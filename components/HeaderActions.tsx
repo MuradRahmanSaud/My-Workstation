@@ -3,7 +3,7 @@ import { ExternalLinkIcon } from './icons/ExternalLinkIcon';
 import { EyeIcon } from './icons/EyeIcon';
 import { ThemeIcon } from './icons/ThemeIcon';
 import { SunIcon } from './icons/SunIcon';
-import { useThemeContext } from '../../contexts/ThemeProvider';
+import { useThemeContext } from '../contexts/ThemeProvider';
 
 interface HeaderActionsProps {
   googleSheetUrl: string;
