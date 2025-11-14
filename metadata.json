@@ -1,0 +1,5 @@
+{
+  "name": "My Workstation_V1",
+  "description": "A single-page application to visualize and manage departmental data from a Google Sheet, featuring a compact design with a sidebar, header, and data tables.",
+  "requestFramePermissions": []
+}
