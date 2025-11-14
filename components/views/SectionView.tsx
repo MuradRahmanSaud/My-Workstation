@@ -11,7 +11,7 @@ interface SectionViewProps {
   filteredData: SectionData[];
   programData: ProgramData[];
   isSheetView: boolean;
-  setIsSheetView: (value: boolean) => void;
+  setIsSheetView: React.Dispatch<React.SetStateAction<boolean>>;
   onOpenFilterPanel: () => void;
   searchTerm: string;
   setSearchTerm: (value: string) => void;
@@ -135,8 +135,6 @@ export const SectionView: React.FC<SectionViewProps> = ({
     if (!isSheetView) {
       setIsReportViewOpen(false);
     }
-    // FIX: The prop type for `setIsSheetView` is `(value: boolean) => void`, which does not accept a function.
-    // The call has been changed to pass the new state value directly.
     setIsSheetView(!isSheetView);
   };
 
