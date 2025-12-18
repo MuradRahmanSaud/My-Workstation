@@ -28,7 +28,7 @@ const FACULTY_HEADER_COLORS: Record<string, string> = {
 };
 
 export const ProgramView: React.FC = () => {
-  const { data: allSections, programData, diuEmployeeData, teacherData, loading, reloadData, updateProgramData, semesterFilter, setSemesterFilter, uniqueSemesters } = useSheetData();
+  const { data: allSections, programData, diuEmployeeData, teacherData, loading, reloadData, updateProgramData, semesterFilter, uniqueSemesters, setSemesterFilter } = useSheetData();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFaculty, setSelectedFaculty] = useState<string>('All');
   const [selectedType, setSelectedType] = useState<string | null>(null);
@@ -204,10 +204,10 @@ export const ProgramView: React.FC = () => {
                     </div>
                     <div className="flex flex-col min-w-0">
                         <h2 className="text-[13px] md:text-sm font-bold text-gray-900 truncate leading-tight">
-                            {selectedProgram['Program Full Name']}
+                            {selectedProgram['Program Short Name']}
                         </h2>
                         <p className="text-[10px] text-gray-500 truncate font-medium">
-                            {selectedProgram['Faculty Full Name']} (PID: {selectedProgram.PID})
+                            {selectedProgram['Faculty Full Name']}
                         </p>
                     </div>
                  </div>
@@ -237,7 +237,7 @@ export const ProgramView: React.FC = () => {
           headerActionsTarget
       )}
 
-      <div className="flex-1 overflow-hidden flex flex-row relative">
+      <div className="flex-1 overflow-hidden flex flex-col md:flex-row relative">
         <ProgramLeftPanel 
             searchTerm={searchTerm} setSearchTerm={setSearchTerm}
             selectedFaculty={selectedFaculty} setSelectedFaculty={setSelectedFaculty} faculties={faculties}
@@ -271,10 +271,10 @@ export const ProgramView: React.FC = () => {
 
         <button
             onClick={handleAdd}
-            className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 group z-30"
+            className="fixed bottom-20 md:bottom-6 right-6 w-12 h-12 md:w-14 md:h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 group z-30"
             title="Add New Program"
         >
-            <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform duration-300" />
+            <Plus className="w-6 h-6 md:w-7 md:h-7 group-hover:rotate-90 transition-transform duration-300" />
         </button>
       </div>
 

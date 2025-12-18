@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { RefreshCw, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowLeft, Database, ExternalLink, CheckCircle, XCircle, BarChart3, List, Menu, X, LogIn, Settings } from 'lucide-react';
@@ -47,7 +48,7 @@ const viewColors: Record<ViewMode, string> = {
 };
 
 export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) => {
-  const { data, programData, classroomData, diuEmployeeData, referenceData, loading, reloadData, semesterLinks, studentCache, loadStudentData, registeredData, loadRegisteredData, studentDataLinks, updateClassroomData, updateReferenceData, updateSectionData, semesterFilter, setSemesterFilter, uniqueSemesters } = useSheetData();
+  const { data, programData, classroomData, diuEmployeeData, referenceData, loading, reloadData, studentCache, loadStudentData, registeredData, loadRegisteredData, studentDataLinks, updateClassroomData, updateReferenceData, updateSectionData, semesterFilter, setSemesterFilter, uniqueSemesters, semesterLinks } = useSheetData();
   
   const { 
       searchTerm, setSearchTerm, 
@@ -609,9 +610,6 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
       };
   }, [data]);
 
-  // Fix for line 1428: Defined transformReferenceData as identity function as no transformation is required for Reference sheet.
-  const transformReferenceData = (data: any) => data;
-
   const handleEditReference = (row: CourseSummaryItem) => {
       const existingRef = referenceData.find(r => r.Ref === row.ref);
       
@@ -869,7 +867,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
       )}
 
       {showStats && data.length > 0 && (
-          <div className="w-full px-0.5">
+          <div className="w-full px-0.5 shrink-0 overflow-x-auto no-scrollbar">
             <DashboardStats 
                 data={filteredData} 
                 onCardClick={handleCardClick}
@@ -1177,8 +1175,8 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
                             <span className="font-bold text-gray-700">{rowsPerPage}</span>
                             <span className="text-[9px] text-blue-500 bg-blue-50 px-1 rounded ml-1">AUTO</span>
                         </div>
-                        <span className="h-3 w-px bg-gray-300 mx-2"></span>
-                        <span>
+                        <span className="h-3 w-px bg-gray-300 mx-2 hidden sm:block"></span>
+                        <span className="hidden sm:inline">
                             {activeDataForPagination.length > 0 ? (currentPage - 1) * rowsPerPage + 1 : 0}-
                             {Math.min(currentPage * rowsPerPage, activeDataForPagination.length)} of {activeDataForPagination.length}
                         </span>
@@ -1301,6 +1299,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
         )}
       </div>
 
+      {/* Responsive FAB for Mobile Controls */}
       <div className="md:hidden fixed bottom-20 right-4 z-50 flex flex-col items-end space-y-3 pointer-events-none">
           {isFabOpen && (
               <div className="flex flex-col items-end space-y-3 pb-2 pointer-events-auto animate-in slide-in-from-bottom-5 fade-in duration-200">
@@ -1398,7 +1397,6 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
           ]}
           hiddenFields={['Program', 'Credit', 'Type']} 
           fieldOptions={referenceFieldOptions} 
-          transformData={transformReferenceData} 
           initialData={referenceEditingRow}
           keyColumn="Ref"
           spreadsheetId={REF_SHEET_ID} 

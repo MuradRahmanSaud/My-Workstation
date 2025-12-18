@@ -10,14 +10,14 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
     { id: 'section', label: 'Section', icon: TableProperties },
     { id: 'program', label: 'Program', icon: School },
     { id: 'student', label: 'Student', icon: FileText },
-    { id: 'employee', label: 'Employee', icon: IdCard },
-    { id: 'classroom', label: 'Class Room', icon: Building2 },
-    { id: 'pdf_to_excel', label: 'PDF to Excel', icon: FileSpreadsheet },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'employee', label: 'Staff', icon: IdCard },
+    { id: 'classroom', label: 'Rooms', icon: Building2 },
+    { id: 'pdf_to_excel', label: 'Tools', icon: FileSpreadsheet },
+    { id: 'settings', label: 'Set', icon: Settings },
   ] as const;
 
   return (
@@ -28,7 +28,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
       flex flex-row md:flex-col 
       shrink-0 transition-all duration-300 
       border-t md:border-t-0 md:border-r border-slate-800
-      z-50
+      z-50 order-2 md:order-1
     ">
       {/* Brand - Hidden on Mobile */}
       <div className="hidden md:flex h-16 items-center justify-center md:justify-start md:px-6 border-b border-slate-800 shrink-0">
@@ -44,6 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
         justify-around md:justify-start 
         py-0 md:py-4
         space-y-0 md:space-y-1
+        overflow-x-auto no-scrollbar
       ">
         {menuItems.map((item) => {
           const isActive = currentView === item.id;
@@ -52,24 +53,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
               key={item.id}
               onClick={() => setView(item.id as ViewState)}
               className={`
-                flex items-center justify-center md:justify-start
-                px-1 md:px-5 
-                py-2 md:py-3.5
+                flex flex-col md:flex-row items-center justify-center md:justify-start
+                px-2 md:px-5 
+                py-1 md:py-3.5
                 h-full md:h-auto
-                text-xs md:text-sm font-medium transition-colors 
+                transition-all duration-200
                 
                 /* Border logic: Top on Mobile, Left on Desktop */
                 border-t-2 md:border-t-0 md:border-l-4
                 ${isActive 
                   ? 'bg-slate-800 text-blue-400 border-blue-500' 
-                  : 'border-transparent hover:bg-slate-800 hover:text-slate-200'
+                  : 'border-transparent hover:bg-slate-800/50 hover:text-slate-200'
                 } 
-                group w-full md:w-auto
+                group min-w-[50px] md:w-auto
               `}
               title={item.label}
             >
               <item.icon className={`w-5 h-5 md:w-5 md:h-5 ${isActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
-              <span className="ml-3 hidden md:block">{item.label}</span>
+              <span className={`text-[10px] md:text-sm font-medium ml-0 md:ml-3 mt-1 md:mt-0 ${isActive ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`}>
+                {item.label}
+              </span>
             </button>
           );
         })}
