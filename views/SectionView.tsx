@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { RefreshCw, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowLeft, Database, ExternalLink, CheckCircle, XCircle, BarChart3, List, Menu, X, LogIn, Settings } from 'lucide-react';
@@ -48,12 +47,11 @@ const viewColors: Record<ViewMode, string> = {
 };
 
 export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) => {
-  const { data, programData, classroomData, diuEmployeeData, referenceData, loading, reloadData, semesterLinks, studentCache, loadStudentData, registeredData, loadRegisteredData, studentDataLinks, updateClassroomData, updateReferenceData, updateSectionData } = useSheetData();
+  const { data, programData, classroomData, diuEmployeeData, referenceData, loading, reloadData, semesterLinks, studentCache, loadStudentData, registeredData, loadRegisteredData, studentDataLinks, updateClassroomData, updateReferenceData, updateSectionData, semesterFilter, setSemesterFilter, uniqueSemesters } = useSheetData();
   
   const { 
       searchTerm, setSearchTerm, 
-      semesterFilter, setSemesterFilter, 
-      filteredData, uniqueSemesters,
+      filteredData, 
       baseFilteredData, 
       
       selectedFaculties, setSelectedFaculties,
@@ -106,7 +104,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
   const [selectedTeacher, setSelectedTeacher] = useState<TeacherSummaryItem | null>(null);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editMode, setEditMode] = useState<'add' | 'edit'>('edit');
+  const [editMode, setEditMode] = useState<'add' | 'edit'>('add');
   const [editingRow, setEditingRow] = useState<any>(undefined);
 
   const [isReferenceEditModalOpen, setIsReferenceEditModalOpen] = useState(false);
@@ -611,18 +609,8 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
       };
   }, [data]);
 
-  const transformReferenceData = (data: any) => {
-      const newData = { ...data };
-      if (newData.Program) {
-          const parts = newData.Program.split(' ');
-          if (parts.length > 0) {
-              newData['P-ID'] = parts[0];
-              newData['Program Short Name'] = parts.slice(1).join(' ');
-          }
-          delete newData.Program;
-      }
-      return newData;
-  };
+  // Fix for line 1428: Defined transformReferenceData as identity function as no transformation is required for Reference sheet.
+  const transformReferenceData = (data: any) => data;
 
   const handleEditReference = (row: CourseSummaryItem) => {
       const existingRef = referenceData.find(r => r.Ref === row.ref);
@@ -687,7 +675,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
   const headerTitleTarget = document.getElementById('header-title-area');
 
   return (
-    <div className="flex flex-col h-full p-2 space-y-2 bg-gray-50 relative">
+    <div className={`flex flex-col h-full space-y-2 bg-gray-50 relative overflow-hidden ${showStats ? 'p-1' : 'p-2 md:p-3'}`}>
       <FilterPanel 
           isOpen={isFilterPanelOpen} 
           onClose={() => setIsFilterPanelOpen(false)}
@@ -881,23 +869,25 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
       )}
 
       {showStats && data.length > 0 && (
-          <DashboardStats 
-              data={filteredData} 
-              onCardClick={handleCardClick}
-              totalCoursesOverride={courseSummaryData.length}
-              lowStudentThreshold={lowStudentThreshold}
-              setLowStudentThreshold={setLowStudentThreshold}
-              classTakenThreshold={classTakenThreshold}
-              setClassTakenThreshold={setClassTakenThreshold}
-              capacityBonus={capacityBonus}
-              setCapacityBonus={setCapacityBonus}
-              totalAdmitted={totalAdmitted}
-              totalClassRooms={filteredClassroomData.length} 
-              missingDataCount={missingDataRows.length} 
-              currentViewMode={viewMode}
-              reportModePreferences={reportModePreferences}
-              onToggleReportMode={handleToggleReportMode}
-          />
+          <div className="w-full px-0.5">
+            <DashboardStats 
+                data={filteredData} 
+                onCardClick={handleCardClick}
+                totalCoursesOverride={courseSummaryData.length}
+                lowStudentThreshold={lowStudentThreshold}
+                setLowStudentThreshold={setLowStudentThreshold}
+                classTakenThreshold={classTakenThreshold}
+                setClassTakenThreshold={setClassTakenThreshold}
+                capacityBonus={capacityBonus}
+                setCapacityBonus={setCapacityBonus}
+                totalAdmitted={totalAdmitted}
+                totalClassRooms={filteredClassroomData.length} 
+                missingDataCount={missingDataRows.length} 
+                currentViewMode={viewMode}
+                reportModePreferences={reportModePreferences}
+                onToggleReportMode={handleToggleReportMode}
+            />
+          </div>
       )}
 
       <div className={`flex-1 overflow-hidden relative flex flex-row ${showSourceSheet ? 'bg-white rounded-lg border border-gray-200 shadow-inner' : 'bg-transparent gap-2'}`}>

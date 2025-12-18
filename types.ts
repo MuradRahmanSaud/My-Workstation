@@ -1,3 +1,4 @@
+
 export interface MainSheetRow {
   Semester: string;
   'Sheet Link': string;
@@ -49,6 +50,11 @@ export interface ProgramDataRow {
   'No of Class Required': string;
   'Class Requirement': string;
   'Class Duration': string;
+  // Faculty Leadership
+  Dean?: string;
+  'Associate Dean'?: string;
+  'Faculty Administration'?: string;
+  // Program Leadership
   Head: string;
   'Associate Head': string;
   Administration: string;
@@ -149,6 +155,12 @@ export interface SheetContextType {
   registeredData: any[];
   loadRegisteredData: (force?: boolean) => Promise<void>;
   loading: LoadingState;
+  
+  // Lifted Semester Filter State
+  semesterFilter: string;
+  setSemesterFilter: (semester: string) => void;
+  uniqueSemesters: string[];
+
   reloadData: (mode?: 'all' | 'admitted' | 'sections') => Promise<void>;
   updateClassroomData: (updater: (prev: ClassRoomDataRow[]) => ClassRoomDataRow[]) => void;
   updateReferenceData: (updater: (prev: ReferenceDataRow[]) => ReferenceDataRow[]) => void;

@@ -1,11 +1,10 @@
-
 import { useState, useMemo, useEffect } from 'react';
 import { CourseSectionData, ProgramDataRow } from '../types';
+import { useSheetData } from './useSheetData';
 
 export const useSectionFilters = (data: CourseSectionData[], programData: ProgramDataRow[] = []) => {
+  const { semesterFilter, setSemesterFilter, uniqueSemesters } = useSheetData();
   const [searchTerm, setSearchTerm] = useState('');
-  const [semesterFilter, setInternalSemesterFilter] = useState('All');
-  const [userHasSelected, setUserHasSelected] = useState(false);
 
   // Advanced Filters State - Programs
   const [selectedFaculties, setSelectedFaculties] = useState<Set<string>>(new Set());
@@ -46,49 +45,6 @@ export const useSectionFilters = (data: CourseSectionData[], programData: Progra
     });
     return map;
   }, [programData]);
-
-  const uniqueSemesters = useMemo(() => {
-    // Filter out empty semesters and get unique values
-    const rawSemesters = Array.from(new Set(data.map(d => d.Semester?.trim()).filter(Boolean)));
-    
-    // Weights for seasons to ensure correct order
-    const seasonWeight: Record<string, number> = { 
-        'winter': 0,
-        'spring': 1, 
-        'summer': 2, 
-        'short': 2, 
-        'fall': 3,
-        'autumn': 3
-    };
-    
-    // Sort: Year Descending -> Season Weight Descending (Fall > Summer > Spring)
-    const sorted = rawSemesters.sort((a, b) => {
-        const regex = /([a-zA-Z]+)[\s-]*'?(\d{2,4})/;
-        const matchA = a.match(regex);
-        const matchB = b.match(regex);
-
-        if (!matchA || !matchB) return b.localeCompare(a);
-        
-        const seasonA = matchA[1].toLowerCase(); 
-        let yearA = parseInt(matchA[2], 10); 
-        if (yearA < 100) yearA += 2000; 
-
-        const seasonB = matchB[1].toLowerCase();
-        let yearB = parseInt(matchB[2], 10);
-        if (yearB < 100) yearB += 2000;
-        
-        if (yearA !== yearB) {
-            return yearB - yearA; 
-        }
-        
-        const weightA = seasonWeight[seasonA] || 0;
-        const weightB = seasonWeight[seasonB] || 0;
-        
-        return weightB - weightA; 
-    });
-
-    return ['All', ...sorted];
-  }, [data]);
 
   // Derived Attribute Options based on current data
   const currentSemesterData = useMemo(() => {
@@ -139,12 +95,6 @@ export const useSectionFilters = (data: CourseSectionData[], programData: Progra
   }, [currentSemesterData]);
 
   useEffect(() => {
-    if (!userHasSelected && uniqueSemesters.length > 1) {
-        setInternalSemesterFilter(uniqueSemesters[1]);
-    }
-  }, [uniqueSemesters, userHasSelected]);
-
-  useEffect(() => {
     if (!hasInitializedCourseTypes && attributeOptions.courseTypes.length > 0) {
         const excludedKeywords = ['thesis', 'project', 'internship', 'viva'];
         const defaultSelection = new Set<string>();
@@ -157,11 +107,6 @@ export const useSectionFilters = (data: CourseSectionData[], programData: Progra
         setHasInitializedCourseTypes(true);
     }
   }, [attributeOptions.courseTypes, hasInitializedCourseTypes]);
-
-  const setSemesterFilter = (val: string) => {
-      setInternalSemesterFilter(val);
-      setUserHasSelected(true);
-  };
 
   const baseFilteredData = useMemo(() => {
     return data.filter(item => {
