@@ -1,0 +1,100 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DIU Workstation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Custom Scrollbar for "Workstation" feel */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(203, 213, 225, 0.4); 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(148, 163, 184, 0.6); 
+      }
+
+      /* Thinner scrollbar for side panels */
+      .thin-scrollbar::-webkit-scrollbar {
+        width: 3px;
+        height: 3px;
+      }
+      .thin-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(203, 213, 225, 0.5); 
+        border-radius: 2px;
+      }
+
+      /* Glassmorphism utility */
+      .glass-morphism {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(12px) saturate(180%);
+        -webkit-backdrop-filter: blur(12px) saturate(180%);
+        border: 1px solid rgba(209, 213, 219, 0.3);
+      }
+
+      .dark-glass-morphism {
+        background: rgba(15, 23, 42, 0.75);
+        backdrop-filter: blur(10px) saturate(150%);
+        -webkit-backdrop-filter: blur(10px) saturate(150%);
+        border: 1px solid rgba(51, 65, 85, 0.4);
+      }
+
+      /* Immersive Background Transition */
+      .bg-fade-enter {
+        opacity: 0;
+      }
+      .bg-fade-enter-active {
+        opacity: 1;
+        transition: opacity 1000ms ease-in-out;
+      }
+
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+
+      @keyframes subtle-progress {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(300%); }
+      }
+      .animate-subtle-progress {
+        animation: subtle-progress 2s infinite linear;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
+    "react-dom": "https://esm.sh/react-dom@^19.2.3"
+  }
+}
+</script>
+<!-- PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+</script>
+<!-- SheetJS (XLSX) -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+</head>
+  <body class="bg-slate-900 text-slate-800 antialiased overflow-hidden">
+    <div id="root"></div>
+    <script type="module" src="./index.tsx"></script>
+  </body>
+</html>

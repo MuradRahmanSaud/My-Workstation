@@ -1,0 +1,5 @@
+{
+  "name": "DIU Workstation_V2",
+  "description": "A compact workstation dashboard for DIU to visualize course section data from Google Sheets.",
+  "requestFramePermissions": []
+}
