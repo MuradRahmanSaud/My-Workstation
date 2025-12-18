@@ -8,6 +8,8 @@ interface ClassRoomDistributionReportProps {
     programData: ProgramDataRow[];
     sectionData?: CourseSectionData[];
     semesterFilter?: string;
+    showExportPanel?: boolean;
+    setShowExportPanel?: (val: boolean) => void;
 }
 
 const EXPORT_COLUMNS = [
@@ -38,13 +40,14 @@ export const ClassRoomDistributionReport: React.FC<ClassRoomDistributionReportPr
     data, 
     programData = [], 
     sectionData = [],
-    semesterFilter 
+    semesterFilter,
+    showExportPanel = false,
+    setShowExportPanel
 }) => {
     const [selectedExportCols, setSelectedExportCols] = useState<Set<string>>(new Set(EXPORT_COLUMNS.map(c => c.key)));
     const [exportFilename, setExportFilename] = useState('Class_Room_Report');
     const [copyReportSuccess, setCopyReportSuccess] = useState(false);
     const [copyChartSuccess, setCopyChartSuccess] = useState(false);
-    const [showExportPanel, setShowExportPanel] = useState(false);
     const [selectedProgram, setSelectedProgram] = useState<{ id: string, name: string } | null>(null);
     
     // Mobile State
@@ -130,6 +133,10 @@ export const ClassRoomDistributionReport: React.FC<ClassRoomDistributionReportPr
         setSelectedExportCols(newSet);
     };
 
+    // Added handleSelectAll and handleDeselectAll functions to fix undefined errors
+    const handleSelectAll = () => setSelectedExportCols(new Set(EXPORT_COLUMNS.map(c => c.key)));
+    const handleDeselectAll = () => setSelectedExportCols(new Set());
+
     const handleDownload = () => {
         if (data.length === 0) return;
         try {
@@ -152,7 +159,6 @@ export const ClassRoomDistributionReport: React.FC<ClassRoomDistributionReportPr
             });
             const worksheet = (window as any).XLSX.utils.json_to_sheet(exportData);
             const workbook = (window as any).XLSX.utils.book_new();
-            (window as any).XLSX.utils.book_append_sheet(workbook, worksheet, "Class Rooms");
             (window as any).XLSX.utils.book_append_sheet(workbook, worksheet, "Class Rooms");
             (window as any).XLSX.writeFile(workbook, `${exportFilename || 'Export'}.xlsx`);
         } catch (error) { console.error("Export failed:", error); }
@@ -227,16 +233,16 @@ export const ClassRoomDistributionReport: React.FC<ClassRoomDistributionReportPr
 
     return (
         <div className="flex h-full bg-gray-50 overflow-hidden relative">
+            {/* Export Sidebar */}
             <div className={`${showExportPanel ? 'w-44 md:w-64 border-r' : 'w-0'} bg-white border-gray-200 flex flex-col transition-all duration-300 shrink-0 overflow-hidden`}>
-                {/* ... export panel ... */}
                 <div className="p-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex justify-between items-start mb-1">
                         <h3 className="text-xs font-bold text-gray-700">Select Columns</h3>
-                        <button onClick={() => setShowExportPanel(false)} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
+                        <button onClick={() => setShowExportPanel && setShowExportPanel(false)} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
                     </div>
                     <div className="flex space-x-2 mt-2">
-                         <button onClick={() => setSelectedExportCols(new Set(EXPORT_COLUMNS.map(c => c.key)))} className="flex-1 py-1 text-[10px] bg-white border border-gray-300 rounded hover:bg-gray-50 text-gray-600">All</button>
-                         <button onClick={() => setSelectedExportCols(new Set())} className="flex-1 py-1 text-[10px] bg-white border border-gray-300 rounded hover:bg-gray-50 text-gray-600">None</button>
+                         <button onClick={handleSelectAll} className="flex-1 py-1 text-[10px] bg-white border border-gray-300 rounded hover:bg-gray-50 text-gray-600">All</button>
+                         <button onClick={handleDeselectAll} className="flex-1 py-1 text-[10px] bg-white border border-gray-300 rounded hover:bg-gray-50 text-gray-600">None</button>
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-1 thin-scrollbar">
@@ -265,8 +271,12 @@ export const ClassRoomDistributionReport: React.FC<ClassRoomDistributionReportPr
                             {copyReportSuccess ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                             <span>{copyReportSuccess ? 'Copied' : 'Copy'}</span>
                         </button>
-                        <button onClick={() => setShowExportPanel(!showExportPanel)} className={`flex items-center space-x-1 px-3 py-1 text-xs font-bold border rounded transition-colors shadow-sm ${showExportPanel ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
-                            <Settings className="w-3.5 h-3.5" /> <span>Export</span>
+                        <button 
+                            onClick={() => setShowExportPanel && setShowExportPanel(!showExportPanel)} 
+                            className={`flex items-center space-x-1 px-3 py-1 text-xs font-bold border rounded transition-colors shadow-sm ${showExportPanel ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}
+                        >
+                            <Settings className="w-3.5 h-3.5" />
+                            <span>Export</span>
                         </button>
                     </div>
                 </div>
@@ -304,7 +314,7 @@ export const ClassRoomDistributionReport: React.FC<ClassRoomDistributionReportPr
                     </div>
                     <div className="bg-white p-2 rounded border border-gray-200 shadow-sm mt-2 flex flex-col shrink-0 relative">
                         <button onClick={handleCopyChart} className="absolute right-2 top-2 flex items-center space-x-1 px-2 py-1 text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors z-10">
-                            {copyChartSuccess ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+                            {copyChartSuccess ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                             <span>{copyChartSuccess ? 'Copied' : 'Copy'}</span>
                         </button>
                         <div className="w-full relative h-[220px] mt-2">{renderChart(sortedFaculties)}</div>
@@ -316,7 +326,7 @@ export const ClassRoomDistributionReport: React.FC<ClassRoomDistributionReportPr
             </div>
             
             {selectedProgram && <ProgramAnalysisModal isOpen={!!selectedProgram} onClose={() => setSelectedProgram(null)} programName={selectedProgram.name} programId={selectedProgram.id} classroomData={modalData.rooms} sectionData={modalData.sections} lowStudentThreshold={7} selectedSemester={semesterFilter} />}
-            {showExportPanel && <div className="fixed inset-0 bg-black/20 z-20 md:hidden backdrop-blur-sm" onClick={() => setShowExportPanel(false)}></div>}
+            {showExportPanel && <div className="fixed inset-0 bg-black/20 z-20 md:hidden backdrop-blur-sm" onClick={() => setShowExportPanel && setShowExportPanel(false)}></div>}
         </div>
     );
 };

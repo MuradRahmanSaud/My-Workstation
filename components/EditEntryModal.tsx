@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Save, AlertCircle, CheckCircle, ChevronDown, Plus } from 'lucide-react';
 import { submitSheetData } from '../services/sheetService';
@@ -428,6 +427,10 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
                             }
 
                             // Regular Fields
+                            const isDuration = col.toLowerCase().includes('duration');
+                            const isRequirement = col.toLowerCase().includes('requirement');
+                            const isMonths = col.toLowerCase().includes('semester duration');
+
                             return (
                                 <div key={col}>
                                     <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">{col}</label>
@@ -439,13 +442,21 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
                                             placeholder={`Select or add ${col}`}
                                         />
                                     ) : (
-                                        <input
-                                            type="text"
-                                            value={formData[col] || ''}
-                                            onChange={(e) => handleChange(col, e.target.value)}
-                                            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2.5 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all bg-white text-gray-900 placeholder-gray-400 shadow-sm"
-                                            placeholder={`Enter ${col}`}
-                                        />
+                                        <div className="relative flex items-center">
+                                            <input
+                                                type={isDuration || isRequirement || isMonths ? "number" : "text"}
+                                                value={formData[col] || ''}
+                                                onChange={(e) => handleChange(col, e.target.value)}
+                                                className={`w-full text-sm border border-gray-300 rounded-lg px-3 py-2.5 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all bg-white text-gray-900 placeholder-gray-400 shadow-sm ${(isDuration || isRequirement) ? 'pr-12' : (isMonths ? 'pr-16' : '')}`}
+                                                placeholder={`Enter ${col}`}
+                                            />
+                                            {(isDuration || isRequirement) && !isMonths && (
+                                                <span className="absolute right-3 text-[10px] font-bold text-gray-400 pointer-events-none uppercase">Min</span>
+                                            )}
+                                            {isMonths && (
+                                                <span className="absolute right-3 text-[10px] font-bold text-gray-400 pointer-events-none uppercase">Months</span>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             );

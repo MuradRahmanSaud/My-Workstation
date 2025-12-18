@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { CourseSectionData } from '../types';
 import { BookOpen, List, Users, HelpCircle, UserMinus, Calendar, UserPlus, BarChart3, Building2, Bell } from 'lucide-react';
@@ -99,7 +100,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
       bg: 'bg-blue-500', // Keep original color
       badge: missingDataCount > 0 ? `${missingDataCount}!` : '0', // Show count of missing
       clickable: true,
-      mode: missingDataCount > 0 ? 'missing_data' : 'courses'
+      mode: 'courses'
     },
     {
       label: 'Total Sections',
@@ -120,7 +121,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
       mode: 'teachers'
     },
     {
-      label: 'Total Admitted',
+      label: 'Student Directory',
       value: totalAdmitted,
       icon: UserPlus,
       bg: 'bg-teal-600',

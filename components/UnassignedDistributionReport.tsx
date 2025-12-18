@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { CourseSectionData, ProgramDataRow } from '../types';
 import { Download, CheckSquare, Square, Copy, Check, Settings, X, BarChart3 } from 'lucide-react';
@@ -5,6 +6,8 @@ import { Download, CheckSquare, Square, Copy, Check, Settings, X, BarChart3 } fr
 interface UnassignedDistributionReportProps {
     data: CourseSectionData[];
     programData: ProgramDataRow[];
+    showExportPanel?: boolean;
+    setShowExportPanel?: (val: boolean) => void;
 }
 
 const EXPORT_COLUMNS = [
@@ -34,12 +37,11 @@ const FACULTY_COLORS: Record<string, string> = {
 
 const ROW_HEIGHT = 27;
 
-export const UnassignedDistributionReport: React.FC<UnassignedDistributionReportProps> = ({ data, programData }) => {
+export const UnassignedDistributionReport: React.FC<UnassignedDistributionReportProps> = ({ data, programData, showExportPanel = false, setShowExportPanel }) => {
     const [selectedExportCols, setSelectedExportCols] = useState<Set<string>>(new Set(EXPORT_COLUMNS.map(c => c.key)));
     const [exportFilename, setExportFilename] = useState('Unassigned_Section_Report');
     const [copyReportSuccess, setCopyReportSuccess] = useState(false);
     const [copyChartSuccess, setCopyChartSuccess] = useState(false);
-    const [showExportPanel, setShowExportPanel] = useState(false);
     
     const [activeFaculty, setActiveFaculty] = useState<string>('');
 
@@ -118,7 +120,6 @@ export const UnassignedDistributionReport: React.FC<UnassignedDistributionReport
             const worksheet = (window as any).XLSX.utils.json_to_sheet(exportData);
             const workbook = (window as any).XLSX.utils.book_new();
             (window as any).XLSX.utils.book_append_sheet(workbook, worksheet, "Unassigned Sections");
-            (window as any).XLSX.utils.book_append_sheet(workbook, worksheet, "Unassigned Sections");
             (window as any).XLSX.writeFile(workbook, `${exportFilename || 'Export'}.xlsx`);
         } catch (error) { console.error("Export failed:", error); }
     };
@@ -187,12 +188,12 @@ export const UnassignedDistributionReport: React.FC<UnassignedDistributionReport
 
     return (
         <div className="flex h-full bg-gray-50 overflow-hidden relative">
+            {/* Export Sidebar */}
             <div className={`${showExportPanel ? 'w-44 md:w-64 border-r' : 'w-0'} bg-white border-gray-200 flex flex-col transition-all duration-300 shrink-0 overflow-hidden`}>
-                {/* ... export panel ... */}
                 <div className="p-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex justify-between items-start mb-1">
                         <h3 className="text-xs font-bold text-gray-700">Select Columns</h3>
-                        <button onClick={() => setShowExportPanel(false)} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
+                        <button onClick={() => setShowExportPanel && setShowExportPanel(false)} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
                     </div>
                     <div className="flex space-x-2 mt-2">
                          <button onClick={() => setSelectedExportCols(new Set(EXPORT_COLUMNS.map(c => c.key)))} className="flex-1 py-1 text-[10px] bg-white border border-gray-300 rounded hover:bg-gray-50 text-gray-600">All</button>
@@ -212,7 +213,7 @@ export const UnassignedDistributionReport: React.FC<UnassignedDistributionReport
                 <div className="p-4 border-t border-gray-200 bg-gray-50">
                     <input type="text" value={exportFilename} onChange={(e) => setExportFilename(e.target.value)} className="w-full text-xs border border-gray-300 rounded px-2 py-1 mb-2 focus:border-blue-500 outline-none" />
                     <button onClick={handleDownload} disabled={data.length === 0} className="w-full flex items-center justify-center py-2 bg-[#0891b2] hover:bg-[#06b6d4] text-white rounded text-xs font-bold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                        <Download className="w-3.5 h-3.5 mr-1.5" /> Download Excel
+                        <Download className="w-3.5 h-3.5 mr-1.5" /> Download
                     </button>
                 </div>
             </div>
@@ -225,8 +226,12 @@ export const UnassignedDistributionReport: React.FC<UnassignedDistributionReport
                             {copyReportSuccess ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                             <span>{copyReportSuccess ? 'Copied' : 'Copy'}</span>
                         </button>
-                        <button onClick={() => setShowExportPanel(!showExportPanel)} className={`flex items-center space-x-1 px-3 py-1 text-xs font-bold border rounded transition-colors shadow-sm ${showExportPanel ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
-                            <Settings className="w-3.5 h-3.5" /> <span>Export</span>
+                        <button 
+                            onClick={() => setShowExportPanel && setShowExportPanel(!showExportPanel)} 
+                            className={`flex items-center space-x-1 px-3 py-1 text-xs font-bold border rounded transition-colors shadow-sm ${showExportPanel ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'}`}
+                        >
+                            <Settings className="w-3.5 h-3.5" />
+                            <span>Export</span>
                         </button>
                     </div>
                 </div>
@@ -264,7 +269,7 @@ export const UnassignedDistributionReport: React.FC<UnassignedDistributionReport
                     </div>
                     <div className="bg-white p-2 rounded border border-gray-200 shadow-sm mt-2 flex flex-col shrink-0 relative">
                         <button onClick={handleCopyChart} className="absolute right-2 top-2 flex items-center space-x-1 px-2 py-1 text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors z-10">
-                            {copyChartSuccess ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+                            {copyChartSuccess ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                             <span>{copyChartSuccess ? 'Copied' : 'Copy'}</span>
                         </button>
                         <div className="w-full relative h-[220px] mt-2">{renderChart(sortedFaculties)}</div>

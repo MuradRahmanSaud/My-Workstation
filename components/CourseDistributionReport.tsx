@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { CourseSummaryItem } from '../hooks/useCourseAggregation';
 import { ProgramDataRow } from '../types';
@@ -6,6 +7,8 @@ import { Download, CheckSquare, Square, Copy, Check, Settings, X, BarChart3 } fr
 interface CourseDistributionReportProps {
     data: CourseSummaryItem[];
     programData: ProgramDataRow[];
+    showExportPanel?: boolean;
+    setShowExportPanel?: (val: boolean) => void;
 }
 
 const EXPORT_COLUMNS = [
@@ -32,12 +35,11 @@ const FACULTY_COLORS: Record<string, string> = {
 
 const ROW_HEIGHT = 27;
 
-export const CourseDistributionReport: React.FC<CourseDistributionReportProps> = ({ data, programData }) => {
+export const CourseDistributionReport: React.FC<CourseDistributionReportProps> = ({ data, programData, showExportPanel = false, setShowExportPanel }) => {
     const [selectedExportCols, setSelectedExportCols] = useState<Set<string>>(new Set(EXPORT_COLUMNS.map(c => c.key)));
     const [exportFilename, setExportFilename] = useState('Program_Summary_Report');
     const [copyReportSuccess, setCopyReportSuccess] = useState(false);
     const [copyChartSuccess, setCopyChartSuccess] = useState(false);
-    const [showExportPanel, setShowExportPanel] = useState(false);
     
     // Mobile State
     const [activeFaculty, setActiveFaculty] = useState<string>('');
@@ -133,8 +135,8 @@ export const CourseDistributionReport: React.FC<CourseDistributionReportProps> =
         (window as any).XLSX.writeFile(workbook, `${exportFilename || 'Export'}.xlsx`);
     };
 
-    const handleCopyReport = async () => { /* ... Keep existing logic ... */ };
-    const handleCopyChart = async () => { /* ... Keep existing logic ... */ };
+    const handleCopyReport = async () => { /* ... existing ... */ };
+    const handleCopyChart = async () => { /* ... existing ... */ };
 
     const renderFacultyCard = (fac: string, mobile: boolean = false) => {
         const programs = facultyGroups[fac];
@@ -208,12 +210,12 @@ export const CourseDistributionReport: React.FC<CourseDistributionReportProps> =
 
     return (
         <div className="flex h-full bg-gray-50 overflow-hidden relative">
-            {/* Export Sidebar - Layout Adjusted for Mobile Side-by-Side */}
+            {/* Export Sidebar */}
             <div className={`${showExportPanel ? 'w-44 md:w-64 border-r' : 'w-0'} bg-white border-gray-200 flex flex-col transition-all duration-300 shrink-0 overflow-hidden`}>
                 <div className="p-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex justify-between items-start mb-1">
                         <h3 className="text-xs font-bold text-gray-700">Select Columns</h3>
-                        <button onClick={() => setShowExportPanel(false)} className="text-gray-500 hover:text-gray-700">
+                        <button onClick={() => setShowExportPanel && setShowExportPanel(false)} className="text-gray-500 hover:text-gray-700">
                             <X className="w-4 h-4" />
                         </button>
                     </div>
@@ -245,7 +247,6 @@ export const CourseDistributionReport: React.FC<CourseDistributionReportProps> =
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-                {/* Header */}
                 <div className="flex justify-between items-center p-2 bg-white border-b border-gray-200 shrink-0">
                     <h3 className="text-sm md:text-lg font-bold text-gray-800 truncate mr-2">Courses Dist.</h3>
                     <div className="flex items-center space-x-2 shrink-0">
@@ -253,7 +254,10 @@ export const CourseDistributionReport: React.FC<CourseDistributionReportProps> =
                             {copyReportSuccess ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                             <span>{copyReportSuccess ? 'Copied' : 'Copy'}</span>
                         </button>
-                        <button onClick={() => setShowExportPanel(!showExportPanel)} className={`flex items-center space-x-1 px-3 py-1 text-xs font-bold border rounded transition-colors shadow-sm ${showExportPanel ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                        <button 
+                            onClick={() => setShowExportPanel && setShowExportPanel(!showExportPanel)} 
+                            className={`flex items-center space-x-1 px-3 py-1 text-xs font-bold border rounded transition-colors shadow-sm ${showExportPanel ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}
+                        >
                             <Settings className="w-3.5 h-3.5" />
                             <span>Export</span>
                         </button>
@@ -295,7 +299,7 @@ export const CourseDistributionReport: React.FC<CourseDistributionReportProps> =
                     </div>
                     <div className="bg-white p-2 rounded border border-gray-200 shadow-sm mt-2 flex flex-col shrink-0 relative">
                         <button onClick={handleCopyChart} className="absolute right-2 top-2 flex items-center space-x-1 px-2 py-1 text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors z-10">
-                            {copyChartSuccess ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+                            {copyChartSuccess ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                             <span>{copyChartSuccess ? 'Copied' : 'Copy'}</span>
                         </button>
                         <div className="w-full relative h-[220px] mt-2">

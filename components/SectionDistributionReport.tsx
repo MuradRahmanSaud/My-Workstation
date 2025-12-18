@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { CourseSectionData, ProgramDataRow } from '../types';
 import { Download, CheckSquare, Square, Copy, Check, Settings, X, BarChart3 } from 'lucide-react';
@@ -6,6 +7,8 @@ interface SectionDistributionReportProps {
     data: CourseSectionData[];
     programData: ProgramDataRow[];
     lowStudentThreshold?: number;
+    showExportPanel?: boolean;
+    setShowExportPanel?: (val: boolean) => void;
 }
 
 const EXPORT_COLUMNS = [
@@ -37,12 +40,11 @@ const FACULTY_COLORS: Record<string, string> = {
 
 const ROW_HEIGHT = 27;
 
-export const SectionDistributionReport: React.FC<SectionDistributionReportProps> = ({ data, programData, lowStudentThreshold = 0 }) => {
+export const SectionDistributionReport: React.FC<SectionDistributionReportProps> = ({ data, programData, lowStudentThreshold = 0, showExportPanel = false, setShowExportPanel }) => {
     const [selectedExportCols, setSelectedExportCols] = useState<Set<string>>(new Set(EXPORT_COLUMNS.map(c => c.key)));
     const [exportFilename, setExportFilename] = useState('Section_List_Report');
     const [copyReportSuccess, setCopyReportSuccess] = useState(false);
     const [copyChartSuccess, setCopyChartSuccess] = useState(false);
-    const [showExportPanel, setShowExportPanel] = useState(false);
     
     // Mobile State
     const [activeFaculty, setActiveFaculty] = useState<string>('');
@@ -209,12 +211,12 @@ export const SectionDistributionReport: React.FC<SectionDistributionReportProps>
 
     return (
         <div className="flex h-full bg-gray-50 overflow-hidden relative">
-            {/* Export Sidebar - Layout Adjusted for Mobile Side-by-Side */}
+            {/* Export Sidebar */}
             <div className={`${showExportPanel ? 'w-44 md:w-64 border-r' : 'w-0'} bg-white border-gray-200 flex flex-col transition-all duration-300 shrink-0 overflow-hidden`}>
                 <div className="p-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex justify-between items-start mb-1">
                         <h3 className="text-xs font-bold text-gray-700">Select Columns</h3>
-                        <button onClick={() => setShowExportPanel(false)} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
+                        <button onClick={() => setShowExportPanel && setShowExportPanel(false)} className="text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>
                     </div>
                     <div className="flex space-x-2 mt-2">
                          <button onClick={handleSelectAll} className="flex-1 py-1 text-[10px] bg-white border border-gray-300 rounded hover:bg-gray-50 text-gray-600">All</button>
@@ -250,8 +252,12 @@ export const SectionDistributionReport: React.FC<SectionDistributionReportProps>
                             {copyReportSuccess ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                             <span>{copyReportSuccess ? 'Copied' : 'Copy'}</span>
                         </button>
-                        <button onClick={() => setShowExportPanel(!showExportPanel)} className={`flex items-center space-x-1 px-3 py-1 text-xs font-bold border rounded transition-colors shadow-sm ${showExportPanel ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
-                            <Settings className="w-3.5 h-3.5" /> <span>Export</span>
+                        <button 
+                            onClick={() => setShowExportPanel && setShowExportPanel(!showExportPanel)} 
+                            className={`flex items-center space-x-1 px-3 py-1 text-xs font-bold border rounded transition-colors shadow-sm ${showExportPanel ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'}`}
+                        >
+                            <Settings className="w-3.5 h-3.5" />
+                            <span>Export</span>
                         </button>
                     </div>
                 </div>
@@ -289,7 +295,7 @@ export const SectionDistributionReport: React.FC<SectionDistributionReportProps>
                     </div>
                     <div className="bg-white p-2 rounded border border-gray-200 shadow-sm mt-2 flex flex-col shrink-0 relative">
                         <button onClick={handleCopyChart} className="absolute right-2 top-2 flex items-center space-x-1 px-2 py-1 text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors z-10">
-                            {copyChartSuccess ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+                            {copyChartSuccess ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                             <span>{copyChartSuccess ? 'Copied' : 'Copy'}</span>
                         </button>
                         <div className="w-full relative h-[220px] mt-2">{renderChart(sortedFaculties)}</div>

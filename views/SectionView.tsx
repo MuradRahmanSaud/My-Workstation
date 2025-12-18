@@ -1,6 +1,7 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { RefreshCw, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowLeft, Database, ExternalLink, CheckCircle, XCircle, BarChart3, List, Menu, X, LogIn } from 'lucide-react';
+import { RefreshCw, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowLeft, Database, ExternalLink, CheckCircle, XCircle, BarChart3, List, Menu, X, LogIn, Settings } from 'lucide-react';
 import { useSheetData } from '../hooks/useSheetData';
 import { useSectionFilters } from '../hooks/useSectionFilters';
 import { useClassRoomFilters } from '../hooks/useClassRoomFilters';
@@ -49,7 +50,6 @@ const viewColors: Record<ViewMode, string> = {
 export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) => {
   const { data, programData, classroomData, diuEmployeeData, referenceData, loading, reloadData, semesterLinks, studentCache, loadStudentData, registeredData, loadRegisteredData, studentDataLinks, updateClassroomData, updateReferenceData, updateSectionData } = useSheetData();
   
-  // --- Section Filters Hook ---
   const { 
       searchTerm, setSearchTerm, 
       semesterFilter, setSemesterFilter, 
@@ -79,7 +79,6 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
       clearAllFilters
   } = useSectionFilters(data, programData);
 
-  // --- Class Room Filters Hook ---
   const {
       searchTerm: classSearchTerm, setSearchTerm: setClassSearchTerm,
       filteredData: filteredClassroomData,
@@ -127,6 +126,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
   });
 
   const isReportMode = reportModePreferences[viewMode];
+  const [isExportPanelOpen, setIsExportPanelOpen] = useState(false);
 
   const [lowStudentThreshold, setLowStudentThreshold] = useState(7);
   const [classTakenThreshold, setClassTakenThreshold] = useState(0); 
@@ -464,6 +464,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
     setSelectedSection(null);
     setSelectedCourse(null);
     setSelectedTeacher(null);
+    setIsExportPanelOpen(false);
     
     if (filteredData.length === 0) {
         setFilterPrograms(new Set());
@@ -501,7 +502,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
           else if (label === 'Total Unassigned') setViewMode('unassigned');
           else if (label === 'Low Student') setViewMode('low_student');
           else if (label === 'Class Taken (%)') setViewMode('class_taken');
-          else if (label === 'Total Admitted') setViewMode('admitted');
+          else if (label === 'Student Directory') setViewMode('admitted');
           else if (label === 'Class Room') setViewMode('classroom');
           setShowSourceSheet(false);
       }
@@ -682,7 +683,6 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
       }
   };
 
-  // Portal Target check
   const headerActionsTarget = document.getElementById('header-actions-area');
   const headerTitleTarget = document.getElementById('header-title-area');
 
@@ -788,7 +788,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
                             {viewMode === 'unassigned' && (isReportMode ? 'Unassigned Report' : 'Unassigned Sections')}
                             {viewMode === 'low_student' && (isReportMode ? `Low Student Report` : `Low Student (<${lowStudentThreshold})`)}
                             {viewMode === 'class_taken' && (isReportMode ? `Class Taken Report` : `Class Taken (≤${classTakenThreshold}%)`)}
-                            {viewMode === 'admitted' && (isReportMode ? 'Admitted Report' : 'Admitted Students')}
+                            {viewMode === 'admitted' && (isReportMode ? 'Student Directory Report' : 'Student Directory')}
                             {viewMode === 'classroom' && (isReportMode ? 'Class Room Distribution' : `Class Room List`)}
                             {viewMode === 'missing_data' && 'Missing Data Report'}
                         </>
@@ -940,7 +940,9 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
                                 data={filteredClassroomData} 
                                 programData={programData} 
                                 sectionData={data} 
-                                semesterFilter={semesterFilter} 
+                                semesterFilter={semesterFilter}
+                                showExportPanel={isExportPanelOpen}
+                                setShowExportPanel={setIsExportPanelOpen}
                             />
                         ) : (
                             <div className="flex-1 overflow-auto relative" ref={containerRef}>
@@ -968,33 +970,45 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
                     ) : viewMode === 'courses' && isReportMode ? (
                         <CourseDistributionReport 
                             data={filteredCourseSummaryData} 
-                            programData={programData} 
+                            programData={programData}
+                            showExportPanel={isExportPanelOpen}
+                            setShowExportPanel={setIsExportPanelOpen}
                         />
                     ) : viewMode === 'sections' && isReportMode ? (
                         <SectionDistributionReport
                             data={activeDataForPagination}
                             programData={programData}
                             lowStudentThreshold={lowStudentThreshold}
+                            showExportPanel={isExportPanelOpen}
+                            setShowExportPanel={setIsExportPanelOpen}
                         />
                     ) : viewMode === 'teachers' && isReportMode ? (
                         <TeacherDistributionReport
                             data={teacherSummaryData}
                             programData={programData}
+                            showExportPanel={isExportPanelOpen}
+                            setShowExportPanel={setIsExportPanelOpen}
                         />
                     ) : viewMode === 'unassigned' && isReportMode ? (
                         <UnassignedDistributionReport
                             data={activeDataForPagination}
                             programData={programData}
+                            showExportPanel={isExportPanelOpen}
+                            setShowExportPanel={setIsExportPanelOpen}
                         />
                     ) : viewMode === 'low_student' && isReportMode ? (
                         <LowStudentDistributionReport
                             data={activeDataForPagination}
                             programData={programData}
+                            showExportPanel={isExportPanelOpen}
+                            setShowExportPanel={setIsExportPanelOpen}
                         />
                     ) : viewMode === 'class_taken' && isReportMode ? (
                         <ClassTakenDistributionReport
                             data={activeDataForPagination}
                             programData={programData}
+                            showExportPanel={isExportPanelOpen}
+                            setShowExportPanel={setIsExportPanelOpen}
                         />
                     ) : (
                         <div className="flex-1 overflow-auto relative" ref={containerRef}>
@@ -1146,7 +1160,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
                                         {paginatedData.length === 0 && (
                                             <tr>
                                                 <td colSpan={admittedColumns.length} className="px-4 py-8 text-center text-gray-400 italic">
-                                                    No admitted student data found.
+                                                    No student data found.
                                                 </td>
                                             </tr>
                                         )}

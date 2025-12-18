@@ -1,136 +1,127 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ProgramDataRow } from '../types';
-import { Search, RefreshCw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus } from 'lucide-react';
+import { Search, RefreshCw, Plus, School, ChevronRight, Pencil, GraduationCap } from 'lucide-react';
 import { useSheetData } from '../hooks/useSheetData';
-import { useResponsivePagination } from '../hooks/useResponsivePagination';
 import { EditEntryModal } from '../components/EditEntryModal';
 import { ProgramDetailsPanel } from '../components/ProgramDetailsPanel';
 import { SHEET_NAMES, REF_SHEET_ID } from '../constants';
 
+const FACULTY_CHIP_COLORS: Record<string, string> = {
+  'FBE': 'bg-red-100 text-red-700 border-red-200',
+  'FE': 'bg-orange-100 text-orange-700 border-orange-200',
+  'FHLS': 'bg-amber-100 text-amber-700 border-amber-200',
+  'FHSS': 'bg-green-100 text-green-700 border-green-200',
+  'FSIT': 'bg-blue-100 text-blue-700 border-blue-200',
+};
+
+const FACULTY_HEADER_COLORS: Record<string, string> = {
+  'FBE': 'bg-red-50 text-red-800',
+  'FE': 'bg-orange-50 text-orange-800',
+  'FHLS': 'bg-amber-50 text-amber-800',
+  'FHSS': 'bg-green-50 text-green-800',
+  'FSIT': 'bg-blue-50 text-blue-800',
+};
+
 export const ProgramView: React.FC = () => {
   const { programData, diuEmployeeData, loading, reloadData, updateProgramData } = useSheetData();
   const [searchTerm, setSearchTerm] = useState('');
+  
+  const [selectedFaculty, setSelectedFaculty] = useState<string>('All');
+  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [selectedSemesterMode, setSelectedSemesterMode] = useState<string | null>(null);
 
-  // Edit/Add Modal State (for Adding only)
+  const [selectedProgram, setSelectedProgram] = useState<ProgramDataRow | null>(null);
+
+  useEffect(() => {
+    if (programData.length > 0 && !selectedProgram) {
+      setSelectedProgram(programData[0]);
+    }
+  }, [programData, selectedProgram]);
+
+  const faculties = useMemo(() => {
+    const set = new Set<string>();
+    programData.forEach(p => { if (p['Faculty Short Name']) set.add(p['Faculty Short Name']); });
+    return Array.from(set).sort();
+  }, [programData]);
+
+  const filteredData = useMemo(() => {
+    let filtered = programData;
+    if (selectedFaculty !== 'All') filtered = filtered.filter(p => p['Faculty Short Name'] === selectedFaculty);
+    if (selectedType) filtered = filtered.filter(p => p['Program Type'] === selectedType);
+    if (selectedSemesterMode) filtered = filtered.filter(p => p['Semester Type'] === selectedSemesterMode);
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      filtered = filtered.filter(item => 
+        item['Program Short Name'].toLowerCase().includes(lower) ||
+        item.PID.toLowerCase().includes(lower) ||
+        item['Program Full Name'].toLowerCase().includes(lower)
+      );
+    }
+    return filtered;
+  }, [programData, searchTerm, selectedFaculty, selectedType, selectedSemesterMode]);
+
+  const groupedData = useMemo(() => {
+    const groups: Record<string, ProgramDataRow[]> = {};
+    filteredData.forEach(p => {
+      const fac = p['Faculty Short Name'] || 'Other';
+      if (!groups[fac]) groups[fac] = [];
+      groups[fac].push(p);
+    });
+    return groups;
+  }, [filteredData]);
+
+  const sortedGroupKeys = useMemo(() => {
+    const order = ['FBE', 'FE', 'FHLS', 'FHSS', 'FSIT'];
+    return Object.keys(groupedData).sort((a, b) => {
+      const indexA = order.indexOf(a);
+      const indexB = order.indexOf(b);
+      if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  }, [groupedData]);
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editMode, setEditMode] = useState<'add' | 'edit'>('add');
   const [editingRow, setEditingRow] = useState<any>(undefined);
 
-  // Detail Panel State
-  const [selectedProgram, setSelectedProgram] = useState<ProgramDataRow | null>(null);
-
-  const filteredData = useMemo(() => {
-    if (!searchTerm) return programData;
-    const lower = searchTerm.toLowerCase();
-    return programData.filter(item => 
-      Object.values(item).some(val => String(val).toLowerCase().includes(lower))
-    );
-  }, [programData, searchTerm]);
-
-  const { currentPage, setCurrentPage, rowsPerPage, totalPages, paginatedData, containerRef } = useResponsivePagination(filteredData);
-
-  const columns: (keyof ProgramDataRow)[] = [
-    'PID',
-    'Faculty Short Name',
-    'Faculty Full Name',
-    'Program Full Name',
-    'Program Short Name',
-    'Department Name',
-    'Program Type',
-    'Semester Type',
-    'Semester Duration',
-    'No of Class Required',
-    'Class Duration',
-    'Class Requirement',
-    'Head',
-    'Associate Head',
-    'Administration'
-  ];
-
-  // Prepare Employee Options for Add Modal
-  const employeeOptions = useMemo(() => {
-      const options = diuEmployeeData.map(e => {
-          const desig = [e['Administrative Designation'], e['Academic Designation']].filter(Boolean).join('/');
-          return `${e['Employee Name']} - ${desig} (${e['Employee ID']})`;
-      });
-      return Array.from(new Set(options)).sort();
-  }, [diuEmployeeData]);
-
-  // Derive options for Add Modal
-  const derivedOptions = useMemo(() => {
-      const fields = [
-          'Faculty Short Name',
-          'Faculty Full Name',
-          'Program Full Name',
-          'Program Short Name',
-          'Department Name',
-          'Program Type',
-          'Semester Type',
-          'Semester Duration',
-          'Class Requirement',
-          'Class Duration'
-      ];
-
-      const options: Record<string, Set<string>> = {};
-      fields.forEach(field => options[field] = new Set());
-
-      programData.forEach(row => {
-          fields.forEach(field => {
-              const val = row[field as keyof ProgramDataRow];
-              if (val) options[field].add(String(val));
-          });
-      });
-
-      return fields.reduce((acc, field) => {
-          acc[field] = Array.from(options[field]).sort();
-          return acc;
-      }, {} as Record<string, string[]>);
-  }, [programData]);
-
-  const calculateNoOfClassRequired = (reqStr: string, durStr: string): string => {
-      const getVal = (str: string, type: 'Theory' | 'Lab') => {
-          if (!str) return 0;
-          const isTheory = type === 'Theory';
-          
-          const pattern = isTheory 
-            ? /(?:theory|th|lecture|lec)[:\s-]*(\d+)/i 
-            : /(?:lab|laboratory|lb)[:\s-]*(\d+)/i;
-          
-          const match = str.match(pattern);
-          if (match) return parseFloat(match[1]);
-          
-          if (isTheory && !/(?:theory|th|lab|lb)/i.test(str)) {
-              const simpleMatch = str.match(/(\d+(\.\d+)?)/);
-              if (simpleMatch) return parseFloat(simpleMatch[1]);
-          }
-          
-          return 0;
-      };
-
-      const reqTheory = getVal(reqStr, 'Theory');
-      const reqLab = getVal(reqStr, 'Lab');
-      
-      const durTheory = getVal(durStr, 'Theory');
-      const durLab = getVal(durStr, 'Lab');
-
-      const classesTheory = (durTheory > 0) ? Math.floor(reqTheory / durTheory) : 0;
-      const classesLab = (durLab > 0) ? Math.floor(reqLab / durLab) : 0;
-
-      const parts = [];
-      if (classesTheory > 0) parts.push(`Theory: ${classesTheory}`); 
-      if (classesLab > 0) parts.push(`Lab: ${classesLab}`);
-      
-      return parts.length > 0 ? parts.join(', ') : '-';
+  const handleAdd = () => {
+    setEditMode('add');
+    setEditingRow({
+      'Semester Duration Num': '4',
+      'Theory Duration': '90',
+      'Lab Duration': '120',
+      'Theory Requirement': '0',
+      'Lab Requirement': '0'
+    });
+    setIsEditModalOpen(true);
   };
 
-  const handleAdd = () => {
-      setEditMode('add');
-      setEditingRow(undefined);
+  const handleEditItem = (e: React.MouseEvent, row: ProgramDataRow) => {
+      e.stopPropagation();
+      setEditMode('edit');
+      const durStr = row['Class Duration'] || '';
+      const reqStr = row['Class Requirement'] || '';
+      const semDurStr = row['Semester Duration'] || '';
+      
+      setEditingRow({
+          ...row,
+          'Theory Duration': (durStr.match(/Theory\s+(\d+)/i) || [])[1] || '90',
+          'Lab Duration': (durStr.match(/Lab\s+(\d+)/i) || [])[1] || '120',
+          'Theory Requirement': (reqStr.match(/Theory\s+(\d+)/i) || [])[1] || '0',
+          'Lab Requirement': (reqStr.match(/Lab\s+(\d+)/i) || [])[1] || '0',
+          'Semester Duration Num': (semDurStr.match(/(\d+)/) || [])[1] || '4',
+      });
       setIsEditModalOpen(true);
   };
 
-  // Helper: Convert Formatted Strings back to IDs for API Submission (For Add Modal)
+  const handlePanelUpdate = (newData: ProgramDataRow) => {
+    updateProgramData(prev => prev.map(row => row.PID === newData.PID ? { ...row, ...newData } : row));
+    setSelectedProgram(prev => prev ? { ...prev, ...newData } : prev);
+  };
+
   const transformDataForSubmit = (data: any) => {
       const extractIds = (fieldVal: string) => {
           if (!fieldVal) return '';
@@ -140,243 +131,264 @@ export const ProgramView: React.FC = () => {
               return match ? match[1] : trimmed;
           }).join(', ');
       };
-
-      return {
+      const tDur = data['Theory Duration'] || '0';
+      const lDur = data['Lab Duration'] || '0';
+      const combinedDuration = `Theory ${tDur} Minutes, Lab ${lDur} Minutes`;
+      const tReq = data['Theory Requirement'] || '0';
+      const lReq = data['Lab Requirement'] || '0';
+      const combinedRequirement = `Theory ${tReq} Minutes, Lab ${lReq} Minutes`;
+      const sDur = data['Semester Duration Num'] || '0';
+      const formattedSemDuration = `${sDur} Months`;
+      const result = {
           ...data,
+          'Class Duration': combinedDuration,
+          'Class Requirement': combinedRequirement,
+          'Semester Duration': formattedSemDuration,
           'Head': extractIds(data.Head),
           'Associate Head': extractIds(data['Associate Head']),
           'Administration': extractIds(data.Administration)
       };
+      delete result['Theory Duration']; delete result['Lab Duration']; delete result['Theory Requirement']; delete result['Lab Requirement']; delete result['Semester Duration Num'];
+      return result;
   };
 
-  const handleModalSuccess = (newData: any) => {
-      if (!newData) return;
-      if (editMode === 'add') {
-          updateProgramData(prev => [newData, ...prev]);
-      }
-  };
+  const employeeOptions = useMemo(() => {
+      return diuEmployeeData.map(e => {
+          const desig = [e['Administrative Designation'], e['Academic Designation']].filter(Boolean).join('/');
+          return `${e['Employee Name']} - ${desig} (${e['Employee ID']})`;
+      }).sort();
+  }, [diuEmployeeData]);
 
-  const handlePanelUpdate = (newData: ProgramDataRow) => {
-      updateProgramData(prev => prev.map(row => 
-          row.PID === newData.PID ? { ...row, ...newData } : row
-      ));
-      setSelectedProgram(prev => prev ? { ...prev, ...newData } : prev);
-  };
-
-  const editColumns = [
-    'PID',
-    'Faculty Short Name',
-    'Faculty Full Name',
-    'Program Full Name',
-    'Program Short Name',
-    'Department Name',
-    'Program Type',
-    'Semester Type',
-    'Semester Duration',
-    'Class Requirement',
-    'Class Duration',
-    'Head',
-    'Associate Head',
-    'Administration'
-  ];
-
-  const fieldOptions = {
-      ...derivedOptions,
-      'Head': employeeOptions,
-      'Associate Head': employeeOptions,
-      'Administration': employeeOptions
-  };
-
-  const multiSelectFields = ['Head', 'Associate Head', 'Administration'];
+  const headerActionsTarget = document.getElementById('header-actions-area');
+  const headerTitleTarget = document.getElementById('header-title-area');
 
   return (
-    <div className="flex flex-col h-full p-2 space-y-2 bg-gray-50 relative">
+    <div className="flex flex-col h-full bg-gray-50 relative overflow-hidden">
       
-      {/* Toolbar */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-2 md:space-y-0 bg-white p-2 rounded border border-gray-200 shadow-sm shrink-0">
-        <div className="flex items-center space-x-2">
-           <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
-             Program List
-           </h2>
-           <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded font-medium border border-blue-200">
-                {filteredData.length}
-           </span>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            <div className="relative group">
-                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                <input 
-                    type="text" 
-                    placeholder="Search Programs..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8 pr-3 py-1 bg-gray-50 border border-gray-300 focus:bg-white focus:border-blue-500 rounded-full text-xs focus:ring-0 w-48 md:w-64 outline-none transition-all"
-                />
-            </div>
+      {headerTitleTarget && createPortal(
+          <div className="flex items-center space-x-3 animate-in fade-in slide-in-from-left-2 duration-300">
+             {selectedProgram ? (
+                 <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                        <GraduationCap className="w-5 h-5" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                        <h2 className="text-[13px] md:text-sm font-bold text-gray-900 truncate leading-tight">
+                            {selectedProgram['Program Full Name']}
+                        </h2>
+                        <p className="text-[10px] text-gray-500 truncate font-medium">
+                            {selectedProgram['Faculty Full Name']} (PID: {selectedProgram.PID})
+                        </p>
+                    </div>
+                 </div>
+             ) : (
+                <div className="flex flex-col">
+                    <h2 className="text-[13px] md:text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center truncate">
+                        <School className="w-4 h-4 mr-2 text-blue-600" />
+                        Programs
+                    </h2>
+                </div>
+             )}
+          </div>,
+          headerTitleTarget
+      )}
 
+      {headerActionsTarget && createPortal(
+          <div className="flex items-center space-x-1 animate-in fade-in slide-in-from-right-2 duration-300 overflow-hidden">
             <button 
                 onClick={() => reloadData()}
                 disabled={loading.status === 'loading'}
-                className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded border border-gray-200 hover:border-blue-200 transition-all disabled:opacity-50"
+                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all disabled:opacity-50"
                 title="Refresh"
             >
-                <RefreshCw className={`w-3.5 h-3.5 ${loading.status === 'loading' ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-4 h-4 ${loading.status === 'loading' ? 'animate-spin' : ''}`} />
             </button>
+          </div>,
+          headerActionsTarget
+      )}
 
-            <a 
-                href="http://empapp.daffodilvarsity.edu.bd/diu-spm/home" 
-                target="_blank" 
-                rel="noreferrer"
-                className="px-2 py-1 text-[10px] font-bold text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded border border-gray-200 hover:border-blue-200 transition-all ml-1 whitespace-nowrap"
-                title="Open SPM Portal"
-            >
-                SPM Portal
-            </a>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-hidden flex flex-row gap-2">
-        {/* Content Area */}
-        <div className="flex-1 overflow-hidden bg-white rounded border border-gray-200 shadow-sm relative flex flex-col">
-            {loading.status === 'loading' && programData.length === 0 && (
-                <div className="absolute inset-0 z-20 bg-white/90 flex flex-col items-center justify-center space-y-2">
-                    <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      {/* Main Container */}
+      <div className="flex-1 overflow-hidden flex flex-row relative">
+        
+        {/* Left Pane: Sidebar - Narrower at 220px */}
+        <div className="w-full md:w-[220px] flex flex-col bg-white border-r border-gray-200 shadow-sm overflow-hidden shrink-0">
+            {/* Top Sidebar Filters */}
+            <div className="p-2 space-y-2.5 shrink-0 bg-white border-b border-gray-100">
+                {/* Faculty chips row */}
+                <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar pb-1">
+                  <button 
+                    onClick={() => setSelectedFaculty('All')}
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all border ${selectedFaculty === 'All' ? 'bg-[#008080] text-white border-[#006666]' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    All
+                  </button>
+                  {faculties.map(fac => (
+                    <button 
+                      key={fac}
+                      onClick={() => setSelectedFaculty(fac)}
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all border whitespace-nowrap ${selectedFaculty === fac ? 'ring-2 ring-blue-400 ring-offset-0' : ''} ${FACULTY_CHIP_COLORS[fac] || 'bg-gray-100 text-gray-700'}`}
+                    >
+                      {fac}
+                    </button>
+                  ))}
                 </div>
-            )}
 
-            <div className="flex-1 overflow-auto relative" ref={containerRef}>
-                <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-100 sticky top-0 z-10 shadow-sm border-b border-gray-200">
-                        <tr>
-                            {columns.map((col) => (
-                                <th key={col} className="px-2 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap text-left">
-                                    {col}
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                        {paginatedData.map((row, idx) => {
-                            const isSelected = selectedProgram?.PID === row.PID;
-                            return (
-                                <tr 
-                                    key={idx} 
-                                    onClick={() => setSelectedProgram(row)}
-                                    className={`transition-colors group text-[11px] text-gray-700 leading-none h-[29px] cursor-pointer ${isSelected ? 'bg-blue-100 ring-1 ring-inset ring-blue-500' : 'hover:bg-blue-50/60'}`}
-                                >
-                                    {columns.map((col) => {
-                                        let displayValue = row[col];
-                                        
-                                        // Calculation for 'No of Class Required'
-                                        if (col === 'No of Class Required') {
-                                            displayValue = calculateNoOfClassRequired(
-                                                row['Class Requirement'] || '', 
-                                                row['Class Duration'] || ''
-                                            );
-                                        }
+                {/* Programs Label */}
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1 mb-1">Programs</div>
 
-                                        return (
-                                            <td key={`${idx}-${col}`} className="px-2 py-1 whitespace-nowrap border-r border-transparent group-hover:border-blue-100/50 last:border-none max-w-[200px] overflow-hidden text-ellipsis">
-                                                {displayValue || <span className="text-gray-300">-</span>}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                            );
-                        })}
-                        {filteredData.length === 0 && loading.status === 'success' && (
-                            <tr>
-                                <td colSpan={columns.length} className="px-4 py-8 text-center text-xs text-gray-400">
-                                    No programs found.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                {/* Filter Rows */}
+                <div className="space-y-1.5 px-0.5">
+                    {/* Program Type Row */}
+                    <div className="flex flex-wrap gap-1">
+                    {['Graduate', 'Undergraduate'].map((cat) => {
+                        const isActive = selectedType === cat;
+                        return (
+                            <button 
+                                key={cat}
+                                onClick={() => setSelectedType(isActive ? null : cat)}
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all ${isActive ? 'bg-blue-50 text-blue-600 border-blue-300' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
+                            >
+                                {cat}
+                            </button>
+                        );
+                    })}
+                    </div>
+                    {/* Semester Type Row */}
+                    <div className="flex flex-wrap gap-1">
+                    {['Bi-Semester', 'Tri-Semester'].map((cat) => {
+                        const isActive = selectedSemesterMode === cat;
+                        return (
+                            <button 
+                                key={cat}
+                                onClick={() => setSelectedSemesterMode(isActive ? null : cat)}
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all ${isActive ? 'bg-blue-50 text-blue-600 border-blue-300' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
+                            >
+                                {cat}
+                            </button>
+                        );
+                    })}
+                    </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative group">
+                    <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input 
+                        type="text" 
+                        placeholder="Search..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-7 pr-2 py-1.5 bg-gray-50 border border-gray-200 rounded-md text-[11px] outline-none focus:border-blue-500 transition-all placeholder:text-gray-400 font-medium"
+                    />
+                </div>
             </div>
             
-            {/* Pagination Footer */}
-            <div className="bg-slate-50 px-2 py-1 border-t border-gray-200 flex justify-between items-center text-[10px] text-gray-500 font-medium select-none shrink-0 h-[30px]">
-                <div className="flex items-center space-x-2">
-                    <span>
-                        {filteredData.length > 0 ? (currentPage - 1) * rowsPerPage + 1 : 0}-
-                        {Math.min(currentPage * rowsPerPage, filteredData.length)} of {filteredData.length}
-                    </span>
-                </div>
-
-                <div className="flex items-center space-x-1">
-                    <button 
-                        onClick={() => setCurrentPage(1)} 
-                        disabled={currentPage === 1}
-                        className="p-1 hover:bg-white hover:shadow-sm rounded disabled:opacity-30 disabled:hover:bg-transparent transition-all"
-                    >
-                        <ChevronsLeft className="w-3.5 h-3.5" />
-                    </button>
-                    <button 
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
-                        disabled={currentPage === 1}
-                        className="p-1 hover:bg-white hover:shadow-sm rounded disabled:opacity-30 disabled:hover:bg-transparent transition-all"
-                    >
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                    </button>
-                    
-                    <span className="min-w-[20px] text-center font-bold text-gray-700">
-                        {currentPage}
-                    </span>
-                    
-                    <button 
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
-                        disabled={currentPage === totalPages || totalPages === 0}
-                        className="p-1 hover:bg-white hover:shadow-sm rounded disabled:opacity-30 disabled:hover:bg-transparent transition-all"
-                    >
-                        <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                    <button 
-                        onClick={() => setCurrentPage(totalPages)} 
-                        disabled={currentPage === totalPages || totalPages === 0}
-                        className="p-1 hover:bg-white hover:shadow-sm rounded disabled:opacity-30 disabled:hover:bg-transparent transition-all"
-                    >
-                        <ChevronsRight className="w-3.5 h-3.5" />
-                    </button>
-                </div>
+            <div className="flex-1 overflow-y-auto thin-scrollbar bg-white">
+                {loading.status === 'loading' && programData.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full space-y-3 opacity-50">
+                        <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                ) : sortedGroupKeys.map((fac) => (
+                    <div key={fac} className="mb-0">
+                        <div className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${FACULTY_HEADER_COLORS[fac] || 'bg-gray-100 text-gray-600'} sticky top-0 z-10 border-b border-gray-100/50`}>
+                          {fac}
+                        </div>
+                        <div className="py-0">
+                          {groupedData[fac].map((row) => {
+                            const isActive = selectedProgram?.PID === row.PID;
+                            return (
+                                <div 
+                                    key={row.PID}
+                                    onClick={() => setSelectedProgram(row)}
+                                    className={`px-3 py-2 flex items-center group cursor-pointer transition-colors border-l-4 ${
+                                        isActive 
+                                        ? 'bg-blue-50/50 border-blue-600' 
+                                        : 'bg-white border-transparent hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <div className="w-1 h-1 rounded-full bg-orange-400 mr-2 shrink-0 shadow-sm" />
+                                    <div className="flex-1 min-w-0 flex items-baseline">
+                                        <span className="text-[10px] font-bold text-gray-400 font-mono w-6 shrink-0">{row.PID}</span>
+                                        <span className={`text-[11px] font-medium truncate ${isActive ? 'text-blue-900 font-bold' : 'text-gray-700'}`}>
+                                            {row['Program Short Name']}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button 
+                                            onClick={(e) => handleEditItem(e, row)}
+                                            className="p-1 hover:bg-blue-100 rounded text-blue-500 transition-colors"
+                                            title="Edit Program"
+                                        >
+                                            <Pencil className="w-3 h-3" />
+                                        </button>
+                                        <ChevronRight className={`w-3 h-3 ${isActive ? 'text-blue-600' : 'text-gray-300'}`} />
+                                    </div>
+                                </div>
+                            );
+                          })}
+                        </div>
+                    </div>
+                ))}
             </div>
         </div>
 
-        {/* Details Panel */}
-        {selectedProgram && (
-            <ProgramDetailsPanel 
-                program={selectedProgram}
-                allPrograms={programData}
-                diuEmployeeData={diuEmployeeData}
-                onClose={() => setSelectedProgram(null)}
-                onUpdate={handlePanelUpdate}
-            />
-        )}
+        {/* Right Pane: Detail View */}
+        <div className="flex-1 min-w-0 bg-white overflow-hidden flex flex-col">
+            {selectedProgram ? (
+                <ProgramDetailsPanel 
+                    program={selectedProgram}
+                    allPrograms={programData}
+                    diuEmployeeData={diuEmployeeData}
+                    onClose={() => setSelectedProgram(null)}
+                    onUpdate={handlePanelUpdate}
+                />
+            ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-slate-50/50">
+                    <School className="w-16 h-16 mb-4 opacity-10" />
+                    <p className="text-sm font-medium">Select a program to view details</p>
+                </div>
+            )}
+        </div>
+
+        {/* Floating Action Button for New Program */}
+        <button
+            onClick={handleAdd}
+            className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 group z-30"
+            title="Add New Program"
+        >
+            <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform duration-300" />
+        </button>
       </div>
 
-      <button
-          onClick={handleAdd}
-          className="fixed bottom-8 right-8 w-14 h-14 bg-blue-600 text-white rounded-full shadow-xl shadow-blue-600/30 flex items-center justify-center z-40 hover:bg-blue-700 active:scale-90 transition-all hover:scale-105"
-      >
-          <Plus className="w-7 h-7" />
-      </button>
-
-      {/* Add Modal */}
       <EditEntryModal 
           isOpen={isEditModalOpen}
           onClose={() => setIsEditModalOpen(false)}
           mode={editMode}
-          title='Add Program'
+          title={editMode === 'add' ? 'Add Program' : 'Edit Program'}
           sheetName={SHEET_NAMES.PROGRAM}
-          columns={editColumns}
+          columns={['PID','Faculty Short Name','Faculty Full Name','Program Full Name','Program Short Name','Department Name','Program Type','Semester Type','Semester Duration Num','Theory Duration','Lab Duration','Theory Requirement','Lab Requirement','Head','Associate Head','Administration']}
+          hiddenFields={['Class Duration', 'Class Requirement', 'Semester Duration']}
           initialData={editingRow}
           keyColumn="PID"
           spreadsheetId={REF_SHEET_ID}
-          fieldOptions={fieldOptions}
-          multiSelectFields={multiSelectFields}
+          fieldOptions={{
+              'Head': employeeOptions,
+              'Associate Head': employeeOptions,
+              'Administration': employeeOptions
+          }}
+          multiSelectFields={['Head', 'Associate Head', 'Administration']}
           transformData={transformDataForSubmit}
-          onSuccess={handleModalSuccess}
+          onSuccess={(newData) => {
+              if (newData) {
+                  if (editMode === 'add') {
+                      updateProgramData(prev => [newData, ...prev]);
+                      setSelectedProgram(newData);
+                  } else {
+                      updateProgramData(prev => prev.map(r => r.PID === newData.PID ? newData : r));
+                      setSelectedProgram(newData);
+                  }
+              }
+          }}
       />
     </div>
   );

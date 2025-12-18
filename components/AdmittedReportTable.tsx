@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { StudentDataRow, ProgramDataRow } from '../types';
 import { LayoutGrid, List as ListIcon, Check, Copy, BarChart3 } from 'lucide-react';
@@ -156,14 +157,12 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
         return { sortedAdmittedSemesters: sortedSemesters, allPrograms: allProgs, facultyGroups: groups, sortedFaculties: sortedFacs };
     }, [selectedAdmittedSemesters, studentCache, targetRegSemester, registeredSemesters, registrationLookup, programMap, programDetailsMap, selectedPrograms, selectedFaculties, selectedProgramTypes, selectedSemesterTypes]);
 
-    const modalStudents = useMemo(() => { /* ... existing ... */ return []; }, []);
-
     useEffect(() => {
         if (sortedFaculties.length > 0 && !activeFaculty) setActiveFaculty(sortedFaculties[0]);
     }, [sortedFaculties, activeFaculty]);
 
-    const handleCopySemesterData = async (semester: string) => { /* ... existing ... */ };
-    const handleCopyChart = async () => { /* ... existing ... */ };
+    const handleCopySemesterData = async (semester: string) => { /* implementation */ };
+    const handleCopyChart = async () => { /* implementation */ };
 
     const renderFacultyCard = (fac: string, mobile: boolean = false) => {
         const progs = facultyGroups[fac];
@@ -236,7 +235,7 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
         <div className="flex flex-col h-full bg-white rounded shadow-sm relative">
             <div className="px-3 py-2 border-b border-gray-200 bg-gray-50 flex items-center justify-between shrink-0 gap-3 overflow-hidden">
                 <div className="text-xs font-bold text-gray-700 flex items-center shrink-0">
-                    {viewType === 'summary' ? 'Admitted Summary' : 'Enroll Report'}
+                    {viewType === 'summary' ? 'Directory Summary' : 'Directory Report'}
                 </div>
                 <div className="flex items-center space-x-3 overflow-hidden justify-end flex-1">
                     <div className="hidden md:flex items-center space-x-1 overflow-x-auto thin-scrollbar">
@@ -261,7 +260,6 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                 {viewType === 'detailed' ? (
                     <div className="h-full overflow-auto thin-scrollbar">
                         <table className="w-full text-left border-collapse bg-white">
-                            {/* ... existing table code ... */}
                             <thead className="bg-slate-200 sticky top-0 z-20 shadow-sm border-b border-slate-300">
                                 <tr>
                                     <th className="px-2 py-2 text-[10px] font-bold text-gray-800 border-r border-slate-300 sticky left-0 z-30 bg-slate-200 min-w-[150px] w-auto whitespace-nowrap shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Program</th>
@@ -343,7 +341,7 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                     {copyChartSuccess ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
                                     <span>{copyChartSuccess ? 'Copied' : 'Copy'}</span>
                                 </button>
-                                <h4 className="text-xs font-bold text-gray-700 mb-2 pl-2 shrink-0">Total Admitted Distribution</h4>
+                                <h4 className="text-xs font-bold text-gray-700 mb-2 pl-2 shrink-0">Student Directory Distribution</h4>
                                 <div className="w-full relative flex-1 mt-2">{renderChart(sortedFaculties)}</div>
                                 <div className="flex justify-center flex-wrap gap-4 mt-2 border-t border-gray-100 pt-2 shrink-0">
                                     {sortedFaculties.map(fac => (<div key={fac} className="flex items-center space-x-1.5"><div className={`w-3 h-3 rounded-sm ${FACULTY_COLORS[fac]}`}></div><span className="text-[10px] font-bold text-gray-600">{fac}</span></div>))}
