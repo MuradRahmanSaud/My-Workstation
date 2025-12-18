@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { DiuEmployeeRow } from '../types';
 import { X, User, Phone, Mail, MapPin, Globe, Linkedin, Facebook, Copy, Check, Briefcase, Hash, Pencil, Save, Undo2, ExternalLink, Image as ImageIcon } from 'lucide-react';
@@ -116,9 +117,9 @@ export const EmployeeDetailsPanel: React.FC<EmployeeDetailsPanelProps> = ({ empl
         >
             {/* 
                 Mobile: Fixed 90vw width and 90vh height
-                Desktop: Full width/height of its flex container context.
+                Desktop: Full height with rounded-xl corners and border on all sides to look like a card.
             */}
-            <div className="w-[90vw] h-[90vh] md:w-full md:h-full md:max-w-none md:max-h-none bg-white rounded-2xl shadow-2xl md:shadow-xl flex flex-col overflow-hidden md:rounded-none md:border-l md:border-gray-200 font-sans transform transition-all animate-in zoom-in-95 duration-200 md:animate-none">
+            <div className="w-[90vw] h-[90vh] md:w-full md:h-full md:max-w-none md:max-h-none bg-white rounded-2xl md:rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.15)] md:shadow-[0_0_20px_rgba(0,0,0,0.08)] flex flex-col overflow-hidden md:border md:border-gray-200 font-sans transform transition-all animate-in zoom-in-95 duration-200 md:animate-none">
                 
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-gray-100 bg-white shrink-0 relative flex items-center justify-between">

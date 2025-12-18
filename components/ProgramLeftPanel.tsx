@@ -34,8 +34,8 @@ export const ProgramLeftPanel: React.FC<ProgramLeftPanelProps> = ({
     facultyColors, facultyHeaderColors, loading
 }) => {
     return (
-        <div className="w-full md:w-[240px] flex flex-col bg-white border-r border-gray-200 shadow-sm overflow-hidden shrink-0">
-            <div className="p-2 space-y-2.5 shrink-0 bg-white border-b border-gray-100">
+        <div className="w-full md:w-[240px] flex flex-col bg-white border-r border-gray-200 overflow-hidden shrink-0">
+            <div className="p-2 space-y-2.5 shrink-0 bg-white">
                 <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar pb-1">
                     <button 
                         onClick={() => setSelectedFaculty('All')}
@@ -58,7 +58,6 @@ export const ProgramLeftPanel: React.FC<ProgramLeftPanelProps> = ({
                     {/* Program Type Tabs */}
                     <div className="flex flex-wrap gap-1">
                         {['Graduate', 'Undergraduate'].map((cat) => {
-                            // Highlight if manually selected as filter OR if it matches the selected program's property
                             const isFilterActive = selectedType === cat;
                             const isProgramProp = selectedProgram && selectedProgram['Program Type'] === cat;
                             
@@ -68,7 +67,7 @@ export const ProgramLeftPanel: React.FC<ProgramLeftPanelProps> = ({
                                     onClick={() => setSelectedType(selectedType === cat ? null : cat)}
                                     className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all 
                                         ${isFilterActive 
-                                            ? 'bg-blue-600 text-white border-blue-700 shadow-sm' 
+                                            ? 'bg-blue-600 text-white border-blue-700' 
                                             : isProgramProp 
                                                 ? 'bg-blue-50 text-blue-600 border-blue-300 ring-1 ring-blue-100' 
                                                 : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
@@ -83,7 +82,6 @@ export const ProgramLeftPanel: React.FC<ProgramLeftPanelProps> = ({
                     {/* Semester Mode Tabs */}
                     <div className="flex flex-wrap gap-1">
                         {['Bi-Semester', 'Tri-Semester'].map((cat) => {
-                            // Highlight if manually selected as filter OR if it matches the selected program's property
                             const isFilterActive = selectedSemesterMode === cat;
                             const isProgramProp = selectedProgram && selectedProgram['Semester Type']?.includes(cat);
 
@@ -93,7 +91,7 @@ export const ProgramLeftPanel: React.FC<ProgramLeftPanelProps> = ({
                                     onClick={() => setSelectedSemesterMode(selectedSemesterMode === cat ? null : cat)}
                                     className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all 
                                         ${isFilterActive 
-                                            ? 'bg-indigo-600 text-white border-indigo-700 shadow-sm' 
+                                            ? 'bg-indigo-600 text-white border-indigo-700' 
                                             : isProgramProp 
                                                 ? 'bg-indigo-50 text-indigo-600 border-indigo-300 ring-1 ring-indigo-100' 
                                                 : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
@@ -111,7 +109,7 @@ export const ProgramLeftPanel: React.FC<ProgramLeftPanelProps> = ({
                         <select 
                             value={semesterFilter}
                             onChange={(e) => setSemesterFilter(e.target.value)}
-                            className="w-full pl-7 pr-6 py-1.5 text-[11px] border border-gray-200 rounded-md bg-white focus:border-blue-500 outline-none appearance-none cursor-pointer hover:border-blue-400 transition-colors font-bold text-gray-700 shadow-sm"
+                            className="w-full pl-7 pr-6 py-1.5 text-[11px] border border-gray-200 rounded-md bg-white focus:border-blue-500 outline-none appearance-none cursor-pointer hover:border-blue-400 transition-colors font-bold text-gray-700"
                         >
                             {uniqueSemesters.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
@@ -153,7 +151,7 @@ export const ProgramLeftPanel: React.FC<ProgramLeftPanelProps> = ({
                                         : 'bg-white border-transparent hover:bg-gray-50'
                                     }`}
                                 >
-                                    <div className="w-1 h-1 rounded-full bg-orange-400 mr-2 shrink-0 shadow-sm" />
+                                    <div className="w-1 h-1 rounded-full bg-orange-400 mr-2 shrink-0" />
                                     <div className="flex-1 min-w-0 flex items-baseline">
                                         <span className="text-[10px] font-bold text-gray-400 font-mono w-6 shrink-0">{row.PID}</span>
                                         <span className={`text-[11px] font-medium truncate ${selectedProgram?.PID === row.PID ? 'text-blue-900 font-bold' : 'text-gray-700'}`}>

@@ -28,7 +28,7 @@ const FACULTY_HEADER_COLORS: Record<string, string> = {
 };
 
 export const ProgramView: React.FC = () => {
-  const { data: allSections, programData, diuEmployeeData, loading, reloadData, updateProgramData, semesterFilter, setSemesterFilter, uniqueSemesters } = useSheetData();
+  const { data: allSections, programData, diuEmployeeData, teacherData, loading, reloadData, updateProgramData, semesterFilter, setSemesterFilter, uniqueSemesters } = useSheetData();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFaculty, setSelectedFaculty] = useState<string>('All');
   const [selectedType, setSelectedType] = useState<string | null>(null);
@@ -131,8 +131,8 @@ export const ProgramView: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleEditItem = (e: React.MouseEvent, row: ProgramDataRow) => {
-      e.stopPropagation();
+  const handleEditItem = (e: React.MouseEvent | null, row: ProgramDataRow) => {
+      if (e) e.stopPropagation();
       setEditMode('edit');
       const durStr = row['Class Duration'] || '';
       const reqStr = row['Class Requirement'] || '';
@@ -254,7 +254,12 @@ export const ProgramView: React.FC = () => {
             {selectedProgram ? (
                 <>
                     <ProgramDashboard stats={stats} />
-                    <ProgramRightPanel program={selectedProgram} diuEmployeeData={diuEmployeeData} />
+                    <ProgramRightPanel 
+                        program={selectedProgram} 
+                        diuEmployeeData={diuEmployeeData} 
+                        teacherData={teacherData}
+                        onEdit={(p) => handleEditItem(null, p)}
+                    />
                 </>
             ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-slate-50/50">
