@@ -65,8 +65,16 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } catch (e) {}
   };
 
-  const loadData = async (mode: 'all' | 'admitted' | 'sections' = 'all') => {
+  const loadData = async (mode: 'all' | 'admitted' | 'sections' = 'all', force: boolean = false) => {
     setLoading({ status: 'loading', message: 'Optimizing Workflow...' });
+    
+    if (force) {
+        // Clear specific DB caches from sessionStorage to bypass caching in sheetService
+        ['reference', 'teacher', 'program', 'faculty_leadership', 'employee'].forEach(key => {
+            sessionStorage.removeItem(`cache_${key}`);
+        });
+    }
+
     try {
       // Lazy load secondary data in background
       if (mode === 'all' || mode === 'admitted') {
@@ -75,7 +83,7 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               links.forEach(row => { if (row.Semester && row['Student Data Link']) map.set(row.Semester, row['Student Data Link']); });
               setStudentDataLinks(map);
           });
-          loadRegisteredData();
+          loadRegisteredData(force);
           if (mode === 'admitted') { setLoading({ status: 'success' }); return; }
       }
 

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, RefreshCw, BarChart3, List, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus } from 'lucide-react';
@@ -76,7 +77,7 @@ export const ClassRoomView: React.FC = () => {
                     <button onClick={() => { setEditMode('add'); setEditingRow(undefined); setIsEditModalOpen(true); }} className="hidden lg:flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-[11px] font-bold transition-all shadow-sm active:scale-95"><Plus className="w-3 h-3 mr-1" />Add Room</button>
                 </>
             )}
-            <button onClick={() => reloadData('sections')} disabled={loading.status === 'loading'} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all disabled:opacity-50" title="Refresh"><RefreshCw className={`w-4 h-4 ${loading.status === 'loading' ? 'animate-spin' : ''}`} /></button>
+            <button onClick={() => reloadData('sections', true)} disabled={loading.status === 'loading'} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all disabled:opacity-50" title="Refresh"><RefreshCw className={`w-4 h-4 ${loading.status === 'loading' ? 'animate-spin' : ''}`} /></button>
           </div>,
           headerActionsTarget
       )}
@@ -103,7 +104,7 @@ export const ClassRoomView: React.FC = () => {
         )}
       </div>
 
-      <EditEntryModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} mode={editMode} title={editMode === 'add' ? 'Add New Room' : 'Edit Room'} sheetName={SHEET_NAMES.CLASSROOM} columns={['PID','Building','Floor','Room','Room Type','Capacity','Slot Duration','Slot Per Room','Shared Program']} initialData={editingRow} keyColumn="Room" spreadsheetId={REF_SHEET_ID} onSuccess={handleModalSuccess} />
+      <EditEntryModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} mode="edit" title={editMode === 'add' ? 'Add New Room' : 'Edit Room'} sheetName={SHEET_NAMES.CLASSROOM} columns={['PID','Building','Floor','Room','Room Type','Capacity','Slot Duration','Slot Per Room','Shared Program']} initialData={editingRow} keyColumn="Room" spreadsheetId={REF_SHEET_ID} onSuccess={handleModalSuccess} />
     </div>
   );
 };

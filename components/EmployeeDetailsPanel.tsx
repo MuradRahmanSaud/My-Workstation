@@ -3,8 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { DiuEmployeeRow } from '../types';
 import { X, User, Phone, Mail, MapPin, Globe, Linkedin, Facebook, Copy, Check, Briefcase, Hash, Pencil, Save, Undo2, ExternalLink, Image as ImageIcon } from 'lucide-react';
 import { SearchableSelect, MultiSearchableSelect } from './EditEntryModal';
-import { submitSheetData, normalizeId } from '../services/sheetService';
-import { SHEET_NAMES, REF_SHEET_ID } from '../constants';
+import { normalizeId } from '../services/sheetService';
 import { getImageUrl, isValEmpty } from '../views/EmployeeView';
 
 interface EmployeeDetailsPanelProps {
@@ -45,20 +44,6 @@ export const EmployeeDetailsPanel: React.FC<EmployeeDetailsPanelProps> = ({
     const handleSave = () => {
         onUpdate(formData);
         setIsEditing(false);
-        (async () => {
-            try {
-                let result = await submitSheetData('update', SHEET_NAMES.EMPLOYEE, formData, 'Employee ID', employee['Employee ID'].trim(), REF_SHEET_ID);
-                const errorMsg = (result.message || result.error || '').toLowerCase();
-                if (result.result === 'error' && (errorMsg.includes('not found') || errorMsg.includes('no match'))) {
-                    result = await submitSheetData('add', SHEET_NAMES.EMPLOYEE, formData, 'Employee ID', employee['Employee ID'].trim(), REF_SHEET_ID, { insertMethod: 'first_empty' });
-                }
-                if (result.result !== 'success') {
-                    alert("Failed to save changes to Google Sheet: " + (result.message || 'Unknown error'));
-                }
-            } catch (e) {
-                alert("Network error while saving to Google Sheet.");
-            }
-        })();
     };
 
     const handleCancelEdit = () => {
@@ -88,7 +73,7 @@ export const EmployeeDetailsPanel: React.FC<EmployeeDetailsPanelProps> = ({
                         {isEditing ? 'Edit Profile' : 'Profile Details'}
                     </h3>
                     <div className="flex items-center space-x-1">
-                        {!isEditing && employee.Status !== 'Unregistered' && (
+                        {!isEditing && (
                             <button 
                                 onClick={() => setIsEditing(true)}
                                 className="p-2 md:p-1.5 hover:bg-blue-50 hover:text-blue-600 rounded-full text-gray-500 transition-colors"

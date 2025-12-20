@@ -165,10 +165,25 @@ export const EmployeeView: React.FC = () => {
   const [editingRow, setEditingRow] = useState<DiuEmployeeRow | undefined>(undefined);
 
   const handlePanelUpdate = (newData: DiuEmployeeRow) => {
+    // Local Update
     updateDiuEmployeeData(prev => prev.map(row => 
         row['Employee ID'] === newData['Employee ID'] ? { ...row, ...newData } : row
     ));
     setSelectedEmployee(prev => prev ? { ...prev, ...newData } : prev);
+
+    // Persistence to Sheets
+    (async () => {
+        try {
+            let result = await submitSheetData('update', SHEET_NAMES.EMPLOYEE, newData, 'Employee ID', newData['Employee ID'].trim(), REF_SHEET_ID);
+            const errorMsg = (result.message || result.error || '').toLowerCase();
+            // If the employee doesn't exist in the Employee DB yet, add them
+            if (result.result === 'error' && (errorMsg.includes('not found') || errorMsg.includes('no match'))) {
+                await submitSheetData('add', SHEET_NAMES.EMPLOYEE, newData, 'Employee ID', newData['Employee ID'].trim(), REF_SHEET_ID, { insertMethod: 'first_empty' });
+            }
+        } catch (e) {
+            console.error("Failed to persist employee update:", e);
+        }
+    })();
   };
 
   const { departments, groups, statuses, fieldOptions } = useMemo(() => {
@@ -274,7 +289,7 @@ export const EmployeeView: React.FC = () => {
                 <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 rounded-full text-xs focus:ring-0 w-32 md:w-48 lg:w-64 outline-none transition-all" />
             </div>
             <button onClick={() => { setEditMode('add'); setEditingRow(undefined); setIsEditModalOpen(true); }} className="hidden lg:flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-[11px] font-bold transition-all shadow-sm"><Plus className="w-3 h-3 mr-1" />Add</button>
-            <button onClick={() => reloadData('all')} disabled={loading.status === 'loading'} className="p-1.5 text-gray-400 hover:text-blue-600 rounded-full transition-all"><RefreshCw className={`w-4 h-4 ${loading.status === 'loading' ? 'animate-spin' : ''}`} /></button>
+            <button onClick={() => reloadData('all', true)} disabled={loading.status === 'loading'} className="p-1.5 text-gray-400 hover:text-blue-600 rounded-full transition-all"><RefreshCw className={`w-4 h-4 ${loading.status === 'loading' ? 'animate-spin' : ''}`} /></button>
           </div>,
           headerActionsTarget
       )}

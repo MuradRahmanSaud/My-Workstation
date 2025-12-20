@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 // Fix: Added ChevronDown to imports from lucide-react
@@ -103,7 +104,7 @@ export const StudentView: React.FC = () => {
   const handleRefresh = async () => {
       setIsManualRefreshing(true);
       try {
-          await reloadData('admitted');
+          await reloadData('admitted', true);
           if (viewMode === 'details' && selectedSemester) await loadStudentData(selectedSemester, true);
       } catch (e) {
           console.error('Refresh failed', e);

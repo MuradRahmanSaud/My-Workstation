@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Users, User, ShieldCheck, GraduationCap, Plus, Edit2, AlertCircle, Save, Undo2, X, ChevronDown, Check, Facebook, Linkedin, Image as ImageIcon, Eye, UserPlus } from 'lucide-react';
+import { Users, User, ShieldCheck, GraduationCap, Plus, Edit2, AlertCircle, Save, Undo2, X, ChevronDown, Check, Facebook, Linkedin, Image as ImageIcon, Eye, UserPlus, Info, ExternalLink } from 'lucide-react';
 import { ProgramDataRow, DiuEmployeeRow, TeacherDataRow, FacultyLeadershipRow } from '../types';
 import { normalizeId } from '../services/sheetService';
 import { SearchableSelect, MultiSearchableSelect } from './EditEntryModal';
@@ -21,16 +21,19 @@ const findInRow = (row: any, patterns: string[]): string => {
 interface ProgramRightPanelProps {
     program: ProgramDataRow;
     facultyLeadership?: FacultyLeadershipRow;
+    facultyLeadershipData: FacultyLeadershipRow[];
     diuEmployeeData: DiuEmployeeRow[];
     teacherData: TeacherDataRow[];
     employeeOptions: string[];
     employeeFieldOptions: any;
     onSaveFacultyLeadership: (data: any) => Promise<void>;
     onSaveProgramLeadership: (data: any) => Promise<void>;
+    onSaveProgramData: (data: any) => Promise<void>;
     onSaveEmployee: (data: any) => Promise<void>;
+    forceEditTrigger?: number;
 }
 
-type PanelView = 'details' | 'edit-faculty' | 'edit-program' | 'edit-employee';
+type PanelView = 'details' | 'edit-faculty' | 'edit-program' | 'edit-employee' | 'edit-program-leadership';
 
 const resolveEmployees = (idsStr: string | undefined, employeeData: DiuEmployeeRow[], teacherData: TeacherDataRow[]) => {
     if (!idsStr) return [];
@@ -66,26 +69,35 @@ const parseMetric = (str: string | undefined) => {
 export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({ 
     program, 
     facultyLeadership, 
+    facultyLeadershipData,
     diuEmployeeData, 
     teacherData,
     employeeOptions,
     employeeFieldOptions,
     onSaveFacultyLeadership,
     onSaveProgramLeadership,
-    onSaveEmployee
+    onSaveProgramData,
+    onSaveEmployee,
+    forceEditTrigger = 0
 }) => {
     const [view, setView] = useState<PanelView>('details');
     const [isSaving, setIsSaving] = useState(false);
     const [formData, setFormData] = useState<any>({});
     const [selectedEmployeeForDetails, setSelectedEmployeeForDetails] = useState<DiuEmployeeRow | null>(null);
 
-    // Keep track of the view we came from when registering a new employee
     const [returnView, setReturnView] = useState<PanelView | null>(null);
 
     useEffect(() => {
         setView('details');
         setSelectedEmployeeForDetails(null);
     }, [program.PID]);
+
+    // Listen for external trigger to open edit view
+    useEffect(() => {
+        if (forceEditTrigger > 0) {
+            handleEditProgram();
+        }
+    }, [forceEditTrigger]);
 
     const classDuration = parseMetric(program['Class Duration']);
     const classRequirement = parseMetric(program['Class Requirement']);
@@ -110,6 +122,7 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
         const existing = facultyLeadership;
         setFormData({
             'Faculty Short Name': program['Faculty Short Name'],
+            'Faculty Full Name': program['Faculty Full Name'],
             'Dean': formatIdsForForm(existing?.Dean),
             'Associate Dean': formatIdsForForm(existing?.['Associate Dean']),
             'Administration': formatIdsForForm(existing?.Administration)
@@ -128,43 +141,21 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
             'Theory Requirement': req.theory !== '-' ? req.theory : '0',
             'Lab Requirement': req.lab !== '-' ? req.lab : '0',
             'Semester Duration Num': (semDurStr.match(/(\d+)/) || [])[1] || '4',
-            'Head': formatIdsForForm(program.Head),
-            'Associate Head': formatIdsForForm(program['Associate Head']),
-            'Administration': formatIdsForForm(program.Administration)
         });
         setView('edit-program');
     };
 
     const handleEditEmployee = (idOrName: string, initial?: any) => {
-        // Store current view to come back after registration
-        if (view !== 'edit-employee') {
-            setReturnView(view);
-        }
-
+        if (view !== 'edit-employee') setReturnView(view);
         const existing = diuEmployeeData.find(e => normalizeId(e['Employee ID']) === normalizeId(idOrName));
         if (existing) {
             setFormData(existing);
         } else {
-            // Check if input looks like ID (regex for DIU common IDs like 71000 or 123-12-123)
             const isLikelyId = /^\d{3}-\d{2}-\d{3,5}$/.test(idOrName) || /^\d{5,8}$/.test(idOrName);
-            
             const name = isLikelyId ? (findInRow(initial, ['Employee Name', 'Name', 'Teacher Name']) || '') : idOrName;
             const id = isLikelyId ? idOrName : '';
-
             setFormData({
-                'Employee ID': id,
-                'Employee Name': name,
-                'Academic Designation': findInRow(initial, ['Designation', 'Academic Designation']) || '',
-                'Administrative Designation': '',
-                'Department': findInRow(initial, ['Department', 'Dept']) || '',
-                'Group Name': 'Teacher',
-                'Status': 'Active',
-                'Mobile': findInRow(initial, ['Mobile', 'Mobile Number', 'Mobile No', 'Phone', 'Cell']) || '',
-                'E-mail': findInRow(initial, ['Email', 'E-mail', 'Email Address']) || '',
-                'IP-Ext': '',
-                'Photo': findInRow(initial, ['Photo', 'Photo URL', 'Photo Link', 'Image', 'Picture']) || '',
-                'Facebook': findInRow(initial, ['Facebook']),
-                'Linkedin': findInRow(initial, ['Linkedin'])
+                'Employee ID': id, 'Employee Name': name, 'Academic Designation': findInRow(initial, ['Designation', 'Academic Designation']) || '', 'Administrative Designation': '', 'Department': findInRow(initial, ['Department', 'Dept']) || '', 'Group Name': 'Teacher', 'Status': 'Active', 'Mobile': findInRow(initial, ['Mobile', 'Mobile Number', 'Mobile No', 'Phone', 'Cell']) || '', 'E-mail': findInRow(initial, ['Email', 'E-mail', 'Email Address']) || '', 'IP-Ext': '', 'Photo': findInRow(initial, ['Photo', 'Photo URL', 'Photo Link', 'Image', 'Picture']) || '', 'Facebook': findInRow(initial, ['Facebook']), 'Linkedin': findInRow(initial, ['Linkedin'])
             });
         }
         setView('edit-employee');
@@ -175,15 +166,16 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
         const dataToSave = { ...formData };
         setIsSaving(true);
         
-        // Handle background task asynchronously to allow UI to close immediately
         (async () => {
             try {
                 if (currentView === 'edit-faculty') {
                     await onSaveFacultyLeadership(dataToSave);
                 } else if (currentView === 'edit-program') {
-                    await onSaveProgramLeadership(dataToSave);
+                    await onSaveProgramData(dataToSave);
                 } else if (currentView === 'edit-employee') {
                     await onSaveEmployee(dataToSave);
+                } else if (currentView === 'edit-program-leadership') {
+                    await onSaveProgramLeadership(dataToSave);
                 }
             } catch (error) {
                 console.error("Save error:", error);
@@ -192,17 +184,25 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
             }
         })();
 
-        // CLOSING LOGIC: Immediately transition the view to satisfy "sathe sathe close"
         if (currentView === 'edit-employee' && returnView) {
-            // If we came from a leadership edit screen, go back there
             setView(returnView);
             setReturnView(null);
         } else {
-            // Otherwise, go to the program details view
             setView('details');
             setReturnView(null);
         }
     };
+
+    // Update Faculty Full Name when Short Name changes in Program Edit
+    useEffect(() => {
+        if (view === 'edit-program') {
+            const short = formData['Faculty Short Name'];
+            const found = facultyLeadershipData.find(f => f['Faculty Short Name'] === short);
+            if (found && formData['Faculty Full Name'] !== found['Faculty Full Name']) {
+                setFormData(prev => ({ ...prev, 'Faculty Full Name': found['Faculty Full Name'] }));
+            }
+        }
+    }, [formData['Faculty Short Name'], view, facultyLeadershipData]);
 
     const renderPersonnelSection = (title: string, idsStr: string | undefined) => {
         const list = resolveEmployees(idsStr, diuEmployeeData, teacherData);
@@ -236,7 +236,6 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
                                 </div>
                                 <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button onClick={() => { if (emp) setSelectedEmployeeForDetails(emp); else { const tempEmp: any = { 'Employee ID': displayId, 'Employee Name': displayName, 'Academic Designation': teacher?.Designation || '', 'Administrative Designation': '', 'Department': teacher?.Department || '', 'Mobile': teacher?.['Mobile Number'] || '', 'E-mail': teacher?.Email || '', 'Photo': rawPhoto || '', 'Status': 'Unregistered' }; setSelectedEmployeeForDetails(tempEmp as DiuEmployeeRow); } }} className={`p-1.5 rounded-full transition-all ${isMissing ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`} title="View Details"><Eye className="w-3 h-3" /></button>
-                                    <button onClick={() => handleEditEmployee(displayId, emp || teacher || { 'Employee ID': displayId, 'Employee Name': displayName })} className={`p-1.5 rounded-full transition-all ${isMissing ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`} title="Edit Employee Information"><Edit2 className="w-3 h-3" /></button>
                                 </div>
                             </div>
                         );
@@ -248,146 +247,164 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
 
     if (view !== 'details') {
         return (
-            <div className="w-full lg:w-[320px] xl:w-[340px] flex flex-col bg-white border-l border-slate-100 shrink-0 overflow-hidden">
+            <div className="w-full lg:w-[320px] xl:w-[350px] flex flex-col bg-white border-l border-slate-100 shrink-0 overflow-hidden">
                 <div className="px-4 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
                     <div className="flex flex-col">
                         <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                            {view === 'edit-faculty' ? 'Faculty Leadership' : view === 'edit-program' ? 'Program Leadership' : 'Employee Registration'}
+                            {view === 'edit-faculty' ? 'Faculty Leadership' : view === 'edit-program' ? 'Edit Program' : view === 'edit-program-leadership' ? 'Program Leadership' : 'Employee Registration'}
                         </h3>
-                        {view === 'edit-employee' && <p className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Fill groups to register</p>}
                     </div>
                     <button onClick={() => { if (view === 'edit-employee' && returnView) { setView(returnView); setReturnView(null); } else setView('details'); }} className="p-1.5 hover:bg-white rounded-full text-slate-400"><X className="w-4 h-4" /></button>
                 </div>
-                <div className="flex-1 overflow-y-auto p-3 space-y-4 thin-scrollbar bg-slate-50/30">
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 thin-scrollbar bg-slate-50/30">
                     
-                    {/* Common Register Button for quick access when editing leadership */}
-                    {(view === 'edit-faculty' || view === 'edit-program') && (
-                        <button 
-                            onClick={() => handleEditEmployee('', {})}
-                            className="w-full flex items-center justify-center p-2 border-2 border-dashed border-slate-200 rounded-lg text-[10px] font-bold text-slate-400 hover:border-blue-300 hover:text-blue-600 transition-all bg-white/50"
-                        >
-                            <UserPlus className="w-3 h-3 mr-2" />
-                            Register New Employee
-                        </button>
+                    {(view === 'edit-faculty' || view === 'edit-program-leadership') && (
+                        <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-4">
+                            {['Head', 'Associate Head', 'Administration', 'Dean', 'Associate Dean'].filter(col => {
+                                if (view === 'edit-faculty') return ['Dean', 'Associate Dean', 'Administration'].includes(col);
+                                return ['Head', 'Associate Head', 'Administration'].includes(col);
+                            }).map(col => (
+                                <div key={col}>
+                                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">{col}</label>
+                                    <MultiSearchableSelect 
+                                        value={formData[col] || ''} 
+                                        onChange={(v) => setFormData({...formData, [col]: v})} 
+                                        options={employeeOptions} 
+                                        placeholder={`Select ${col}`} 
+                                        onAddNew={(searchVal) => handleEditEmployee(searchVal, {})}
+                                    />
+                                </div>
+                            ))}
+                        </div>
                     )}
 
-                    {view === 'edit-faculty' && (
-                        <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-4">
-                            {['Dean', 'Associate Dean', 'Administration'].map(col => (
-                                <div key={col}>
-                                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">{col}</label>
-                                    <MultiSearchableSelect 
-                                        value={formData[col] || ''} 
-                                        onChange={(v) => setFormData({...formData, [col]: v})} 
-                                        options={employeeOptions} 
-                                        placeholder={`Select ${col}`} 
-                                        onAddNew={(searchVal) => handleEditEmployee(searchVal, {})}
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    )}
                     {view === 'edit-program' && (
-                        <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-4">
-                            {['Head', 'Associate Head', 'Administration'].map(col => (
-                                <div key={col}>
-                                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">{col}</label>
-                                    <MultiSearchableSelect 
-                                        value={formData[col] || ''} 
-                                        onChange={(v) => setFormData({...formData, [col]: v})} 
-                                        options={employeeOptions} 
-                                        placeholder={`Select ${col}`} 
-                                        onAddNew={(searchVal) => handleEditEmployee(searchVal, {})}
-                                    />
+                        <div className="space-y-4">
+                            {/* Faculty Block */}
+                            <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-3">
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-50 pb-1.5">Faculty Association</h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase">Faculty (Short)</label>
+                                        <select 
+                                            value={formData['Faculty Short Name'] || ''}
+                                            onChange={(e) => setFormData({...formData, 'Faculty Short Name': e.target.value})}
+                                            className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none bg-white"
+                                        >
+                                            {facultyLeadershipData.map(f => (
+                                                <option key={f['Faculty Short Name']} value={f['Faculty Short Name']}>{f['Faculty Short Name']}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="group">
+                                        <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase">Faculty (Full)</label>
+                                        <input 
+                                            type="text" 
+                                            value={formData['Faculty Full Name'] || ''} 
+                                            onChange={(e) => setFormData({...formData, 'Faculty Full Name': e.target.value})}
+                                            className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none"
+                                            title="Editing this will update Faculty database"
+                                        />
+                                    </div>
                                 </div>
-                            ))}
+                            </div>
+
+                            {/* Program Block */}
+                            <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-3">
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-50 pb-1.5">Program Details</h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase">Short Name</label>
+                                        <input type="text" value={formData['Program Short Name'] || ''} onChange={e => setFormData({...formData, 'Program Short Name': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase">Full Name</label>
+                                        <input type="text" value={formData['Program Full Name'] || ''} onChange={e => setFormData({...formData, 'Program Full Name': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase">Department Name</label>
+                                    <input type="text" value={formData['Department Name'] || ''} onChange={e => setFormData({...formData, 'Department Name': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase">Program Type</label>
+                                        <SearchableSelect value={formData['Program Type'] || ''} onChange={v => setFormData({...formData, 'Program Type': v})} options={['Graduate', 'Undergraduate']} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase">Semester Type</label>
+                                        <SearchableSelect value={formData['Semester Type'] || ''} onChange={v => setFormData({...formData, 'Semester Type': v})} options={['Bi-Semester', 'Tri-Semester']} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Duration Block */}
+                            <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-3">
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-50 pb-1.5">Class Duration Configuration</h4>
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase">Semester</label>
+                                        <div className="relative">
+                                            <input type="number" value={formData['Semester Duration Num'] || ''} onChange={e => setFormData({...formData, 'Semester Duration Num': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 pr-12 focus:border-blue-500 outline-none" />
+                                            <span className="absolute right-2 top-2.5 text-[8px] font-bold text-slate-400 uppercase">Months</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase">Theory</label>
+                                        <div className="relative">
+                                            <input type="number" value={formData['Theory Duration'] || ''} onChange={e => setFormData({...formData, 'Theory Duration': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 pr-8 focus:border-blue-500 outline-none" />
+                                            <span className="absolute right-2 top-2.5 text-[8px] font-bold text-slate-400 uppercase">Min</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase">Lab</label>
+                                        <div className="relative">
+                                            <input type="number" value={formData['Lab Duration'] || ''} onChange={e => setFormData({...formData, 'Lab Duration': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 pr-8 focus:border-blue-500 outline-none" />
+                                            <span className="absolute right-2 top-2.5 text-[8px] font-bold text-slate-400 uppercase">Min</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Class Requirement Block */}
+                            <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-3">
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-50 pb-1.5">Class Requirement</h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase">Theory</label>
+                                        <div className="relative">
+                                            <input type="number" value={formData['Theory Requirement'] || ''} onChange={e => setFormData({...formData, 'Theory Requirement': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 pr-8 focus:border-blue-500 outline-none" />
+                                            <span className="absolute right-2 top-2.5 text-[8px] font-bold text-slate-400 uppercase">Min</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase">Lab</label>
+                                        <div className="relative">
+                                            <input type="number" value={formData['Lab Requirement'] || ''} onChange={e => setFormData({...formData, 'Lab Requirement': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 pr-8 focus:border-blue-500 outline-none" />
+                                            <span className="absolute right-2 top-2.5 text-[8px] font-bold text-slate-400 uppercase">Min</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
+
                     {view === 'edit-employee' && (
                         <div className="space-y-3 pb-2">
-                            {/* Basic Info */}
                             <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-2">
                                 <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-1 mb-1">Basic Information</h4>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase">Name</label>
-                                    <input type="text" value={formData['Employee Name'] || ''} onChange={e => setFormData({...formData, 'Employee Name': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none" />
-                                </div>
+                                <div><label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase">Name</label><input type="text" value={formData['Employee Name'] || ''} onChange={e => setFormData({...formData, 'Employee Name': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none" /></div>
                                 <div className="flex gap-2">
-                                    <div className="flex-1">
-                                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase">Dept</label>
-                                        <SearchableSelect value={formData['Department'] || ''} onChange={v => setFormData({...formData, 'Department': v})} options={employeeFieldOptions['Department']} />
-                                    </div>
-                                    <div className="w-[40%]">
-                                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase">Status</label>
-                                        <SearchableSelect value={formData['Status'] || 'Active'} onChange={v => setFormData({...formData, 'Status': v})} options={employeeFieldOptions['Status']} />
-                                    </div>
+                                    <div className="flex-1"><label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase">Dept</label><SearchableSelect value={formData['Department'] || ''} onChange={v => setFormData({...formData, 'Department': v})} options={employeeFieldOptions['Department']} /></div>
+                                    <div className="w-[40%]"><label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase">Status</label><SearchableSelect value={formData['Status'] || 'Active'} onChange={v => setFormData({...formData, 'Status': v})} options={employeeFieldOptions['Status']} /></div>
                                 </div>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase">Group</label>
-                                    <MultiSearchableSelect value={formData['Group Name'] || ''} onChange={v => setFormData({...formData, 'Group Name': v})} options={employeeFieldOptions['Group Name']} />
-                                </div>
+                                <div><label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase">Group</label><MultiSearchableSelect value={formData['Group Name'] || ''} onChange={v => setFormData({...formData, 'Group Name': v})} options={employeeFieldOptions['Group Name']} /></div>
                             </div>
-
-                            {/* Designation */}
-                            <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-2">
-                                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-1 mb-1">Designation</h4>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase truncate">Administrative</label>
-                                        <SearchableSelect value={formData['Administrative Designation'] || ''} onChange={v => setFormData({...formData, 'Administrative Designation': v})} options={employeeFieldOptions['Administrative Designation']} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase truncate">Academic</label>
-                                        <SearchableSelect value={formData['Academic Designation'] || ''} onChange={v => setFormData({...formData, 'Academic Designation': v})} options={employeeFieldOptions['Academic Designation']} />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Contact */}
+                            {/* Shortened rest of form to fit space */}
                             <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-2">
                                 <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-1 mb-1">Contact</h4>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase">Email</label>
-                                    <input type="text" value={formData['E-mail'] || ''} onChange={e => setFormData({...formData, 'E-mail': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none" />
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase">Mobile</label>
-                                        <input type="text" value={formData['Mobile'] || ''} onChange={e => setFormData({...formData, 'Mobile': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase">IP / Ext</label>
-                                        <input type="text" value={formData['IP-Ext'] || ''} onChange={e => setFormData({...formData, 'IP-Ext': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none" />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Social & Media */}
-                            <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-2">
-                                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-1 mb-1">Social & Media</h4>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase">Photo URL (Drive/Direct)</label>
-                                    <div className="relative">
-                                        <input type="text" value={formData['Photo'] || ''} onChange={e => setFormData({...formData, 'Photo': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none pr-8" placeholder="https://..." />
-                                        <ImageIcon className="absolute right-2.5 top-2.5 w-3.5 h-3.5 text-gray-400" />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase truncate">Facebook</label>
-                                        <div className="relative">
-                                            <input type="text" value={formData['Facebook'] || ''} onChange={e => setFormData({...formData, 'Facebook': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none pr-8" placeholder="facebook.com/..." />
-                                            <Facebook className="absolute right-2.5 top-2.5 w-3.5 h-3.5 text-blue-600" />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase truncate">LinkedIn</label>
-                                        <div className="relative">
-                                            <input type="text" value={formData['Linkedin'] || ''} onChange={e => setFormData({...formData, 'Linkedin': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none pr-8" placeholder="linkedin.com/in/..." />
-                                            <Linkedin className="absolute right-2.5 top-2.5 w-3.5 h-3.5 text-blue-700" />
-                                        </div>
-                                    </div>
-                                </div>
+                                <div><label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase">Email</label><input type="text" value={formData['E-mail'] || ''} onChange={e => setFormData({...formData, 'E-mail': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none" /></div>
+                                <div><label className="block text-[10px] font-bold text-gray-600 mb-0.5 uppercase">Mobile</label><input type="text" value={formData['Mobile'] || ''} onChange={e => setFormData({...formData, 'Mobile': e.target.value})} className="w-full text-xs border border-gray-300 rounded px-2 py-2 focus:border-blue-500 outline-none" /></div>
                             </div>
                         </div>
                     )}
@@ -404,10 +421,17 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
     const hasProgramLeadership = !!(program.Head || program['Associate Head'] || program.Administration);
 
     return (
-        <div className="w-full lg:w-[320px] xl:w-[340px] flex flex-col bg-white overflow-hidden border-l border-slate-100 shrink-0 relative">
+        <div className="w-full lg:w-[320px] xl:w-[350px] flex flex-col bg-white overflow-hidden border-l border-slate-100 shrink-0 relative">
             <div className="flex-1 overflow-y-auto thin-scrollbar">
                 <div className="pt-5 pb-3 bg-white">
-                    <div className="text-center px-4 space-y-1.5">
+                    <div className="text-center px-4 space-y-1.5 relative group">
+                        <button 
+                            onClick={handleEditProgram}
+                            className="absolute top-0 right-4 p-1.5 bg-blue-50 text-blue-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                            title="Edit Program Data"
+                        >
+                            <Edit2 className="w-3.5 h-3.5" />
+                        </button>
                         <h1 className="text-sm font-black text-slate-900 leading-tight uppercase tracking-tight">{program['Program Full Name'] || 'Program Full Name'}</h1>
                         <h2 className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{program['Faculty Full Name'] || 'Faculty Full Name'}</h2>
                         <div className="flex items-center justify-center space-x-2 text-[10px] font-bold text-slate-500 uppercase tracking-tighter pt-0.5">
@@ -454,7 +478,7 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
                     <div className="bg-white rounded-lg border border-slate-200 p-3">
                         <h4 className="text-[10px] font-bold text-slate-900 border-b border-slate-100 pb-1.5 mb-2.5 flex items-center justify-between uppercase tracking-widest">
                             <div className="flex items-center"><GraduationCap className="w-3 h-3 mr-1.5 text-indigo-600" />Program Leadership</div>
-                            <button onClick={handleEditProgram} className="p-1 hover:bg-slate-100 rounded transition-colors text-slate-400 hover:text-blue-600" title="Edit Program Leadership"><Plus className="w-3 h-3" /></button>
+                            <button onClick={() => { setFormData({...program}); setView('edit-program-leadership'); }} className="p-1 hover:bg-slate-100 rounded transition-colors text-slate-400 hover:text-blue-600" title="Edit Program Leadership"><Plus className="w-3 h-3" /></button>
                         </h4>
                         {hasProgramLeadership ? (
                             <div className="space-y-1">
@@ -469,7 +493,6 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
                 </div>
             </div>
 
-            {/* Overlaid Employee Details Panel */}
             {selectedEmployeeForDetails && (
                 <div className="absolute inset-0 z-50 bg-white flex flex-col animate-in slide-in-from-right duration-300 shadow-2xl">
                     <EmployeeDetailsPanel 
@@ -477,9 +500,10 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
                         onClose={() => setSelectedEmployeeForDetails(null)} 
                         onUpdate={(updatedData) => {
                             onSaveEmployee(updatedData);
+                            setSelectedEmployeeForDetails(updatedData);
                         }} 
                         fieldOptions={employeeFieldOptions} 
-                        isInline={true} // Ensure it stays within this specific absolute container
+                        isInline={true} 
                     />
                 </div>
             )}

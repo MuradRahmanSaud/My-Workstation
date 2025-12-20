@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { RefreshCw, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowLeft, Database, ExternalLink, CheckCircle, XCircle, BarChart3, List, Menu, X, LogIn, Settings } from 'lucide-react';
@@ -574,9 +575,9 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
 
   const handleRefresh = () => {
       if (viewMode === 'admitted') {
-          reloadData('admitted');
+          reloadData('admitted', true);
       } else {
-          reloadData('sections');
+          reloadData('sections', true);
       }
   };
 

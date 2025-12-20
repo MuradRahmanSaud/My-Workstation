@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Save, AlertCircle, CheckCircle, ChevronDown, Plus } from 'lucide-react';
+import { X, Save, AlertCircle, CheckCircle, ChevronDown, Plus, Search, Check } from 'lucide-react';
 import { submitSheetData } from '../services/sheetService';
 
 interface EditEntryModalProps {
@@ -68,14 +68,15 @@ export const MultiSearchableSelect = ({
         onChange(unique.join(', '));
     };
 
-    const handleSelect = (val: string) => {
+    const handleToggle = (val: string) => {
         const trimmed = val.trim();
         if (!trimmed) return;
-        if (!selectedItems.includes(trimmed)) {
+        
+        if (selectedItems.includes(trimmed)) {
+            updateValue(selectedItems.filter(item => item !== trimmed));
+        } else {
             updateValue([...selectedItems, trimmed]);
         }
-        setSearch('');
-        inputRef.current?.focus();
     };
 
     const handleRemove = (val: string) => {
@@ -83,88 +84,124 @@ export const MultiSearchableSelect = ({
         updateValue(selectedItems.filter(item => item !== val));
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && search) {
-            e.preventDefault();
-            if (onAddNew && !options.some(opt => opt.toLowerCase().includes(search.toLowerCase()))) {
-                onAddNew(search);
-            } else {
-                handleSelect(search);
-            }
+    const handleAddNew = () => {
+        if (!search.trim()) return;
+        const newVal = search.trim();
+        if (!selectedItems.includes(newVal)) {
+            updateValue([...selectedItems, newVal]);
         }
-        if (e.key === 'Backspace' && !search && selectedItems.length > 0) {
-            handleRemove(selectedItems[selectedItems.length - 1]);
-        }
+        setSearch('');
     };
 
     const filteredOptions = options
-        .filter(opt => opt.toLowerCase().includes(search.toLowerCase()) && !selectedItems.includes(opt))
-        .slice(0, 50);
+        .filter(opt => opt.toLowerCase().includes(search.toLowerCase()))
+        .sort((a, b) => a.localeCompare(b));
     
-    const showAddOption = search && !options.some(opt => opt.toLowerCase() === search.toLowerCase()) && !selectedItems.includes(search);
+    const showAddOption = search.trim() && !options.some(opt => opt.toLowerCase() === search.toLowerCase().trim());
 
     return (
         <div ref={wrapperRef} className="relative">
+            {/* Main Selection Area */}
             <div 
-                className={`w-full min-h-[42px] border border-gray-300 rounded-lg px-2 py-1.5 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all bg-white shadow-sm flex flex-wrap gap-1.5 items-center ${disabled ? 'opacity-70 cursor-not-allowed' : ''}`}
-                onClick={() => !disabled && inputRef.current?.focus()}
+                className={`w-full min-h-[42px] border border-gray-300 rounded-lg px-2 py-1.5 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all bg-white shadow-sm flex flex-wrap gap-1.5 items-center cursor-pointer ${disabled ? 'opacity-70 cursor-not-allowed' : ''}`}
+                onClick={() => !disabled && setIsOpen(!isOpen)}
             >
-                {selectedItems.map(item => (
-                    <span key={item} className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                        {item}
-                        {!disabled && (
-                            <button 
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); handleRemove(item); }}
-                                className="ml-1 hover:text-blue-900 rounded-full hover:bg-blue-200 p-0.5 transition-colors"
-                            >
-                                <X className="w-3 h-3" />
-                            </button>
-                        )}
-                    </span>
-                ))}
-                <input
-                    ref={inputRef}
-                    type="text"
-                    value={search}
-                    onChange={(e) => {
-                        setSearch(e.target.value);
-                        if (!isOpen) setIsOpen(true);
-                    }}
-                    onFocus={() => !disabled && setIsOpen(true)}
-                    onKeyDown={handleKeyDown}
-                    className="flex-1 min-w-[80px] text-sm outline-none bg-transparent placeholder-gray-400 h-6"
-                    placeholder={selectedItems.length === 0 ? placeholder : ''}
-                    disabled={disabled}
-                    autoComplete="off"
-                />
-                {!disabled && (
-                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                {selectedItems.length === 0 ? (
+                    <span className="text-sm text-gray-400 px-1">{placeholder || 'Select options...'}</span>
+                ) : (
+                    selectedItems.map(item => (
+                        <span key={item} className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                            {item}
+                            {!disabled && (
+                                <button 
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleRemove(item); }}
+                                    className="ml-1 hover:text-blue-900 rounded-full hover:bg-blue-200 p-0.5 transition-colors"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
+                            )}
+                        </span>
+                    ))
                 )}
+                <div className="ml-auto flex items-center shrink-0">
+                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                </div>
             </div>
+
+            {/* Enhanced Grid Dropdown - Fixed Width to fit within parent panel */}
             {isOpen && !disabled && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto thin-scrollbar left-0">
-                    {filteredOptions.length === 0 && !showAddOption && (
-                        <div className="px-3 py-2 text-sm text-gray-400 italic">No matching options</div>
-                    )}
-                    {filteredOptions.map((opt) => (
-                        <div
-                            key={opt}
-                            onClick={() => handleSelect(opt)}
-                            className="px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 cursor-pointer transition-colors"
-                        >
-                            {opt}
+                <div className="absolute z-[110] w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden left-0 flex flex-col animate-in fade-in zoom-in-95 duration-150">
+                    {/* Internal Search Bar */}
+                    <div className="p-2 border-b border-gray-100 bg-gray-50/50">
+                        <div className="relative">
+                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                autoFocus
+                                type="text"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                placeholder="Search groups..."
+                                onClick={(e) => e.stopPropagation()}
+                            />
                         </div>
-                    ))}
-                    {showAddOption && (
-                        <div
-                            onClick={() => onAddNew ? onAddNew(search) : handleSelect(search)}
-                            className="px-3 py-2 text-sm text-blue-600 font-bold hover:bg-blue-50 cursor-pointer border-t border-gray-100 flex items-center bg-gray-50/50"
-                        >
-                            <Plus className="w-3.5 h-3.5 mr-1.5" />
-                            Add "{search}"
+                    </div>
+
+                    {/* Suggestions Grid - Reduced padding and gaps */}
+                    <div className="p-2 max-h-[280px] overflow-y-auto thin-scrollbar">
+                        <div className="grid grid-cols-2 gap-1.5">
+                            {filteredOptions.map((opt) => {
+                                const isSelected = selectedItems.includes(opt);
+                                return (
+                                    <button
+                                        key={opt}
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); handleToggle(opt); }}
+                                        className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[10px] md:text-xs font-medium transition-all border ${
+                                            isSelected 
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm' 
+                                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                                        }`}
+                                    >
+                                        <span className="truncate">{opt}</span>
+                                        {isSelected && <Check className="w-3 h-3 ml-1 shrink-0" />}
+                                    </button>
+                                );
+                            })}
+                            
+                            {showAddOption && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleAddNew(); }}
+                                    className="flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-all col-span-2 mt-1 shadow-sm"
+                                >
+                                    <Plus className="w-3.5 h-3.5 mr-1.5" />
+                                    Add "{search}"
+                                </button>
+                            )}
+
+                            {filteredOptions.length === 0 && !showAddOption && (
+                                <div className="col-span-2 py-6 text-center">
+                                    <p className="text-xs text-gray-400 italic">No groups found</p>
+                                </div>
+                            )}
                         </div>
-                    )}
+                    </div>
+
+                    {/* Footer Actions */}
+                    <div className="p-2 bg-gray-50 border-t border-gray-100 flex items-center justify-between shrink-0">
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-1">
+                            {selectedItems.length} Selected
+                        </span>
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setIsOpen(false); setSearch(''); }}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all active:scale-95 flex items-center"
+                        >
+                            Done
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

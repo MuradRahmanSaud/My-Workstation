@@ -39,6 +39,7 @@ export interface TeacherDataRow {
 
 export interface FacultyLeadershipRow {
   'Faculty Short Name': string;
+  'Faculty Full Name': string;
   Dean: string;
   'Associate Dean': string;
   Administration: string;
@@ -169,7 +170,7 @@ export interface SheetContextType {
   setSemesterFilter: (semester: string) => void;
   uniqueSemesters: string[];
 
-  reloadData: (mode?: 'all' | 'admitted' | 'sections') => Promise<void>;
+  reloadData: (mode?: 'all' | 'admitted' | 'sections', force?: boolean) => Promise<void>;
   updateClassroomData: (updater: (prev: ClassRoomDataRow[]) => ClassRoomDataRow[]) => void;
   updateReferenceData: (updater: (prev: ReferenceDataRow[]) => ReferenceDataRow[]) => void;
   updateSectionData: (updater: (prev: CourseSectionData[]) => CourseSectionData[]) => void;
