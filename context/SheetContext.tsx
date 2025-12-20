@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
-import { CourseSectionData, ProgramDataRow, TeacherDataRow, ClassRoomDataRow, LoadingState, SheetContextType, StudentDataRow, StudentLinkRow, MainSheetRow, DiuEmployeeRow, ReferenceDataRow } from '../types';
-import { fetchRegisteredStudentData, fetchStudentLinks, fetchMainSheet, fetchTeacherData, fetchProgramData, fetchClassRoomData, fetchMergedSectionData, fetchDiuEmployeeData, normalizeId, fetchReferenceData, getMobileNumber, fetchSubSheet } from '../services/sheetService';
+import { CourseSectionData, ProgramDataRow, TeacherDataRow, ClassRoomDataRow, LoadingState, SheetContextType, StudentDataRow, StudentLinkRow, MainSheetRow, DiuEmployeeRow, ReferenceDataRow, FacultyLeadershipRow } from '../types';
+import { fetchRegisteredStudentData, fetchStudentLinks, fetchMainSheet, fetchTeacherData, fetchProgramData, fetchClassRoomData, fetchMergedSectionData, fetchDiuEmployeeData, normalizeId, fetchReferenceData, getMobileNumber, fetchSubSheet, fetchFacultyLeadershipData } from '../services/sheetService';
 
 const SheetContext = createContext<SheetContextType | undefined>(undefined);
 
@@ -12,6 +12,7 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [classroomData, setClassroomData] = useState<ClassRoomDataRow[]>([]);
   const [diuEmployeeData, setDiuEmployeeData] = useState<DiuEmployeeRow[]>([]);
   const [referenceData, setReferenceData] = useState<ReferenceDataRow[]>([]);
+  const [facultyLeadershipData, setFacultyLeadershipData] = useState<FacultyLeadershipRow[]>([]);
   const [semesterLinks, setSemesterLinks] = useState<Map<string, string>>(new Map());
   const [admittedLinks, setAdmittedLinks] = useState<Map<string, string>>(new Map());
   const [registeredLinks, setRegisteredLinks] = useState<Map<string, string>>(new Map());
@@ -80,12 +81,12 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
       if (mode === 'all' || mode === 'sections') {
           onStatusChange('Syncing Assets...');
-          const [mainRows, pRows, tRows, cRows, eRows, rRows] = await Promise.all([
-            fetchMainSheet(), fetchProgramData(), fetchTeacherData(), fetchClassRoomData(), fetchDiuEmployeeData(), fetchReferenceData()
+          const [mainRows, pRows, tRows, cRows, eRows, rRows, lRows] = await Promise.all([
+            fetchMainSheet(), fetchProgramData(), fetchTeacherData(), fetchClassRoomData(), fetchDiuEmployeeData(), fetchReferenceData(), fetchFacultyLeadershipData()
           ]);
           if (mainRows.length === 0) throw new Error("Network Busy.");
 
-          setProgramData(pRows); setTeacherData(tRows); setClassroomData(cRows); setReferenceData(rRows); setDiuEmployeeData(eRows);
+          setProgramData(pRows); setTeacherData(tRows); setClassroomData(cRows); setReferenceData(rRows); setDiuEmployeeData(eRows); setFacultyLeadershipData(lRows);
           const semLinks = new Map<string, string>();
           mainRows.forEach(row => { if (row.Semester && row['Sheet Link']) semLinks.set(row.Semester, row['Sheet Link']); });
           setSemesterLinks(semLinks);
@@ -110,10 +111,11 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const updateSectionData = (updater: (prev: CourseSectionData[]) => CourseSectionData[]) => setData(prev => updater(prev));
   const updateDiuEmployeeData = (updater: (prev: DiuEmployeeRow[]) => DiuEmployeeRow[]) => setDiuEmployeeData(prev => updater(prev));
   const updateProgramData = (updater: (prev: ProgramDataRow[]) => ProgramDataRow[]) => setProgramData(prev => updater(prev));
+  const updateFacultyLeadershipData = (updater: (prev: FacultyLeadershipRow[]) => FacultyLeadershipRow[]) => setFacultyLeadershipData(prev => updater(prev));
 
   return (
     <SheetContext.Provider value={{ 
-        data, programData, teacherData, classroomData, diuEmployeeData, referenceData, semesterLinks, admittedLinks, registeredLinks, studentDataLinks, studentCache, loadStudentData, registeredData, loadRegisteredData, loading, semesterFilter, setSemesterFilter: (v) => { setSemesterFilter(v); setUserHasSelected(true); }, uniqueSemesters, reloadData: loadData, updateClassroomData, updateReferenceData, updateSectionData, updateDiuEmployeeData, updateProgramData
+        data, programData, teacherData, classroomData, diuEmployeeData, referenceData, facultyLeadershipData, semesterLinks, admittedLinks, registeredLinks, studentDataLinks, studentCache, loadStudentData, registeredData, loadRegisteredData, loading, semesterFilter, setSemesterFilter: (v) => { setSemesterFilter(v); setUserHasSelected(true); }, uniqueSemesters, reloadData: loadData, updateClassroomData, updateReferenceData, updateSectionData, updateDiuEmployeeData, updateProgramData, updateFacultyLeadershipData
     }}>
       {children}
     </SheetContext.Provider>

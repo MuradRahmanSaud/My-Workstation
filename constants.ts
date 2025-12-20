@@ -1,5 +1,4 @@
 
-
 export const MAIN_SHEET_ID = '1si65O_OvBeVh77uRrEKFA5qWO5AYP_4EZNh6Mr6KkWw';
 export const MAIN_SHEET_GID = '2085704136';
 
@@ -9,6 +8,7 @@ export const TEACHER_SHEET_GID = '1383485302';
 export const PROGRAM_SHEET_GID = '2086836531';
 export const CLASSROOM_SHEET_GID = '1657227174';
 export const DIU_EMPLOYEE_SHEET_GID = '383791522';
+export const FACULTY_LEADERSHIP_SHEET_GID = '1130435623';
 
 export const STUDENT_LINK_SHEET_ID = '1agI_X0JjNyEu90bWfX-JnZgFQt__EAMI3kTmgVviHes';
 export const STUDENT_LINK_SHEET_GID = '1064007862';
@@ -25,5 +25,6 @@ export const SHEET_NAMES = {
     TEACHER: 'Teacher_DB', 
     EMPLOYEE: 'Employee_DB', 
     PROGRAM: 'Program_DB',
-    REFERENCE: 'Course_Setting_DB'
+    REFERENCE: 'Course_Setting_DB',
+    FACULTY_LEADERSHIP: 'Faculty_DB'
 };

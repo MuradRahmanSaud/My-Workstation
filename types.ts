@@ -37,6 +37,13 @@ export interface TeacherDataRow {
   [key: string]: string | undefined;
 }
 
+export interface FacultyLeadershipRow {
+  'Faculty Short Name': string;
+  Dean: string;
+  'Associate Dean': string;
+  Administration: string;
+}
+
 export interface ProgramDataRow {
   PID: string;
   'Faculty Short Name': string;
@@ -50,7 +57,7 @@ export interface ProgramDataRow {
   'No of Class Required': string;
   'Class Requirement': string;
   'Class Duration': string;
-  // Faculty Leadership
+  // Faculty Leadership (Legacy fields in Program_DB)
   Dean?: string;
   'Associate Dean'?: string;
   'Faculty Administration'?: string;
@@ -146,6 +153,7 @@ export interface SheetContextType {
   classroomData: ClassRoomDataRow[];
   diuEmployeeData: DiuEmployeeRow[];
   referenceData: ReferenceDataRow[];
+  facultyLeadershipData: FacultyLeadershipRow[];
   semesterLinks: Map<string, string>;
   admittedLinks: Map<string, string>;
   registeredLinks: Map<string, string>;
@@ -167,4 +175,5 @@ export interface SheetContextType {
   updateSectionData: (updater: (prev: CourseSectionData[]) => CourseSectionData[]) => void;
   updateDiuEmployeeData: (updater: (prev: DiuEmployeeRow[]) => DiuEmployeeRow[]) => void;
   updateProgramData: (updater: (prev: ProgramDataRow[]) => ProgramDataRow[]) => void;
+  updateFacultyLeadershipData: (updater: (prev: FacultyLeadershipRow[]) => FacultyLeadershipRow[]) => void;
 }

@@ -10,6 +10,45 @@ import { EmployeeDetailsPanel } from '../components/EmployeeDetailsPanel';
 import { submitSheetData, normalizeId } from '../services/sheetService';
 import { SHEET_NAMES, REF_SHEET_ID } from '../constants';
 
+// Helper to check if a value from a sheet is effectively empty
+export const isValEmpty = (val: any): boolean => {
+    if (val === null || val === undefined) return true;
+    const s = String(val).trim().toLowerCase();
+    return s === '' || s === 'none' || s === '-' || s === 'null' || s === 'n/a';
+};
+
+// Robust field extraction to handle variations in spreadsheet headers
+const findField = (row: any, patterns: string[]): string => {
+    if (!row) return '';
+    const keys = Object.keys(row);
+    for (const pattern of patterns) {
+        const found = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === pattern.toLowerCase().replace(/[^a-z0-9]/g, ''));
+        if (found && !isValEmpty(row[found])) return String(row[found]).trim();
+    }
+    return '';
+};
+
+export const getImageUrl = (link: string | undefined) => {
+    if (isValEmpty(link)) return '';
+    let cleanLink = link!.trim();
+    
+    // Remove potential wrapping quotes from CSV artifacts
+    cleanLink = cleanLink.replace(/^["']|["']$/g, '');
+    
+    if (!cleanLink) return '';
+    
+    // Handle Google Drive / Docs links
+    if (cleanLink.includes('drive.google.com') || cleanLink.includes('docs.google.com')) {
+        const idMatch = cleanLink.match(/\/d\/([^/]+)/) || cleanLink.match(/id=([^&]+)/);
+        if (idMatch && idMatch[1]) {
+            return `https://lh3.googleusercontent.com/d/${idMatch[1]}`;
+        }
+    }
+    
+    // Return direct image link or fallback
+    return cleanLink;
+};
+
 const FilterSection = ({ 
     title, items, selectedSet, onToggle, expandedSection, setExpandedSection 
 }: {
@@ -27,7 +66,7 @@ const FilterSection = ({
             {isExpanded && (
                 <div className="pb-3 px-3">
                     <div className="relative mb-2">
-                        <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-7 pr-2 py-1 text-[10px] border border-gray-200 rounded focus:outline-none focus:border-blue-400 bg-gray-50 focus:bg-white" />
                     </div>
                     <div className="max-h-40 overflow-y-auto thin-scrollbar space-y-0.5">
@@ -54,49 +93,45 @@ export const EmployeeView: React.FC = () => {
     setter(newSet);
   };
 
-  const getImageUrl = (link: string | undefined) => {
-    if (!link) return '';
-    const cleanLink = link.trim();
-    if (cleanLink.includes('drive.google.com') || cleanLink.includes('docs.google.com')) {
-        const idMatch = cleanLink.match(/\/d\/([^/]+)/) || cleanLink.match(/id=([^&]+)/);
-        if (idMatch && idMatch[1]) return `https://lh3.googleusercontent.com/d/${idMatch[1]}`;
-    }
-    return cleanLink;
-  };
-
   const columnsToEdit = [
     'Employee ID', 'Employee Name', 'Administrative Designation', 'Academic Designation',
     'Mobile', 'IP-Ext', 'E-mail', 'Photo', 'Facebook', 'Linkedin', 'Status', 'Group Name', 'Department'
   ];
 
-  // Merge teacherData (GID 1383485302) with diuEmployeeData
+  // Merge teacherData (Teacher_DB) with diuEmployeeData (Employee_DB)
   const combinedEmployees = useMemo(() => {
     const map = new Map<string, DiuEmployeeRow>();
     
-    // 1. Add people from the large Employee database first
+    // 1. Add people from the primary Employee database first
     diuEmployeeData.forEach(emp => {
       const id = normalizeId(emp['Employee ID']);
-      if (id) map.set(id, emp);
+      if (id) map.set(id, { ...emp });
     });
 
-    // 2. Merge data from the Teacher database (linked by user)
+    // 2. Merge/Enrich data from the Teacher database
     teacherData.forEach(t => {
       const id = normalizeId(t['Employee ID']);
       if (!id) return;
       
+      const teacherPhoto = findField(t, ['Photo', 'Photo URL', 'Photo Link', 'Image', 'Picture']);
+      const teacherEmail = findField(t, ['Email', 'E-mail', 'Email Address']);
+      const teacherMobile = findField(t, ['Mobile', 'Mobile Number', 'Mobile No', 'Phone', 'Cell']);
+      const teacherName = findField(t, ['Employee Name', 'Name', 'Teacher Name']);
+      const teacherDesig = findField(t, ['Designation', 'Academic Designation']);
+
       if (!map.has(id)) {
-        // Create a new normalized record if they don't exist in Employee DB
+        // Create a new record if they don't exist in Employee DB
         map.set(id, {
-          'Employee ID': t['Employee ID'],
-          'Employee Name': t['Employee Name'],
+          'Employee ID': t['Employee ID'] || id.toUpperCase(),
+          'Employee Name': teacherName || t['Employee Name'] || '',
           'Administrative Designation': '',
-          'Academic Designation': t.Designation || '',
-          'Mobile': t['Mobile Number'] || '',
-          'E-mail': t.Email || '',
+          'Academic Designation': teacherDesig || t.Designation || '',
+          'Mobile': teacherMobile || t['Mobile Number'] || '',
+          'E-mail': teacherEmail || t.Email || '',
           'IP-Ext': '',
-          'Photo': t.Photo || '',
-          'Facebook': t.Facebook || '',
-          'Linkedin': t.Linkedin || '',
+          'Photo': teacherPhoto || '',
+          'Facebook': findField(t, ['Facebook']),
+          'Linkedin': findField(t, ['Linkedin']),
           'Status': 'Active',
           'Group Name': 'Teacher',
           'Department': t.Department || '',
@@ -104,10 +139,11 @@ export const EmployeeView: React.FC = () => {
       } else {
         // Enrich existing record with missing pieces from Teacher DB
         const existing = map.get(id)!;
-        if (!existing.Mobile) existing.Mobile = t['Mobile Number'] || '';
-        if (!existing['E-mail']) existing['E-mail'] = t.Email || '';
-        if (!existing.Photo) existing.Photo = t.Photo || '';
-        if (!existing['Academic Designation']) existing['Academic Designation'] = t.Designation || '';
+        if (isValEmpty(existing['Employee Name'])) existing['Employee Name'] = teacherName;
+        if (isValEmpty(existing.Mobile)) existing.Mobile = teacherMobile;
+        if (isValEmpty(existing['E-mail'])) existing['E-mail'] = teacherEmail;
+        if (isValEmpty(existing.Photo)) existing.Photo = teacherPhoto;
+        if (isValEmpty(existing['Academic Designation'])) existing['Academic Designation'] = teacherDesig;
       }
     });
 
@@ -137,11 +173,16 @@ export const EmployeeView: React.FC = () => {
 
   const { departments, groups, statuses, fieldOptions } = useMemo(() => {
     const depts = new Set<string>(), grps = new Set<string>(), stats = new Set<string>();
+    const adminDesigs = new Set<string>(), acadDesigs = new Set<string>();
+
     combinedEmployees.forEach(e => {
         if (e.Department) depts.add(e.Department);
         if (e['Group Name']) e['Group Name'].split(',').forEach(g => grps.add(g.trim()));
         if (e.Status) stats.add(e.Status);
+        if (e['Administrative Designation']) adminDesigs.add(e['Administrative Designation']);
+        if (e['Academic Designation']) acadDesigs.add(e['Academic Designation']);
     });
+    
     const sortedDepts = Array.from(depts).sort();
     return { 
         departments: sortedDepts, 
@@ -150,7 +191,9 @@ export const EmployeeView: React.FC = () => {
         fieldOptions: { 
             'Department': sortedDepts, 
             'Group Name': Array.from(grps).sort().filter(Boolean), 
-            'Status': ['Active', 'Inactive', 'On Leave'] 
+            'Status': ['Active', 'Inactive', 'On Leave'],
+            'Administrative Designation': Array.from(adminDesigs).sort().filter(Boolean),
+            'Academic Designation': Array.from(acadDesigs).sort().filter(Boolean)
         } 
     };
   }, [combinedEmployees]);
@@ -244,7 +287,7 @@ export const EmployeeView: React.FC = () => {
                         <div key={emp['Employee ID']} onClick={() => setSelectedEmployee(emp)} className={`bg-white rounded-xl border p-4 shadow-[0_0_10px_rgba(0,0,0,0.06)] hover:shadow-[0_0_15px_rgba(0,0,0,0.12)] transition-all flex flex-col relative cursor-pointer group ${selectedEmployee?.['Employee ID'] === emp['Employee ID'] ? 'ring-2 ring-blue-500 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'border-gray-100 hover:border-blue-200'}`}>
                             <div className="flex items-start space-x-4 mb-3">
                                 <div className="w-14 h-14 rounded-full border-2 border-white shadow-sm flex items-center justify-center shrink-0 overflow-hidden relative bg-gray-100">
-                                    {emp.Photo ? <img src={getImageUrl(emp.Photo)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <User className="w-7 h-7 text-gray-300" />}
+                                    {!isValEmpty(emp.Photo) ? <img src={getImageUrl(emp.Photo)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <User className="w-7 h-7 text-gray-300" />}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <h3 className="text-sm font-bold text-slate-900 truncate leading-tight mb-1 group-hover:text-blue-700 transition-colors">{emp['Employee Name']}</h3>
@@ -272,7 +315,7 @@ export const EmployeeView: React.FC = () => {
         </div>
         {selectedEmployee && <EmployeeDetailsPanel employee={selectedEmployee} onClose={() => setSelectedEmployee(null)} onUpdate={handlePanelUpdate} fieldOptions={fieldOptions} />}
       </div>
-      <EditEntryModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} mode={editMode} title={editMode === 'add' ? 'Add Employee' : 'Edit Employee'} sheetName={SHEET_NAMES.EMPLOYEE} columns={columnsToEdit} initialData={editingRow} keyColumn="Employee ID" spreadsheetId={REF_SHEET_ID} fieldOptions={fieldOptions} multiSelectFields={['Group Name']} onSuccess={handleModalSuccess} />
+      <EditEntryModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} mode="edit" title="Add Employee" sheetName={SHEET_NAMES.EMPLOYEE} columns={columnsToEdit} initialData={editingRow} keyColumn="Employee ID" spreadsheetId={REF_SHEET_ID} fieldOptions={fieldOptions} multiSelectFields={['Group Name']} onSuccess={handleModalSuccess} />
     </div>
   );
 };

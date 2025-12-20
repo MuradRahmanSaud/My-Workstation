@@ -18,7 +18,7 @@ const VIEW_BACKGROUNDS: Record<string, string> = {
   section: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=2069',
   program: 'https://images.unsplash.com/photo-1523050335392-9bc567597b81?auto=format&fit=crop&q=80&w=2070',
   student: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=2070',
-  employee: 'https://images.unsplash.com/photo-1556761175-4b464b461175?auto=format&fit=crop&q=80&w=1974',
+  employee: 'https://images.unsplash.com/photo-1556761175-4b464b461175-4b46b61175-4b46?auto=format&fit=crop&q=80&w=1974',
   classroom: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&q=80&w=2132',
   pdf_to_excel: 'https://images.unsplash.com/photo-1454165833767-027ff3399ae7?auto=format&fit=crop&q=80&w=2070',
   settings: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=2070',
@@ -26,6 +26,7 @@ const VIEW_BACKGROUNDS: Record<string, string> = {
 
 function AppContent() {
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const bgImage = useMemo(() => VIEW_BACKGROUNDS[currentView] || VIEW_BACKGROUNDS.dashboard, [currentView]);
 
@@ -53,7 +54,7 @@ function AppContent() {
   };
 
   return (
-    <div className="relative flex flex-col md:flex-row h-screen w-screen bg-slate-950 overflow-hidden font-sans">
+    <div className="relative flex flex-col-reverse md:flex-row h-screen w-screen bg-slate-950 overflow-hidden font-sans">
       {/* Immersive Background Layer */}
       <div 
         className="fixed inset-0 z-0 transition-all duration-1000 ease-in-out scale-105"
@@ -66,14 +67,12 @@ function AppContent() {
       />
       
       {/* Content Wrapper */}
-      <div className="relative z-10 flex flex-col md:flex-row h-full w-full overflow-hidden">
-        {/* Sidebar at Left on Desktop, Bottom on Mobile */}
+      <div className="relative z-10 flex flex-col-reverse md:flex-row h-full w-full overflow-hidden">
         <Sidebar 
           currentView={currentView}
           setView={setCurrentView}
         />
-        
-        <div className="flex-1 flex flex-col min-w-0 bg-transparent order-1 md:order-2 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 bg-transparent">
           <Header />
           <main className="flex-1 overflow-hidden relative">
             {renderContent()}
@@ -84,6 +83,7 @@ function AppContent() {
   );
 }
 
+// Fix for index.tsx line 3: Added default export and wrapped in SheetProvider to fix "no default export" error.
 export default function App() {
   return (
     <SheetProvider>

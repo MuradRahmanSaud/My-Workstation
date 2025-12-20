@@ -1,6 +1,6 @@
 
-import { MAIN_SHEET_ID, MAIN_SHEET_GID, REF_SHEET_ID, REF_SHEET_GID, TEACHER_SHEET_GID, PROGRAM_SHEET_GID, CLASSROOM_SHEET_GID, DIU_EMPLOYEE_SHEET_GID, STUDENT_LINK_SHEET_ID, STUDENT_LINK_SHEET_GID, REGISTERED_STUDENT_SHEET_GID, CORS_PROXY, GOOGLE_SCRIPT_URL } from '../constants';
-import { MainSheetRow, CourseSectionData, ReferenceDataRow, TeacherDataRow, ProgramDataRow, StudentLinkRow, StudentDataRow, ClassRoomDataRow, DiuEmployeeRow } from '../types';
+import { MAIN_SHEET_ID, MAIN_SHEET_GID, REF_SHEET_ID, REF_SHEET_GID, TEACHER_SHEET_GID, PROGRAM_SHEET_GID, CLASSROOM_SHEET_GID, DIU_EMPLOYEE_SHEET_GID, FACULTY_LEADERSHIP_SHEET_GID, STUDENT_LINK_SHEET_ID, STUDENT_LINK_SHEET_GID, REGISTERED_STUDENT_SHEET_GID, CORS_PROXY, GOOGLE_SCRIPT_URL } from '../constants';
+import { MainSheetRow, CourseSectionData, ReferenceDataRow, TeacherDataRow, ProgramDataRow, StudentLinkRow, StudentDataRow, ClassRoomDataRow, DiuEmployeeRow, FacultyLeadershipRow } from '../types';
 import { parseCSV, extractSheetIdAndGid } from '../utils/csvParser';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -78,6 +78,15 @@ export const fetchProgramData = async (): Promise<ProgramDataRow[]> => {
   const url = `https://docs.google.com/spreadsheets/d/${REF_SHEET_ID}/export?format=csv&gid=${PROGRAM_SHEET_GID}&t=${Date.now()}`;
   const data = await fetchSheet<ProgramDataRow>(url);
   if (data.length > 0) setCachedData('program', data);
+  return data;
+};
+
+export const fetchFacultyLeadershipData = async (): Promise<FacultyLeadershipRow[]> => {
+  const cached = getCachedData<FacultyLeadershipRow>('faculty_leadership');
+  if (cached) return cached;
+  const url = `https://docs.google.com/spreadsheets/d/${REF_SHEET_ID}/export?format=csv&gid=${FACULTY_LEADERSHIP_SHEET_GID}&t=${Date.now()}`;
+  const data = await fetchSheet<FacultyLeadershipRow>(url);
+  if (data.length > 0) setCachedData('faculty_leadership', data);
   return data;
 };
 

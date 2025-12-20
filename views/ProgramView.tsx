@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ProgramDataRow } from '../types';
+import { ProgramDataRow, FacultyLeadershipRow, DiuEmployeeRow } from '../types';
 import { RefreshCw, Plus, GraduationCap, School } from 'lucide-react';
 import { useSheetData } from '../hooks/useSheetData';
 import { EditEntryModal } from '../components/EditEntryModal';
@@ -9,7 +9,7 @@ import { ProgramLeftPanel } from '../components/ProgramLeftPanel';
 import { ProgramDashboard } from '../components/ProgramDashboard';
 import { ProgramRightPanel } from '../components/ProgramRightPanel';
 import { SHEET_NAMES, REF_SHEET_ID } from '../constants';
-import { normalizeId } from '../services/sheetService';
+import { normalizeId, submitSheetData } from '../services/sheetService';
 
 const FACULTY_CHIP_COLORS: Record<string, string> = {
   'FBE': 'bg-red-100 text-red-700 border-red-200',
@@ -28,7 +28,7 @@ const FACULTY_HEADER_COLORS: Record<string, string> = {
 };
 
 export const ProgramView: React.FC = () => {
-  const { data: allSections, programData, diuEmployeeData, teacherData, loading, reloadData, updateProgramData, semesterFilter, uniqueSemesters, setSemesterFilter } = useSheetData();
+  const { data: allSections, programData, facultyLeadershipData, diuEmployeeData, teacherData, loading, reloadData, updateProgramData, updateFacultyLeadershipData, updateDiuEmployeeData, semesterFilter, setSemesterFilter, uniqueSemesters } = useSheetData();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFaculty, setSelectedFaculty] = useState<string>('All');
   const [selectedType, setSelectedType] = useState<string | null>(null);
@@ -115,202 +115,173 @@ export const ProgramView: React.FC = () => {
       return { uniqueCourses, totalSections, uniqueTeachers, totalStudents, unassigned, lowEnrollment, avgProgress };
   }, [allSections, selectedProgram, semesterFilter]);
 
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editMode, setEditMode] = useState<'add' | 'edit'>('add');
-  const [editingRow, setEditingRow] = useState<any>(undefined);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  const handleAdd = () => {
-    setEditMode('add');
-    setEditingRow({
-      'Semester Duration Num': '4',
-      'Theory Duration': '90',
-      'Lab Duration': '120',
-      'Theory Requirement': '0',
-      'Lab Requirement': '0'
-    });
-    setIsEditModalOpen(true);
-  };
-
-  const handleEditItem = (e: React.MouseEvent | null, row: ProgramDataRow) => {
-      if (e) e.stopPropagation();
-      setEditMode('edit');
-      const durStr = row['Class Duration'] || '';
-      const reqStr = row['Class Requirement'] || '';
-      const semDurStr = row['Semester Duration'] || '';
-      
-      setEditingRow({
-          ...row,
-          'Theory Duration': (durStr.match(/Theory\s+(\d+)/i) || [])[1] || '90',
-          'Lab Duration': (durStr.match(/Lab\s+(\d+)/i) || [])[1] || '120',
-          'Theory Requirement': (reqStr.match(/Theory\s+(\d+)/i) || [])[1] || '0',
-          'Lab Requirement': (reqStr.match(/Lab\s+(\d+)/i) || [])[1] || '0',
-          'Semester Duration Num': (semDurStr.match(/(\d+)/) || [])[1] || '4',
+  const employeeOptions = useMemo(() => {
+      const map = new Map<string, string>();
+      diuEmployeeData.forEach(e => {
+          const id = e['Employee ID']?.trim();
+          if (!id) return;
+          const desig = [e['Administrative Designation'], e['Academic Designation']].filter(Boolean).join('/');
+          map.set(normalizeId(id), `${e['Employee Name']} - ${desig} (${id})`);
       });
-      setIsEditModalOpen(true);
+      teacherData.forEach(t => {
+          const id = t['Employee ID']?.trim();
+          if (!id) return;
+          const normId = normalizeId(id);
+          if (!map.has(normId)) {
+              map.set(normId, `${t['Employee Name']} - ${t.Designation} (${id})`);
+          }
+      });
+      return Array.from(map.values()).sort();
+  }, [diuEmployeeData, teacherData]);
+
+  const employeeFieldOptions = useMemo(() => {
+    const depts = new Set<string>(), grps = new Set<string>(), stats = new Set<string>();
+    const adminDesigs = new Set<string>(), acadDesigs = new Set<string>();
+    diuEmployeeData.forEach(e => {
+        if (e.Department) depts.add(e.Department);
+        if (e['Group Name']) e['Group Name'].split(',').forEach(g => grps.add(g.trim()));
+        if (e.Status) stats.add(e.Status);
+        if (e['Administrative Designation']) adminDesigs.add(e['Administrative Designation']);
+        if (e['Academic Designation']) acadDesigs.add(e['Academic Designation']);
+    });
+    return { 
+        'Department': Array.from(depts).sort(), 
+        'Group Name': Array.from(grps).sort().filter(Boolean), 
+        'Status': ['Active', 'Inactive', 'On Leave'],
+        'Administrative Designation': Array.from(adminDesigs).sort().filter(Boolean),
+        'Academic Designation': Array.from(acadDesigs).sort().filter(Boolean)
+    };
+  }, [diuEmployeeData]);
+
+  const extractIds = (fieldVal: string) => {
+      if (!fieldVal) return '';
+      return fieldVal.split(',').map(item => {
+          const trimmed = item.trim();
+          const match = trimmed.match(/\(([^)]+)\)$/);
+          return match ? match[1] : trimmed;
+      }).join(', ');
   };
 
-  const transformDataForSubmit = (data: any) => {
-      const extractIds = (fieldVal: string) => {
-          if (!fieldVal) return '';
-          return fieldVal.split(',').map(item => {
-              const trimmed = item.trim();
-              const match = trimmed.match(/\(([^)]+)\)$/);
-              return match ? match[1] : trimmed;
-          }).join(', ');
-      };
-      const tDur = data['Theory Duration'] || '0';
-      const lDur = data['Lab Duration'] || '0';
-      const combinedDuration = `Theory ${tDur} Minutes, Lab ${lDur} Minutes`;
-      const tReq = data['Theory Requirement'] || '0';
-      const lReq = data['Lab Requirement'] || '0';
-      const combinedRequirement = `Theory ${tReq} Minutes, Lab ${lReq} Minutes`;
-      const sDur = data['Semester Duration Num'] || '0';
-      const formattedSemDuration = `${sDur} Months`;
-      const result = {
+  const syncEmployeeRoles = async (ids: string, role: string) => {
+    if (!ids) return;
+    const idList = ids.split(',').map(id => id.trim()).filter(Boolean);
+    for (const id of idList) {
+        const normId = normalizeId(id);
+        const employee = diuEmployeeData.find(e => normalizeId(e['Employee ID']) === normId);
+        if (employee && employee['Administrative Designation'] !== role) {
+            const updated = { ...employee, 'Administrative Designation': role };
+            updateDiuEmployeeData(prev => prev.map(e => normalizeId(e['Employee ID']) === normId ? updated : e));
+            await submitSheetData('update', SHEET_NAMES.EMPLOYEE, updated, 'Employee ID', employee['Employee ID'].trim(), REF_SHEET_ID);
+        }
+    }
+  };
+
+  const handleSaveFacultyLeadership = async (data: any) => {
+      const payload = {
           ...data,
-          'Class Duration': combinedDuration,
-          'Class Requirement': combinedRequirement,
-          'Semester Duration': formattedSemDuration,
           'Dean': extractIds(data.Dean),
           'Associate Dean': extractIds(data['Associate Dean']),
-          'Faculty Administration': extractIds(data['Faculty Administration']),
+          'Administration': extractIds(data.Administration)
+      };
+      updateFacultyLeadershipData(prev => {
+          const exists = prev.some(f => f['Faculty Short Name'] === payload['Faculty Short Name']);
+          if (exists) return prev.map(f => f['Faculty Short Name'] === payload['Faculty Short Name'] ? payload : f);
+          return [...prev, payload];
+      });
+      await submitSheetData('update', SHEET_NAMES.FACULTY_LEADERSHIP, payload, 'Faculty Short Name', payload['Faculty Short Name'], REF_SHEET_ID);
+      await syncEmployeeRoles(payload.Dean, 'Dean');
+      await syncEmployeeRoles(payload['Associate Dean'], 'Associate Dean');
+      await syncEmployeeRoles(payload.Administration, 'Administration');
+  };
+
+  const handleSaveProgramLeadership = async (data: any) => {
+      const tDur = data['Theory Duration'] || '0', lDur = data['Lab Duration'] || '0';
+      const tReq = data['Theory Requirement'] || '0', lReq = data['Lab Requirement'] || '0';
+      const sDurNum = data['Semester Duration Num'] || '4';
+      const payload = {
+          ...data,
+          'Class Duration': `Theory ${tDur} Minutes, Lab ${lDur} Minutes`,
+          'Class Requirement': `Theory ${tReq} Minutes, Lab ${lReq} Minutes`,
+          'Semester Duration': `${sDurNum} Months`,
           'Head': extractIds(data.Head),
           'Associate Head': extractIds(data['Associate Head']),
           'Administration': extractIds(data.Administration)
       };
-      delete result['Theory Duration']; delete result['Lab Duration']; delete result['Theory Requirement']; delete result['Lab Requirement']; delete result['Semester Duration Num'];
-      return result;
+      delete payload['Theory Duration']; delete payload['Lab Duration']; delete payload['Theory Requirement']; delete payload['Lab Requirement']; delete payload['Semester Duration Num'];
+      updateProgramData(prev => prev.map(p => p.PID === payload.PID ? payload : p));
+      setSelectedProgram(payload);
+      await submitSheetData('update', SHEET_NAMES.PROGRAM, payload, 'PID', payload.PID, REF_SHEET_ID);
+      await syncEmployeeRoles(payload.Head, 'Head');
+      await syncEmployeeRoles(payload['Associate Head'], 'Associate Head');
+      await syncEmployeeRoles(payload.Administration, 'Administration');
   };
 
-  const employeeOptions = useMemo(() => {
-      return diuEmployeeData.map(e => {
-          const desig = [e['Administrative Designation'], e['Academic Designation']].filter(Boolean).join('/');
-          return `${e['Employee Name']} - ${desig} (${e['Employee ID']})`;
-      }).sort();
-  }, [diuEmployeeData]);
+  const handleSaveEmployee = async (data: any) => {
+      updateDiuEmployeeData(prev => {
+          const exists = prev.some(e => normalizeId(e['Employee ID']) === normalizeId(data['Employee ID']));
+          if (exists) return prev.map(e => normalizeId(e['Employee ID']) === normalizeId(data['Employee ID']) ? { ...e, ...data } : e);
+          return [data, ...prev];
+      });
+      let result = await submitSheetData('update', SHEET_NAMES.EMPLOYEE, data, 'Employee ID', data['Employee ID'].trim(), REF_SHEET_ID);
+      if (result.result === 'error') {
+          await submitSheetData('add', SHEET_NAMES.EMPLOYEE, data, 'Employee ID', data['Employee ID'].trim(), REF_SHEET_ID);
+      }
+  };
+
+  const handleAddProgramSuccess = (newData: any) => {
+      updateProgramData(prev => [newData, ...prev]);
+      setSelectedProgram(newData);
+  };
+
+  const currentFacultyLeadership = useMemo(() => {
+      if (!selectedProgram) return undefined;
+      return facultyLeadershipData.find(f => f['Faculty Short Name'] === selectedProgram['Faculty Short Name']);
+  }, [selectedProgram, facultyLeadershipData]);
 
   const headerActionsTarget = document.getElementById('header-actions-area');
   const headerTitleTarget = document.getElementById('header-title-area');
 
   return (
     <div className="flex flex-col h-full bg-gray-50 relative overflow-hidden">
-      
       {headerTitleTarget && createPortal(
           <div className="flex items-center space-x-3 animate-in fade-in slide-in-from-left-2 duration-300">
-             {selectedProgram ? (
-                 <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                        <GraduationCap className="w-5 h-5" />
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                        <h2 className="text-[13px] md:text-sm font-bold text-gray-900 truncate leading-tight">
-                            {selectedProgram['Program Short Name']}
-                        </h2>
-                        <p className="text-[10px] text-gray-500 truncate font-medium">
-                            {selectedProgram['Faculty Full Name']}
-                        </p>
-                    </div>
-                 </div>
-             ) : (
-                <div className="flex flex-col">
-                    <h2 className="text-[13px] md:text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center truncate">
-                        <School className="w-4 h-4 mr-2 text-blue-600" />
-                        Programs
-                    </h2>
-                </div>
-             )}
+             <div className="flex flex-col">
+                <h2 className="text-[13px] md:text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center truncate">
+                    <School className="w-4 h-4 mr-2 text-blue-600" />
+                    Programs
+                </h2>
+             </div>
           </div>,
           headerTitleTarget
       )}
-
       {headerActionsTarget && createPortal(
           <div className="flex items-center space-x-1 animate-in fade-in slide-in-from-right-2 duration-300 overflow-hidden">
-            <button 
-                onClick={() => reloadData()}
-                disabled={loading.status === 'loading'}
-                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all disabled:opacity-50"
-                title="Refresh"
-            >
-                <RefreshCw className={`w-4 h-4 ${loading.status === 'loading' ? 'animate-spin' : ''}`} />
-            </button>
+            <button onClick={() => reloadData()} disabled={loading.status === 'loading'} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all disabled:opacity-50" title="Refresh"><RefreshCw className={`w-4 h-4 ${loading.status === 'loading' ? 'animate-spin' : ''}`} /></button>
           </div>,
           headerActionsTarget
       )}
-
-      <div className="flex-1 overflow-hidden flex flex-col md:flex-row relative">
-        <ProgramLeftPanel 
-            searchTerm={searchTerm} setSearchTerm={setSearchTerm}
-            selectedFaculty={selectedFaculty} setSelectedFaculty={setSelectedFaculty} faculties={faculties}
-            selectedType={selectedType} setSelectedType={setSelectedType}
-            selectedSemesterMode={selectedSemesterMode} setSelectedSemesterMode={setSelectedSemesterMode}
-            semesterFilter={semesterFilter} setSemesterFilter={setSemesterFilter} uniqueSemesters={uniqueSemesters}
-            sortedGroupKeys={sortedGroupKeys} groupedData={groupedData}
-            selectedProgram={selectedProgram} onSelectProgram={setSelectedProgram} onEditProgram={handleEditItem}
-            facultyColors={FACULTY_CHIP_COLORS} facultyHeaderColors={FACULTY_HEADER_COLORS}
-            loading={loading.status === 'loading' && programData.length === 0}
-        />
-
+      <div className="flex-1 overflow-hidden flex flex-row relative">
+        <ProgramLeftPanel searchTerm={searchTerm} setSearchTerm={setSearchTerm} selectedFaculty={selectedFaculty} setSelectedFaculty={setSelectedFaculty} faculties={faculties} selectedType={selectedType} setSelectedType={setSelectedType} selectedSemesterMode={selectedSemesterMode} setSelectedSemesterMode={setSelectedSemesterMode} semesterFilter={semesterFilter} setSemesterFilter={setSemesterFilter} uniqueSemesters={uniqueSemesters} sortedGroupKeys={sortedGroupKeys} groupedData={groupedData} selectedProgram={selectedProgram} onSelectProgram={setSelectedProgram} onEditProgram={(e, p) => { e.stopPropagation(); setSelectedProgram(p); }} facultyColors={FACULTY_CHIP_COLORS} facultyHeaderColors={FACULTY_HEADER_COLORS} loading={loading.status === 'loading' && programData.length === 0} />
         <div className="flex-1 min-w-0 bg-white overflow-hidden flex flex-col lg:flex-row">
             {selectedProgram ? (
                 <>
                     <ProgramDashboard stats={stats} />
-                    <ProgramRightPanel 
-                        program={selectedProgram} 
-                        diuEmployeeData={diuEmployeeData} 
-                        teacherData={teacherData}
-                        onEdit={(p) => handleEditItem(null, p)}
-                    />
+                    <ProgramRightPanel program={selectedProgram} facultyLeadership={currentFacultyLeadership} diuEmployeeData={diuEmployeeData} teacherData={teacherData} employeeOptions={employeeOptions} employeeFieldOptions={employeeFieldOptions} onSaveFacultyLeadership={handleSaveFacultyLeadership} onSaveProgramLeadership={handleSaveProgramLeadership} onSaveEmployee={handleSaveEmployee} />
                 </>
             ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-slate-50/50">
-                    <School className="w-16 h-16 mb-4 opacity-10" />
-                    <p className="text-sm font-medium">Select a program to view details</p>
-                </div>
+                <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-slate-50/50"><School className="w-16 h-16 mb-4 opacity-10" /><p className="text-sm font-medium">Select a program to view details</p></div>
             )}
         </div>
-
-        <button
-            onClick={handleAdd}
-            className="fixed bottom-20 md:bottom-6 right-6 w-12 h-12 md:w-14 md:h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 group z-30"
-            title="Add New Program"
-        >
-            <Plus className="w-6 h-6 md:w-7 md:h-7 group-hover:rotate-90 transition-transform duration-300" />
-        </button>
+        <button onClick={() => setIsAddModalOpen(true)} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 group z-30" title="Add New Program"><Plus className="w-7 h-7 group-hover:rotate-90 transition-transform duration-300" /></button>
       </div>
-
-      <EditEntryModal 
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          mode={editMode}
-          title={editMode === 'add' ? 'Add Program' : 'Edit Program'}
-          sheetName={SHEET_NAMES.PROGRAM}
-          columns={['PID','Faculty Short Name','Faculty Full Name','Program Full Name','Program Short Name','Department Name','Program Type','Semester Type','Semester Duration Num','Theory Duration','Lab Duration','Theory Requirement','Lab Requirement','Dean', 'Associate Dean', 'Faculty Administration', 'Head','Associate Head','Administration']}
-          hiddenFields={['Class Duration', 'Class Requirement', 'Semester Duration']}
-          initialData={editingRow}
-          keyColumn="PID"
-          spreadsheetId={REF_SHEET_ID}
-          fieldOptions={{
-              'Dean': employeeOptions,
-              'Associate Dean': employeeOptions,
-              'Faculty Administration': employeeOptions,
-              'Head': employeeOptions,
-              'Associate Head': employeeOptions,
-              'Administration': employeeOptions
-          }}
-          multiSelectFields={['Dean', 'Associate Dean', 'Faculty Administration', 'Head', 'Associate Head', 'Administration']}
-          transformData={transformDataForSubmit}
-          onSuccess={(newData) => {
-              if (newData) {
-                  if (editMode === 'add') {
-                      updateProgramData(prev => [newData, ...prev]);
-                      setSelectedProgram(newData);
-                  } else {
-                      updateProgramData(prev => prev.map(r => r.PID === newData.PID ? newData : r));
-                      setSelectedProgram(newData);
-                  }
-              }
-          }}
-      />
+      <EditEntryModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} mode="add" title="Add Program" sheetName={SHEET_NAMES.PROGRAM} columns={['PID','Faculty Short Name','Faculty Full Name','Program Full Name','Program Short Name','Department Name','Program Type','Semester Type','Semester Duration Num','Theory Duration','Lab Duration','Theory Requirement','Lab Requirement','Head','Associate Head','Administration']} hiddenFields={['Class Duration', 'Class Requirement', 'Semester Duration']} initialData={{ 'Semester Duration Num': '4', 'Theory Duration': '90', 'Lab Duration': '120', 'Theory Requirement': '0', 'Lab Requirement': '0' }} keyColumn="PID" spreadsheetId={REF_SHEET_ID} fieldOptions={{ 'Head': employeeOptions, 'Associate Head': employeeOptions, 'Administration': employeeOptions }} multiSelectFields={['Head', 'Associate Head', 'Administration']} transformData={(data) => {
+          const tDur = data['Theory Duration'] || '0', lDur = data['Lab Duration'] || '0', tReq = data['Theory Requirement'] || '0', lReq = data['Lab Requirement'] || '0', sDur = data['Semester Duration Num'] || '0';
+          const result = { ...data, 'Class Duration': `Theory ${tDur} Minutes, Lab ${lDur} Minutes`, 'Class Requirement': `Theory ${tReq} Minutes, Lab ${lReq} Minutes`, 'Semester Duration': `${sDur} Months`, 'Head': extractIds(data.Head), 'Associate Head': extractIds(data['Associate Head']), 'Administration': extractIds(data.Administration) };
+          delete result['Theory Duration']; delete result['Lab Duration']; delete result['Theory Requirement']; delete result['Lab Requirement']; delete result['Semester Duration Num'];
+          return result;
+      }} onSuccess={handleAddProgramSuccess} />
     </div>
   );
 };
