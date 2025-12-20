@@ -5,7 +5,7 @@ import { Search, RefreshCw, Mail, Phone, Filter, User, Building2, Plus, Trash2, 
 import { useSheetData } from '../hooks/useSheetData';
 import { useResponsivePagination } from '../hooks/useResponsivePagination';
 import { DiuEmployeeRow, TeacherDataRow } from '../types';
-import { EditEntryModal } from '../components/EditEntryModal';
+import { EmployeeAddEditModal } from '../components/EmployeeAddEditModal';
 import { EmployeeDetailsPanel } from '../components/EmployeeDetailsPanel';
 import { submitSheetData, normalizeId } from '../services/sheetService';
 import { SHEET_NAMES, REF_SHEET_ID } from '../constants';
@@ -93,11 +93,6 @@ export const EmployeeView: React.FC = () => {
     setter(newSet);
   };
 
-  const columnsToEdit = [
-    'Employee ID', 'Employee Name', 'Administrative Designation', 'Academic Designation',
-    'Mobile', 'IP-Ext', 'E-mail', 'Photo', 'Facebook', 'Linkedin', 'Status', 'Group Name', 'Department'
-  ];
-
   // Merge teacherData (Teacher_DB) with diuEmployeeData (Employee_DB)
   const combinedEmployees = useMemo(() => {
     const map = new Map<string, DiuEmployeeRow>();
@@ -162,14 +157,21 @@ export const EmployeeView: React.FC = () => {
   const [selectedEmployee, setSelectedEmployee] = useState<DiuEmployeeRow | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editMode, setEditMode] = useState<'add' | 'edit'>('add');
-  const [editingRow, setEditingRow] = useState<DiuEmployeeRow | undefined>(undefined);
+  const [editingRow, setEditingRow] = useState<Partial<DiuEmployeeRow> | undefined>(undefined);
 
   const handlePanelUpdate = (newData: DiuEmployeeRow) => {
     // Local Update
-    updateDiuEmployeeData(prev => prev.map(row => 
-        row['Employee ID'] === newData['Employee ID'] ? { ...row, ...newData } : row
-    ));
-    setSelectedEmployee(prev => prev ? { ...prev, ...newData } : prev);
+    updateDiuEmployeeData(prev => {
+        const exists = prev.some(row => normalizeId(row['Employee ID']) === normalizeId(newData['Employee ID']));
+        if (exists) {
+            return prev.map(row => normalizeId(row['Employee ID']) === normalizeId(newData['Employee ID']) ? { ...row, ...newData } : row);
+        }
+        return [newData, ...prev];
+    });
+    
+    if (selectedEmployee && normalizeId(selectedEmployee['Employee ID']) === normalizeId(newData['Employee ID'])) {
+        setSelectedEmployee({ ...selectedEmployee, ...newData });
+    }
 
     // Persistence to Sheets
     (async () => {
@@ -232,15 +234,17 @@ export const EmployeeView: React.FC = () => {
 
   const { currentPage, setCurrentPage, rowsPerPage, totalPages, paginatedData, containerRef } = useResponsivePagination(filteredData, { defaultRows: 12 });
 
-  const handleModalSuccess = (newData: any) => {
-      if (!newData) return;
-      if (editMode === 'add') updateDiuEmployeeData(prev => [newData, ...prev]);
-      else {
-          const originalId = editingRow?.['Employee ID'];
-          if (originalId) {
-              updateDiuEmployeeData(prev => prev.map(row => row['Employee ID'] === originalId ? { ...row, ...newData } : row));
-              if (selectedEmployee?.['Employee ID'] === originalId) setSelectedEmployee({ ...selectedEmployee, ...newData });
+  const handleModalSuccess = (newData: DiuEmployeeRow) => {
+      updateDiuEmployeeData(prev => {
+          const exists = prev.some(row => normalizeId(row['Employee ID']) === normalizeId(newData['Employee ID']));
+          if (exists) {
+              return prev.map(row => normalizeId(row['Employee ID']) === normalizeId(newData['Employee ID']) ? { ...row, ...newData } : row);
           }
+          return [newData, ...prev];
+      });
+      
+      if (selectedEmployee && normalizeId(selectedEmployee['Employee ID']) === normalizeId(newData['Employee ID'])) {
+          setSelectedEmployee(newData);
       }
   };
 
@@ -286,9 +290,9 @@ export const EmployeeView: React.FC = () => {
             </button>
             <div className="relative group hidden sm:block">
                 <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 rounded-full text-xs focus:ring-0 w-32 md:w-48 lg:w-64 outline-none transition-all" />
+                <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 rounded-full text-xs focus:ring-0 w-32 md:w-48 outline-none transition-all" />
             </div>
-            <button onClick={() => { setEditMode('add'); setEditingRow(undefined); setIsEditModalOpen(true); }} className="hidden lg:flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-[11px] font-bold transition-all shadow-sm"><Plus className="w-3 h-3 mr-1" />Add</button>
+            <button onClick={() => { setEditMode('add'); setEditingRow(undefined); setIsEditModalOpen(true); }} className="hidden lg:flex items-center px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-[11px] font-bold transition-all shadow-lg active:scale-95"><Plus className="w-4 h-4 mr-1.5" />Add New</button>
             <button onClick={() => reloadData('all', true)} disabled={loading.status === 'loading'} className="p-1.5 text-gray-400 hover:text-blue-600 rounded-full transition-all"><RefreshCw className={`w-4 h-4 ${loading.status === 'loading' ? 'animate-spin' : ''}`} /></button>
           </div>,
           headerActionsTarget
@@ -297,40 +301,48 @@ export const EmployeeView: React.FC = () => {
       <div className="flex-1 overflow-hidden flex flex-row gap-2 p-2 md:p-3 bg-white">
         <div className="flex-1 overflow-hidden bg-transparent relative flex flex-col">
             <div className="flex-1 overflow-y-auto p-2 thin-scrollbar" ref={containerRef}>
-                <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ${selectedEmployee ? 'xl:grid-cols-3' : 'xl:grid-cols-4'} gap-3`}>
+                <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ${selectedEmployee ? 'xl:grid-cols-3' : 'xl:grid-cols-4'} gap-4`}>
                     {paginatedData.map((emp) => (
-                        <div key={emp['Employee ID']} onClick={() => setSelectedEmployee(emp)} className={`bg-white rounded-xl border p-4 shadow-[0_0_10px_rgba(0,0,0,0.06)] hover:shadow-[0_0_15px_rgba(0,0,0,0.12)] transition-all flex flex-col relative cursor-pointer group ${selectedEmployee?.['Employee ID'] === emp['Employee ID'] ? 'ring-2 ring-blue-500 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'border-gray-100 hover:border-blue-200'}`}>
+                        <div key={emp['Employee ID']} onClick={() => setSelectedEmployee(emp)} className={`bg-white rounded-2xl border p-5 shadow-sm hover:shadow-md transition-all flex flex-col relative cursor-pointer group ${selectedEmployee?.['Employee ID'] === emp['Employee ID'] ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50/10' : 'border-gray-100 hover:border-blue-200'}`}>
                             <div className="flex items-start space-x-4 mb-3">
-                                <div className="w-14 h-14 rounded-full border-2 border-white shadow-sm flex items-center justify-center shrink-0 overflow-hidden relative bg-gray-100">
-                                    {!isValEmpty(emp.Photo) ? <img src={getImageUrl(emp.Photo)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <User className="w-7 h-7 text-gray-300" />}
+                                <div className="w-16 h-16 rounded-full border-2 border-white shadow-md flex items-center justify-center shrink-0 overflow-hidden relative bg-gray-100 ring-1 ring-gray-100">
+                                    {!isValEmpty(emp.Photo) ? <img src={getImageUrl(emp.Photo)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <User className="w-8 h-8 text-gray-300" />}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <h3 className="text-sm font-bold text-slate-900 truncate leading-tight mb-1 group-hover:text-blue-700 transition-colors">{emp['Employee Name']}</h3>
-                                    <div className="text-[11px] text-blue-600 font-bold truncate mb-0.5">{emp['Administrative Designation'] || emp['Academic Designation'] || '-'}</div>
-                                    <div className="text-[10px] text-gray-400 font-mono font-bold">ID: {emp['Employee ID']}</div>
+                                    <h3 className="text-[15px] font-bold text-slate-900 truncate leading-tight mb-1 group-hover:text-blue-700 transition-colors">{emp['Employee Name']}</h3>
+                                    <div className="text-[11px] text-blue-600 font-bold truncate mb-1 uppercase tracking-tighter">{emp['Administrative Designation'] || emp['Academic Designation'] || '-'}</div>
+                                    <div className="inline-flex px-2 py-0.5 rounded-md bg-gray-100 text-[9px] font-mono font-bold text-gray-500">ID: {emp['Employee ID']}</div>
                                 </div>
                             </div>
-                            <div className="space-y-1.5 mt-auto pt-3 border-t border-gray-50">
-                                <div className="flex items-center text-[11px] text-gray-600 truncate"><Building2 className="w-3.5 h-3.5 mr-2 text-gray-400" />{emp.Department || '-'}</div>
-                                <div className="flex items-center text-[11px] text-gray-600 truncate"><Phone className="w-3.5 h-3.5 mr-2 text-gray-400" />{emp.Mobile || '-'}</div>
-                                <div className="flex items-center text-[11px] text-gray-600 truncate"><Mail className="w-3.5 h-3.5 mr-2 text-gray-400" />{emp['E-mail'] || '-'}</div>
+                            <div className="space-y-2 mt-auto pt-4 border-t border-gray-50">
+                                <div className="flex items-center text-[11px] text-gray-600 truncate"><Building2 className="w-3.5 h-3.5 mr-2.5 text-gray-400" />{emp.Department || '-'}</div>
+                                <div className="flex items-center text-[11px] text-gray-600 truncate font-mono"><Phone className="w-3.5 h-3.5 mr-2.5 text-gray-400" />{emp.Mobile || '-'}</div>
+                                <div className="flex items-center text-[11px] text-gray-600 truncate"><Mail className="w-3.5 h-3.5 mr-2.5 text-gray-400" />{emp['E-mail'] || '-'}</div>
                             </div>
                         </div>
                     ))}
                 </div>
             </div>
-            <div className="bg-gray-50 px-4 py-1 border-t border-gray-100 flex justify-between items-center text-[11px] text-gray-500 font-bold rounded-b-xl shrink-0">
+            <div className="bg-gray-50 px-4 py-2 border-t border-gray-100 flex justify-between items-center text-[11px] text-gray-500 font-bold rounded-b-xl shrink-0">
                 <span>Displaying {filteredData.length > 0 ? (currentPage - 1) * rowsPerPage + 1 : 0}-{Math.min(currentPage * rowsPerPage, filteredData.length)} of {filteredData.length}</span>
                 <div className="flex items-center space-x-2">
-                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2.5 py-0.5 bg-white border border-gray-200 rounded-lg shadow-sm disabled:opacity-40 transition-colors hover:bg-gray-50">Prev</button>
-                    <span className="bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-lg">Page {currentPage} / {totalPages}</span>
-                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2.5 py-0.5 bg-white border border-gray-200 rounded-lg shadow-sm disabled:opacity-40 transition-colors hover:bg-gray-50">Next</button>
+                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 bg-white border border-gray-300 rounded-lg shadow-sm disabled:opacity-40 transition-colors hover:bg-gray-50 font-bold">Prev</button>
+                    <span className="bg-blue-600 text-white px-3 py-1 rounded-lg shadow-sm">Page {currentPage} / {totalPages}</span>
+                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 bg-white border border-gray-300 rounded-lg shadow-sm disabled:opacity-40 transition-colors hover:bg-gray-50 font-bold">Next</button>
                 </div>
             </div>
         </div>
         {selectedEmployee && <EmployeeDetailsPanel employee={selectedEmployee} onClose={() => setSelectedEmployee(null)} onUpdate={handlePanelUpdate} fieldOptions={fieldOptions} />}
       </div>
-      <EditEntryModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} mode="edit" title="Add Employee" sheetName={SHEET_NAMES.EMPLOYEE} columns={columnsToEdit} initialData={editingRow} keyColumn="Employee ID" spreadsheetId={REF_SHEET_ID} fieldOptions={fieldOptions} multiSelectFields={['Group Name']} onSuccess={handleModalSuccess} />
+      
+      <EmployeeAddEditModal 
+        isOpen={isEditModalOpen} 
+        onClose={() => setIsEditModalOpen(false)} 
+        mode={editMode as 'add' | 'edit'} 
+        initialData={editingRow} 
+        fieldOptions={fieldOptions} 
+        onSuccess={handleModalSuccess} 
+      />
     </div>
   );
 };

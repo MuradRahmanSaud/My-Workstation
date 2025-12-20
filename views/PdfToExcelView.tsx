@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Upload, FileSpreadsheet, Download, RefreshCw, AlertCircle, FileText, X, Bot, Clock } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
@@ -87,6 +86,7 @@ export const PdfToExcelView: React.FC = () => {
             setStatus('analyzing');
             setStatusMessage(`Analying ${text.length} chars (Extraction took ${extractTime}s)...`);
             
+            // Fix: Initialize GoogleGenAI with apiKey from process.env.API_KEY
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
             // Explicitly requesting JSON array of objects with specific columns
@@ -114,14 +114,16 @@ export const PdfToExcelView: React.FC = () => {
             ${text.substring(0, 100000)} 
             `; // Increased limit to 100k chars for Flash model
 
+            // Fix: Using recommended 'gemini-3-flash-preview' for extraction task and ensuring responseMimeType is set.
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3-flash-preview',
                 contents: prompt,
                 config: {
-                    responseMimeType: "application/json" // Force JSON for speed and reliability
+                    responseMimeType: "application/json" 
                 }
             });
 
+            // Fix: Direct access to .text property on response object as per updated SDK guidelines.
             const rawResponse = response.text || '[]';
             let jsonData: any = [];
             
@@ -187,7 +189,7 @@ export const PdfToExcelView: React.FC = () => {
                     <FileSpreadsheet className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                    <h2 className="text-xl font-bold text-gray-800">PDF to Excel Converter</h2>
+                    <h2 className="textxl font-bold text-gray-800">PDF to Excel Converter</h2>
                     <p className="text-xs text-gray-500">Powered by Gemini AI</p>
                 </div>
             </div>

@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Save, AlertCircle, CheckCircle, ChevronDown, Plus, Search, Check } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { X, Save, AlertCircle, CheckCircle, ChevronDown, Plus, Search, Check, User } from 'lucide-react';
 import { submitSheetData } from '../services/sheetService';
 
 interface EditEntryModalProps {
@@ -41,7 +41,6 @@ export const MultiSearchableSelect = ({
     const [search, setSearch] = useState('');
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
     const wrapperRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (value) {
@@ -84,34 +83,47 @@ export const MultiSearchableSelect = ({
         updateValue(selectedItems.filter(item => item !== val));
     };
 
-    const handleAddNew = () => {
+    const handleAddNewClick = () => {
         if (!search.trim()) return;
         const newVal = search.trim();
-        if (!selectedItems.includes(newVal)) {
-            updateValue([...selectedItems, newVal]);
+        
+        // If an external add logic exists (like opening a registration form), call it
+        if (onAddNew) {
+            onAddNew(newVal);
+            setIsOpen(false);
+        } else {
+            // Default behavior: just add as text
+            if (!selectedItems.includes(newVal)) {
+                updateValue([...selectedItems, newVal]);
+            }
         }
         setSearch('');
     };
 
-    const filteredOptions = options
-        .filter(opt => opt.toLowerCase().includes(search.toLowerCase()))
-        .sort((a, b) => a.localeCompare(b));
+    const filteredOptions = useMemo(() => {
+        const lowerSearch = search.toLowerCase();
+        return options
+            .filter(opt => opt.toLowerCase().includes(lowerSearch))
+            .sort((a, b) => a.localeCompare(b))
+            .slice(0, 100); 
+    }, [options, search]);
     
     const showAddOption = search.trim() && !options.some(opt => opt.toLowerCase() === search.toLowerCase().trim());
 
+    const isEmployeeList = options.length > 0 && options[0].includes(' - ');
+
     return (
-        <div ref={wrapperRef} className="relative">
-            {/* Main Selection Area */}
+        <div ref={wrapperRef} className="relative w-full">
             <div 
                 className={`w-full min-h-[42px] border border-gray-300 rounded-lg px-2 py-1.5 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all bg-white shadow-sm flex flex-wrap gap-1.5 items-center cursor-pointer ${disabled ? 'opacity-70 cursor-not-allowed' : ''}`}
                 onClick={() => !disabled && setIsOpen(!isOpen)}
             >
                 {selectedItems.length === 0 ? (
-                    <span className="text-sm text-gray-400 px-1">{placeholder || 'Select options...'}</span>
+                    <span className="text-[11px] md:text-xs text-gray-400 px-1">{placeholder || 'Select options...'}</span>
                 ) : (
                     selectedItems.map(item => (
-                        <span key={item} className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                            {item}
+                        <span key={item} className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] md:text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                            <span className="max-w-[120px] md:max-w-[200px] truncate">{item}</span>
                             {!disabled && (
                                 <button 
                                     type="button"
@@ -129,10 +141,8 @@ export const MultiSearchableSelect = ({
                 </div>
             </div>
 
-            {/* Enhanced Grid Dropdown - Fixed Width to fit within parent panel */}
             {isOpen && !disabled && (
-                <div className="absolute z-[110] w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden left-0 flex flex-col animate-in fade-in zoom-in-95 duration-150">
-                    {/* Internal Search Bar */}
+                <div className="absolute z-[110] w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden left-0 right-0 flex flex-col animate-in fade-in zoom-in-95 duration-150 border-t-0 rounded-t-none">
                     <div className="p-2 border-b border-gray-100 bg-gray-50/50">
                         <div className="relative">
                             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -142,17 +152,42 @@ export const MultiSearchableSelect = ({
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
-                                placeholder="Search groups..."
+                                placeholder="Search..."
                                 onClick={(e) => e.stopPropagation()}
                             />
                         </div>
                     </div>
 
-                    {/* Suggestions Grid - Reduced padding and gaps */}
-                    <div className="p-2 max-h-[280px] overflow-y-auto thin-scrollbar">
-                        <div className="grid grid-cols-2 gap-1.5">
+                    <div className="p-2 max-h-[320px] overflow-y-auto thin-scrollbar">
+                        <div className={isEmployeeList ? "flex flex-col gap-1" : "grid grid-cols-2 gap-1.5"}>
                             {filteredOptions.map((opt) => {
                                 const isSelected = selectedItems.includes(opt);
+                                
+                                if (isEmployeeList) {
+                                    const parts = opt.split(' - ');
+                                    const name = parts[0];
+                                    const subtext = parts[1] || '';
+
+                                    return (
+                                        <button
+                                            key={opt}
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); handleToggle(opt); }}
+                                            className={`flex items-center text-left p-2 rounded-lg transition-all border ${
+                                                isSelected 
+                                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm' 
+                                                : 'bg-white text-gray-700 border-gray-100 hover:border-blue-300 hover:bg-blue-50'
+                                            }`}
+                                        >
+                                            <div className="flex-1 min-w-0">
+                                                <div className={`text-[11px] font-bold truncate ${isSelected ? 'text-white' : 'text-gray-900'}`}>{name}</div>
+                                                <div className={`text-[9px] truncate ${isSelected ? 'text-blue-100' : 'text-gray-500'}`}>{subtext}</div>
+                                            </div>
+                                            {isSelected && <Check className="w-3.5 h-3.5 ml-2 shrink-0" />}
+                                        </button>
+                                    );
+                                }
+
                                 return (
                                     <button
                                         key={opt}
@@ -173,8 +208,8 @@ export const MultiSearchableSelect = ({
                             {showAddOption && (
                                 <button
                                     type="button"
-                                    onClick={(e) => { e.stopPropagation(); handleAddNew(); }}
-                                    className="flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-all col-span-2 mt-1 shadow-sm"
+                                    onClick={(e) => { e.stopPropagation(); handleAddNewClick(); }}
+                                    className="flex items-center justify-center px-3 py-2 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-all col-span-full mt-1 shadow-sm"
                                 >
                                     <Plus className="w-3.5 h-3.5 mr-1.5" />
                                     Add "{search}"
@@ -182,14 +217,13 @@ export const MultiSearchableSelect = ({
                             )}
 
                             {filteredOptions.length === 0 && !showAddOption && (
-                                <div className="col-span-2 py-6 text-center">
-                                    <p className="text-xs text-gray-400 italic">No groups found</p>
+                                <div className="col-span-full py-8 text-center">
+                                    <p className="text-xs text-gray-400 italic">No results found</p>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Footer Actions */}
                     <div className="p-2 bg-gray-50 border-t border-gray-100 flex items-center justify-between shrink-0">
                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-1">
                             {selectedItems.length} Selected
@@ -197,7 +231,7 @@ export const MultiSearchableSelect = ({
                         <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setIsOpen(false); setSearch(''); }}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all active:scale-95 flex items-center"
+                            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all active:scale-95 flex items-center"
                         >
                             Done
                         </button>
@@ -250,15 +284,27 @@ export const SearchableSelect = ({
         setIsOpen(false);
     };
 
-    const filteredOptions = options
-        .filter(opt => opt.toLowerCase().includes(search.toLowerCase()))
-        .slice(0, 50);
+    const handleAddClick = () => {
+        if (onAddNew) {
+            onAddNew(search);
+            setIsOpen(false);
+        } else {
+            handleSelect(search);
+        }
+    };
+
+    const filteredOptions = useMemo(() => {
+        const lowerSearch = search.toLowerCase();
+        return options
+            .filter(opt => opt.toLowerCase().includes(lowerSearch))
+            .slice(0, 50);
+    }, [options, search]);
     
     const hasExactMatch = options.some(opt => opt.toLowerCase() === search.toLowerCase());
     const showAddOption = search && !hasExactMatch;
 
     return (
-        <div ref={wrapperRef} className="relative">
+        <div ref={wrapperRef} className="relative w-full">
             <div className="relative">
                 <input
                     type="text"
@@ -277,7 +323,7 @@ export const SearchableSelect = ({
                 <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-gray-400 pointer-events-none" />
             </div>
             {isOpen && !disabled && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto thin-scrollbar left-0">
+                <div className="absolute z-[120] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto thin-scrollbar left-0 right-0">
                     {filteredOptions.map((opt) => (
                         <div
                             key={opt}
@@ -292,10 +338,10 @@ export const SearchableSelect = ({
                     )}
                     {showAddOption && (
                         <div
-                            onClick={() => onAddNew ? onAddNew(search) : handleSelect(search)}
-                            className="px-3 py-2 text-sm text-blue-600 font-bold hover:bg-blue-50 cursor-pointer border-t border-gray-100 flex items-center bg-gray-50/50"
+                            onClick={handleAddClick}
+                            className="px-3 py-2 text-sm text-blue-600 font-bold hover:bg-blue-50 cursor-pointer border-t border-gray-100 flex items-center bg-gray-50/50 sticky bottom-0"
                         >
-                            <span className="mr-1 bg-blue-100 text-blue-600 rounded w-4 h-4 flex items-center justify-center text-xs">+</span> 
+                            <span className="mr-2 bg-blue-100 text-blue-600 rounded w-4 h-4 flex items-center justify-center text-xs">+</span> 
                             Add "{search}"
                         </div>
                     )}

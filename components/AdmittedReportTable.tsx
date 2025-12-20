@@ -16,6 +16,7 @@ interface AdmittedReportTableProps {
     setSelectedFaculties: (val: Set<string>) => void;
     selectedProgramTypes: Set<string>;
     selectedSemesterTypes: Set<string>;
+    onUnregClick?: (data: { semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string }) => void;
 }
 
 const FACULTY_COLORS: Record<string, string> = {
@@ -25,15 +26,6 @@ const FACULTY_COLORS: Record<string, string> = {
     'FHSS': 'bg-blue-500',
     'FSIT': 'bg-orange-500',
     'Other': 'bg-gray-400'
-};
-
-const FACULTY_HEX_COLORS: Record<string, string> = {
-    'FBE': '#ef4444',
-    'FE': '#eab308',
-    'FHLS': '#22c55e',
-    'FHSS': '#3b82f6',
-    'FSIT': '#f97316',
-    'Other': '#9ca3af'
 };
 
 export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
@@ -47,24 +39,22 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
     selectedFaculties,
     setSelectedFaculties,
     selectedProgramTypes,
-    selectedSemesterTypes
+    selectedSemesterTypes,
+    onUnregClick
 }) => {
     const [targetRegSemester, setTargetRegSemester] = useState<string>('');
     const [viewType, setViewType] = useState<'detailed' | 'summary'>('detailed');
-    const [copyChartSuccess, setCopyChartSuccess] = useState(false);
-    const [copySemesterSuccess, setCopySemesterSuccess] = useState<string | null>(null);
-    const [unregModalState, setUnregModalState] = useState<{ isOpen: boolean; semester: string; programId: string; programName: string; } | null>(null);
-    
-    // Mobile State
+    const [unregModalState, setUnregModalState] = useState<{ isOpen: boolean; semester: string; programId: string; programName: string; students: StudentDataRow[] } | null>(null);
     const [activeFaculty, setActiveFaculty] = useState<string>('');
 
     useEffect(() => {
         if (!targetRegSemester && registeredSemesters.length > 0) setTargetRegSemester(registeredSemesters[0]);
     }, [registeredSemesters, targetRegSemester]);
 
+    const normalize = (id: string) => String(id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
     const programDetailsMap = useMemo(() => {
         const map = new Map<string, ProgramDataRow>();
-        const normalize = (id: string) => String(id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
         programData.forEach(p => { if(p.PID) map.set(normalize(p.PID), p); });
         return map;
     }, [programData]);
@@ -102,7 +92,7 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
             const students = studentCache.get(sem) || [];
             students.forEach((student) => {
                 const id = String(student['Student ID']).trim();
-                const normalizePid = String(student.PID).trim().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                const normalizePid = normalize(student.PID);
                 progNames.add(normalizePid);
                 const isRegistered = registrationLookup.get(id)?.has(effectiveTarget) || false;
                 const isUnregistered = !isRegistered;
@@ -157,12 +147,33 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
         return { sortedAdmittedSemesters: sortedSemesters, allPrograms: allProgs, facultyGroups: groups, sortedFaculties: sortedFacs };
     }, [selectedAdmittedSemesters, studentCache, targetRegSemester, registeredSemesters, registrationLookup, programMap, programDetailsMap, selectedPrograms, selectedFaculties, selectedProgramTypes, selectedSemesterTypes]);
 
-    useEffect(() => {
-        if (sortedFaculties.length > 0 && !activeFaculty) setActiveFaculty(sortedFaculties[0]);
-    }, [sortedFaculties, activeFaculty]);
+    const getUnregisteredStudents = (sem: string, pid: string) => {
+        const targetPidNorm = normalize(pid);
+        const target = targetRegSemester || registeredSemesters[0];
+        if (sem !== 'ALL') {
+            const students = studentCache.get(sem) || [];
+            return students.filter(s => normalize(s.PID) === targetPidNorm && !registrationLookup.get(String(s['Student ID']).trim())?.has(target));
+        }
+        const allStudents: StudentDataRow[] = [];
+        sortedAdmittedSemesters.forEach(sName => {
+            const students = studentCache.get(sName) || [];
+            students.forEach(s => {
+                if (normalize(s.PID) === targetPidNorm && !registrationLookup.get(String(s['Student ID']).trim())?.has(target)) {
+                    allStudents.push(s);
+                }
+            });
+        });
+        return allStudents;
+    };
 
-    const handleCopySemesterData = async (semester: string) => { /* implementation */ };
-    const handleCopyChart = async () => { /* implementation */ };
+    const handleUnregClick = (semester: string, programId: string, programName: string) => {
+        const students = getUnregisteredStudents(semester, programId);
+        if (onUnregClick) {
+            onUnregClick({ semester, programId, programName, students, targetSemester: targetRegSemester });
+        } else {
+            setUnregModalState({ isOpen: true, semester, programId, programName, students });
+        }
+    };
 
     const renderFacultyCard = (fac: string, mobile: boolean = false) => {
         const progs = facultyGroups[fac];
@@ -187,7 +198,7 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                             <span className="w-[40%] text-gray-700 truncate font-medium" title={`${p.pid} ${p.name}`}><span className="font-mono font-bold mr-1 text-gray-500">{p.pid}</span>{p.name}</span>
                             <span className="w-[20%] text-center font-bold text-gray-900">{p.totalAdmitted}</span>
                             <span className="w-[20%] text-center text-green-600">{p.totalRegistered}</span>
-                            <span className="w-[20%] text-right text-red-500 font-bold cursor-pointer" onClick={() => p.totalUnregistered > 0 && setUnregModalState({ isOpen: true, semester: 'ALL', programId: p.pid, programName: p.name })}>{p.totalUnregistered}</span>
+                            <span className="w-[20%] text-right text-red-500 font-bold cursor-pointer" onClick={() => p.totalUnregistered > 0 && handleUnregClick('ALL', p.pid, p.name)}>{p.totalUnregistered}</span>
                         </div>
                     ))}
                 </div>
@@ -231,95 +242,125 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
         );
     };
 
+    const isTransposed = allPrograms.length === 1;
+
     return (
-        <div className="flex flex-col h-full bg-white rounded shadow-sm relative">
-            <div className="px-3 py-2 border-b border-gray-200 bg-gray-50 flex items-center justify-between shrink-0 gap-3 overflow-hidden">
-                <div className="text-xs font-bold text-gray-700 flex items-center shrink-0">
-                    {viewType === 'summary' ? 'Directory Summary' : 'Directory Report'}
+        <div className="flex flex-col h-full bg-white rounded-lg shadow-md border border-gray-200 relative overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between shrink-0 gap-3 overflow-hidden">
+                <div className="text-xs font-bold text-gray-700 flex items-center shrink-0 uppercase tracking-tight">
+                    {isTransposed ? `${allPrograms[0].pid} Semester Analysis` : 'Directory Report'}
                 </div>
                 <div className="flex items-center space-x-3 overflow-hidden justify-end flex-1">
-                    <div className="hidden md:flex items-center space-x-1 overflow-x-auto thin-scrollbar">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase mr-1 whitespace-nowrap">Faculty:</span>
-                        <button onClick={() => setSelectedFaculties(new Set())} className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all whitespace-nowrap ${selectedFaculties.size === 0 ? 'bg-slate-700 text-white border-slate-700 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-100'}`}>All</button>
-                        {uniqueFaculties.map(fac => (
-                            <button key={fac} onClick={() => { const newSet = new Set(selectedFaculties); if (newSet.has(fac)) newSet.delete(fac); else newSet.add(fac); setSelectedFaculties(newSet); }} className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all whitespace-nowrap ${selectedFaculties.has(fac) ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200'}`}>{fac}</button>
-                        ))}
-                    </div>
-                    <div className="flex items-center bg-white border border-gray-200 rounded p-0.5 shadow-sm hidden md:flex">
-                        <button onClick={() => setViewType('detailed')} className={`p-1 rounded transition-colors ${viewType === 'detailed' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`} title="Detailed"><ListIcon className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => setViewType('summary')} className={`p-1 rounded transition-colors ${viewType === 'summary' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`} title="Summary"><LayoutGrid className="w-3.5 h-3.5" /></button>
-                    </div>
+                    {!isTransposed && (
+                        <div className="hidden md:flex items-center space-x-1 overflow-x-auto no-scrollbar">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase mr-1 whitespace-nowrap">Faculty:</span>
+                            <button onClick={() => setSelectedFaculties(new Set())} className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all whitespace-nowrap ${selectedFaculties.size === 0 ? 'bg-slate-700 text-white border-slate-700 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-100'}`}>All</button>
+                            {uniqueFaculties.map(fac => (
+                                <button key={fac} onClick={() => { const newSet = new Set(selectedFaculties); if (newSet.has(fac)) newSet.delete(fac); else newSet.add(fac); setSelectedFaculties(newSet); }} className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all whitespace-nowrap ${selectedFaculties.has(fac) ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200'}`}>{fac}</button>
+                            ))}
+                        </div>
+                    )}
                     <div className="flex items-center space-x-2 shrink-0">
-                        <span className="text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap hidden md:inline">Compare:</span>
-                        <select value={targetRegSemester} onChange={(e) => setTargetRegSemester(e.target.value)} className="text-[10px] border-gray-300 rounded shadow-sm focus:border-blue-500 py-1 pl-2 pr-6 bg-white cursor-pointer">{registeredSemesters.map(s => <option key={s} value={s}>{s}</option>)}</select>
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase whitespace-nowrap hidden md:inline tracking-widest">Compare:</span>
+                        <select value={targetRegSemester} onChange={(e) => setTargetRegSemester(e.target.value)} className="text-[10px] border-gray-300 rounded shadow-sm focus:border-blue-500 py-1 pl-2 pr-6 bg-white cursor-pointer font-bold">{registeredSemesters.map(s => <option key={s} value={s}>{s}</option>)}</select>
                     </div>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-hidden relative bg-slate-50/50">
+            <div className="flex-1 overflow-hidden relative bg-white">
                 {viewType === 'detailed' ? (
                     <div className="h-full overflow-auto thin-scrollbar">
-                        <table className="w-full text-left border-collapse bg-white">
-                            <thead className="bg-slate-200 sticky top-0 z-20 shadow-sm border-b border-slate-300">
-                                <tr>
-                                    <th className="px-2 py-2 text-[10px] font-bold text-gray-800 border-r border-slate-300 sticky left-0 z-30 bg-slate-200 min-w-[150px] w-auto whitespace-nowrap shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Program</th>
-                                    {sortedAdmittedSemesters.map(sem => (
-                                        <th key={sem} className="px-1 py-1 text-[9px] font-bold text-gray-700 border-r border-slate-300 text-center min-w-[110px]">
-                                            <div className="flex items-center justify-center space-x-1 mb-1"><span className="text-gray-800">{sem}</span><button onClick={() => handleCopySemesterData(sem)} className="p-0.5 rounded hover:bg-slate-300 text-slate-500 hover:text-slate-800 transition-colors">{copySemesterSuccess === sem ? <Check className="w-2.5 h-2.5 text-green-600" /> : <Copy className="w-2.5 h-2.5" />}</button></div>
-                                            <div className="grid grid-cols-3 gap-1 border-t border-slate-300 pt-1"><span className="text-blue-700">Enroll</span><span className="text-green-700">Reg</span><span className="text-red-700">Unreg</span></div>
-                                        </th>
-                                    ))}
-                                    <th className="px-1 py-1 text-[9px] font-bold text-gray-800 border-b border-slate-300 text-center min-w-[110px]">
-                                        <div className="mb-1 text-gray-900">Total</div>
-                                        <div className="grid grid-cols-3 gap-1 border-t border-slate-300 pt-1"><span className="text-blue-700">Enroll</span><span className="text-green-700">Reg</span><span className="text-red-700">Unreg</span></div>
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {allPrograms.map((prog: any) => (
-                                    <tr key={prog.pid} className="group hover:bg-blue-50 transition-colors text-[10px] h-[29px]">
-                                        <td className="px-2 py-1 font-bold text-gray-600 border-r border-gray-100 sticky left-0 bg-white group-hover:bg-blue-100 group-hover:text-blue-900 transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-auto">
-                                            <span className="inline-block w-8 text-right mr-2 text-gray-400 group-hover:text-blue-500 font-mono transition-colors">{prog.pid}</span>
-                                            <span className="text-gray-700 group-hover:text-blue-900 transition-colors" title={prog.name}>{prog.name}</span>
-                                        </td>
-                                        {sortedAdmittedSemesters.map(sem => {
-                                            const data = prog.data[sem]; const adm = data?.admitted || 0; const unreg = data?.unregistered || 0; const reg = adm - unreg;
-                                            return (
-                                                <td key={sem} className="px-1 py-1 border-r border-gray-100 text-center">
-                                                    <div className="grid grid-cols-3 gap-1">
-                                                        <span className={`${adm > 0 ? 'text-gray-700' : 'text-gray-300'}`}>{adm}</span>
-                                                        <span className={`${reg > 0 ? 'text-green-600 font-bold' : 'text-gray-300'}`}>{reg}</span>
-                                                        <span className={`font-bold ${unreg > 0 ? 'text-red-500 cursor-pointer hover:underline decoration-red-500 decoration-dotted underline-offset-2' : 'text-gray-300'}`} onClick={() => unreg > 0 && setUnregModalState({ isOpen: true, semester: sem, programId: prog.pid, programName: prog.name })}>{unreg}</span>
-                                                    </div>
-                                                </td>
-                                            );
-                                        })}
-                                        <td className="px-1 py-1 font-bold text-center bg-slate-100 border-l border-gray-200">
-                                            <div className="grid grid-cols-3 gap-1"><span className="text-blue-800">{prog.totalAdmitted}</span><span className="text-green-700">{prog.totalAdmitted - prog.totalUnregistered}</span><span className="text-red-700">{prog.totalUnregistered}</span></div>
-                                        </td>
+                        {isTransposed ? (
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-slate-50 sticky top-0 z-20 shadow-sm border-b border-slate-200">
+                                    <tr>
+                                        <th className="px-4 py-2 text-[10px] font-bold text-slate-500 border-r border-slate-200 w-48 uppercase tracking-widest">Semester</th>
+                                        <th className="px-4 py-2 text-[10px] font-bold text-slate-500 border-r border-slate-200 text-center uppercase tracking-widest">Enrollment</th>
+                                        <th className="px-4 py-2 text-[10px] font-bold text-slate-500 border-r border-slate-200 text-center uppercase tracking-widest">Registered</th>
+                                        <th className="px-4 py-2 text-[10px] font-bold text-slate-500 text-center uppercase tracking-widest">Unregistered</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {sortedAdmittedSemesters.map(sem => {
+                                        const prog = allPrograms[0];
+                                        const data = prog.data[sem];
+                                        const adm = data?.admitted || 0;
+                                        const unreg = data?.unregistered || 0;
+                                        const reg = adm - unreg;
+                                        return (
+                                            <tr key={sem} className="group hover:bg-slate-50/60 transition-colors h-[28px] text-[11px]">
+                                                <td className="px-4 py-1 font-bold text-slate-600 border-r border-slate-100 group-hover:text-blue-600">{sem}</td>
+                                                <td className="px-4 py-1 text-center font-medium text-slate-700 border-r border-slate-100">{adm > 0 ? adm : <span className="text-gray-300">-</span>}</td>
+                                                <td className="px-4 py-1 text-center font-bold text-green-600 border-r border-slate-100">{reg > 0 ? reg : <span className="text-gray-300">-</span>}</td>
+                                                <td className="px-4 py-1 text-center font-bold text-red-500">
+                                                    {unreg > 0 ? (
+                                                        <span className="cursor-pointer hover:underline decoration-red-400 underline-offset-2" onClick={() => handleUnregClick(sem, prog.pid, prog.name)}>{unreg}</span>
+                                                    ) : <span className="text-gray-300">-</span>}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    <tr className="bg-slate-50 border-t border-slate-200 font-bold h-[28px] text-[11px]">
+                                        <td className="px-4 py-1 text-[10px] uppercase text-slate-400 tracking-widest">Grand Total</td>
+                                        <td className="px-4 py-1 text-center text-slate-900 border-r border-slate-200">{allPrograms[0].totalAdmitted}</td>
+                                        <td className="px-4 py-1 text-center text-green-700 border-r border-slate-200">{allPrograms[0].totalAdmitted - allPrograms[0].totalUnregistered}</td>
+                                        <td className="px-4 py-1 text-center text-red-600">{allPrograms[0].totalUnregistered}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        ) : (
+                            <table className="w-full text-left border-collapse bg-white">
+                                <thead className="bg-slate-50 sticky top-0 z-20 shadow-sm border-b border-slate-200">
+                                    <tr>
+                                        <th className="px-2 py-1.5 text-[10px] font-bold text-slate-500 border-r border-slate-200 sticky left-0 z-30 bg-slate-50 min-w-[150px] w-auto whitespace-nowrap shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] uppercase tracking-wider">Program</th>
+                                        {sortedAdmittedSemesters.map(sem => (
+                                            <th key={sem} className="px-1 py-1 text-[9px] font-bold text-slate-500 border-r border-slate-200 text-center min-w-[110px]">
+                                                <div className="flex items-center justify-center space-x-1 mb-1"><span className="text-slate-700">{sem}</span></div>
+                                                <div className="grid grid-cols-3 gap-1 border-t border-slate-200 pt-1 uppercase"><span className="text-blue-700">Enroll</span><span className="text-green-700">Reg</span><span className="text-red-700">Unreg</span></div>
+                                            </th>
+                                        ))}
+                                        <th className="px-1 py-1 text-[9px] font-bold text-slate-500 border-b border-slate-200 text-center min-w-[110px] uppercase">
+                                            <div className="mb-1 text-slate-700">Total</div>
+                                            <div className="grid grid-cols-3 gap-1 border-t border-slate-200 pt-1"><span className="text-blue-700">Enroll</span><span className="text-green-700">Reg</span><span className="text-red-700">Unreg</span></div>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {allPrograms.map((prog: any) => (
+                                        <tr key={prog.pid} className="group hover:bg-slate-50/60 transition-colors text-[10px] h-[28px]">
+                                            <td className="px-2 py-1 font-bold text-gray-600 border-r border-gray-100 sticky left-0 bg-white group-hover:bg-slate-100 group-hover:text-blue-900 transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-auto">
+                                                <span className="inline-block w-8 text-right mr-2 text-gray-400 group-hover:text-blue-500 font-mono transition-colors">{prog.pid}</span>
+                                                <span className="text-gray-700 group-hover:text-blue-900 transition-colors" title={prog.name}>{prog.name}</span>
+                                            </td>
+                                            {sortedAdmittedSemesters.map(sem => {
+                                                const data = prog.data[sem]; const adm = data?.admitted || 0; const unreg = data?.unregistered || 0; const reg = adm - unreg;
+                                                return (
+                                                    <td key={sem} className="px-1 py-1 border-r border-gray-100 text-center">
+                                                        <div className="grid grid-cols-3 gap-1">
+                                                            <span className={`${adm > 0 ? 'text-gray-700' : 'text-gray-300'}`}>{adm}</span>
+                                                            <span className={`${reg > 0 ? 'text-green-600 font-bold' : 'text-gray-300'}`}>{reg}</span>
+                                                            <span className={`font-bold ${unreg > 0 ? 'text-red-500 cursor-pointer hover:underline decoration-red-500 decoration-dotted underline-offset-2' : 'text-gray-300'}`} onClick={() => unreg > 0 && handleUnregClick(sem, prog.pid, prog.name)}>{unreg}</span>
+                                                        </div>
+                                                    </td>
+                                                );
+                                            })}
+                                            <td className="px-1 py-1 font-bold text-center bg-slate-50 border-l border-gray-200">
+                                                <div className="grid grid-cols-3 gap-1"><span className="text-blue-800">{prog.totalAdmitted}</span><span className="text-green-700">{prog.totalAdmitted - prog.totalUnregistered}</span><span className="text-red-700 cursor-pointer" onClick={() => prog.totalUnregistered > 0 && handleUnregClick('ALL', prog.pid, prog.name)}>{prog.totalUnregistered}</span></div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
                     </div>
                 ) : (
-                    // SUMMARY VIEW
                     <div className="flex flex-col h-full overflow-hidden">
-                        {/* Mobile View: Horizontal Tabs + Vertical Content */}
                         <div className="md:hidden flex flex-col flex-1 overflow-hidden">
-                            {/* Horizontal Tabs */}
                             <div className="flex overflow-x-auto p-2 space-x-2 bg-white border-b border-gray-200 shrink-0 no-scrollbar">
                                 {sortedFaculties.map(fac => (
-                                    <button 
-                                        key={fac} 
-                                        onClick={() => setActiveFaculty(fac)}
-                                        className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-all shadow-sm ${activeFaculty === fac ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                                    >
-                                        {fac}
-                                    </button>
+                                    <button key={fac} onClick={() => setActiveFaculty(fac)} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-all shadow-sm ${activeFaculty === fac ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{fac}</button>
                                 ))}
                             </div>
-                            {/* Content */}
                             <div className="flex-1 overflow-y-auto p-3 space-y-4 bg-gray-50">
                                 {activeFaculty && renderFacultyCard(activeFaculty, true)}
                                 {activeFaculty && (
@@ -330,17 +371,11 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                 )}
                             </div>
                         </div>
-
-                        {/* Desktop View */}
                         <div className="hidden md:flex flex-col flex-1 overflow-y-auto p-2 space-y-4 thin-scrollbar">
                             <div className="flex flex-nowrap overflow-x-auto gap-3 items-start shrink-0">
                                 {sortedFaculties.map(fac => renderFacultyCard(fac))}
                             </div>
-                            <div className="bg-white p-2 rounded border border-gray-200 shadow-sm relative mt-4 flex-1 min-h-[300px] flex flex-col">
-                                <button onClick={handleCopyChart} className="absolute right-2 top-2 flex items-center space-x-1 px-2 py-1 text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors z-10">
-                                    {copyChartSuccess ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
-                                    <span>{copyChartSuccess ? 'Copied' : 'Copy'}</span>
-                                </button>
+                            <div className="bg-white p-2 rounded border border-gray-200 shadow-sm mt-4 flex-1 min-h-[300px] flex flex-col">
                                 <h4 className="text-xs font-bold text-gray-700 mb-2 pl-2 shrink-0">Student Directory Distribution</h4>
                                 <div className="w-full relative flex-1 mt-2">{renderChart(sortedFaculties)}</div>
                                 <div className="flex justify-center flex-wrap gap-4 mt-2 border-t border-gray-100 pt-2 shrink-0">
@@ -351,7 +386,19 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                     </div>
                 )}
             </div>
-            <UnregisteredStudentsModal isOpen={!!unregModalState && unregModalState.isOpen} onClose={() => setUnregModalState(null)} semester={unregModalState?.semester || ''} programName={unregModalState?.programName || ''} programId={unregModalState?.programId || ''} targetSemester={targetRegSemester} students={[]} />
+            {unregModalState?.isOpen && (
+                <UnregisteredStudentsModal 
+                    isOpen={unregModalState.isOpen} 
+                    onClose={() => setUnregModalState(null)} 
+                    semester={unregModalState.semester} 
+                    programName={unregModalState.programName} 
+                    programId={unregModalState.programId} 
+                    targetSemester={targetRegSemester} 
+                    students={unregModalState.students}
+                    programMap={programMap}
+                    registrationLookup={registrationLookup}
+                />
+            )}
         </div>
     );
 };
