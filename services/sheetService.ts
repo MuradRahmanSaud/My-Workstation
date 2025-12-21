@@ -3,6 +3,9 @@ import { MAIN_SHEET_ID, MAIN_SHEET_GID, REF_SHEET_ID, REF_SHEET_GID, TEACHER_SHE
 import { MainSheetRow, CourseSectionData, ReferenceDataRow, TeacherDataRow, ProgramDataRow, StudentLinkRow, StudentDataRow, ClassRoomDataRow, DiuEmployeeRow, FacultyLeadershipRow } from '../types';
 import { parseCSV, extractSheetIdAndGid } from '../utils/csvParser';
 
+// Exporting extractSheetIdAndGid to resolve import dependency in other views
+export { extractSheetIdAndGid };
+
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const PROXY_LIST = [

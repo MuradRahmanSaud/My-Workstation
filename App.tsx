@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { SectionView } from './views/SectionView';
 import { ProgramView } from './views/ProgramView';
+import { DropOutView } from './views/DropOutView';
 import { EmployeeView } from './views/EmployeeView';
 import { StudentView } from './views/StudentView';
 import { ClassRoomView } from './views/ClassRoomView';
@@ -17,8 +18,9 @@ const VIEW_BACKGROUNDS: Record<string, string> = {
   dashboard: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&q=80&w=2070',
   section: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=2069',
   program: 'https://images.unsplash.com/photo-1523050335392-9bc567597b81?auto=format&fit=crop&q=80&w=2070',
+  dropout: 'https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&q=80&w=2070',
   student: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=2070',
-  employee: 'https://images.unsplash.com/photo-1556761175-4b464b461175-4b46b61175-4b46?auto=format&fit=crop&q=80&w=1974',
+  employee: 'https://images.unsplash.com/photo-1556761175-4b464b461175-4b46?auto=format&fit=crop&q=80&w=1974',
   classroom: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&q=80&w=2132',
   pdf_to_excel: 'https://images.unsplash.com/photo-1454165833767-027ff3399ae7?auto=format&fit=crop&q=80&w=2070',
   settings: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=2070',
@@ -26,7 +28,6 @@ const VIEW_BACKGROUNDS: Record<string, string> = {
 
 function AppContent() {
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const bgImage = useMemo(() => VIEW_BACKGROUNDS[currentView] || VIEW_BACKGROUNDS.dashboard, [currentView]);
 
@@ -38,6 +39,8 @@ function AppContent() {
         return <SectionView key="section" showStats={false} />;
       case 'program':
         return <ProgramView />;
+      case 'dropout':
+        return <DropOutView />;
       case 'employee':
         return <EmployeeView />;
       case 'student':
@@ -83,7 +86,6 @@ function AppContent() {
   );
 }
 
-// Fix for index.tsx line 3: Added default export and wrapped in SheetProvider to fix "no default export" error.
 export default function App() {
   return (
     <SheetProvider>

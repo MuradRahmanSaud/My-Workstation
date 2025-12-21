@@ -137,10 +137,23 @@ export interface StudentDataRow {
     Sex: string;
     Mobile: string;
     Email: string;
-    [key: string]: string;
+    // New Fields
+    'Credit Requirement'?: string;
+    'Credit Completed'?: string;
+    'Defense Registration'?: string;
+    'Defense Supervisor'?: string;
+    'Defense Status'?: string;
+    'Degree Status'?: string;
+    // Familial & Mentor Fields
+    'Father Name'?: string;
+    'Father Mobile'?: string;
+    'Mother Name'?: string;
+    'Mother Mobile'?: string;
+    'Mentor'?: string;
+    [key: string]: string | undefined;
 }
 
-export type ViewState = 'dashboard' | 'section' | 'program' | 'employee' | 'settings' | 'student' | 'classroom' | 'pdf_to_excel';
+export type ViewState = 'dashboard' | 'section' | 'program' | 'dropout' | 'employee' | 'settings' | 'student' | 'classroom' | 'pdf_to_excel';
 
 export interface LoadingState {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -161,6 +174,7 @@ export interface SheetContextType {
   studentDataLinks: Map<string, string>;
   studentCache: Map<string, StudentDataRow[]>;
   loadStudentData: (semester: string, force?: boolean) => Promise<void>;
+  updateStudentData: (semester: string, studentId: string, newData: Partial<StudentDataRow>) => void;
   registeredData: any[];
   loadRegisteredData: (force?: boolean) => Promise<void>;
   loading: LoadingState;

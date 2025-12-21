@@ -17,8 +17,8 @@ export const REGISTERED_STUDENT_SHEET_GID = '742235954';
 // Using corsproxy.io for better reliability with Google Sheets CSV exports
 export const CORS_PROXY = 'https://corsproxy.io/?';
 
-// API Configuration
-export const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwcS6hgo3pFGMdtVhdHqlUbNzQg6gybTWmrGoekfp2k-92kJzIujULPFXJFjDoMCnFekQ/exec';
+// API Configuration - Updated with User's Deployment URL
+export const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwppRFyVIfRsHbQsf_cKU4ZgMEbJ9ESvklY5jdhnpRPahZ2xsSqEWNN3_EGcayFUPs-IQ/exec';
 
 export const SHEET_NAMES = {
     CLASSROOM: 'Class Room_DB',

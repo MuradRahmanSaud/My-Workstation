@@ -1,8 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-// Fix: Added ChevronDown to imports from lucide-react
-import { RefreshCw, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, List, CheckCircle, XCircle, ChevronDown } from 'lucide-react';
+import { RefreshCw, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, List, CheckCircle, XCircle, ChevronDown, GraduationCap, ClipboardList, Users } from 'lucide-react';
 import { useSheetData } from '../hooks/useSheetData';
 import { useResponsivePagination } from '../hooks/useResponsivePagination';
 
@@ -86,7 +85,10 @@ export const StudentView: React.FC = () => {
       return activeData.filter(row => 
           row['Student Name'].toLowerCase().includes(lower) || 
           row['Student ID'].includes(lower) || 
-          row.Mobile.includes(lower)
+          row.Mobile.includes(lower) ||
+          (row['Father Name'] || '').toLowerCase().includes(lower) ||
+          (row['Mother Name'] || '').toLowerCase().includes(lower) ||
+          (row['Mentor'] || '').toLowerCase().includes(lower)
       );
   }, [activeData, searchTerm, viewMode]);
 
@@ -99,7 +101,26 @@ export const StudentView: React.FC = () => {
   const displayData = viewMode === 'details' ? filteredDetailsData : filteredRegisteredData;
   const { currentPage, setCurrentPage, rowsPerPage, totalPages, paginatedData, containerRef } = useResponsivePagination(displayData);
 
-  const detailColumns = ['SL', 'Program', 'Student ID', 'Student Name', 'Sex', 'Mobile', 'Email', 'Status'];
+  // Added the new familial and mentor columns to detailColumns
+  const detailColumns = [
+    'SL', 
+    'Program', 
+    'Student ID', 
+    'Student Name', 
+    'Credit Req', 
+    'Credit Com', 
+    'Mentor',
+    'Father Name',
+    'Father Mob',
+    'Mother Name',
+    'Mother Mob',
+    'Def Reg', 
+    'Supervisor', 
+    'Def Status', 
+    'Deg Status', 
+    'Mobile', 
+    'Status'
+  ];
 
   const handleRefresh = async () => {
       setIsManualRefreshing(true);
@@ -196,12 +217,12 @@ export const StudentView: React.FC = () => {
                     <p className="text-sm">No data found.</p>
                 </div>
             ) : (
-                <div className="flex-1 overflow-auto relative" ref={containerRef}>
+                <div className="flex-1 overflow-auto relative thin-scrollbar" ref={containerRef}>
                     <table className="w-full text-left border-collapse">
                         <thead className="bg-slate-100 sticky top-0 z-10 shadow-sm border-b border-gray-200">
                             <tr>
                                 {(viewMode === 'details' ? detailColumns : registeredColumns).map((col, idx) => (
-                                    <th key={idx} className={`px-1 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap ${col === 'SL' ? 'w-1' : ''} ${viewMode === 'registered' || ['Status', 'Program', 'Sex'].includes(col) ? 'text-center' : 'text-left'}`}>
+                                    <th key={idx} className={`px-2 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap ${col === 'SL' ? 'w-1' : ''} ${viewMode === 'registered' || ['Status', 'Program', 'Sex', 'Credit Req', 'Credit Com', 'Def Reg', 'Def Status', 'Deg Status'].includes(col) ? 'text-center' : 'text-left'}`}>
                                         {col}
                                     </th>
                                 ))}
@@ -212,8 +233,8 @@ export const StudentView: React.FC = () => {
                                 <tr key={idx} className="hover:bg-blue-50/60 transition-colors text-[11px] text-gray-700 leading-none h-[29px]">
                                     {viewMode === 'details' ? (
                                         <>
-                                            <td className="px-1 py-1 text-center w-1">{row.SL}</td>
-                                            <td className="px-1 py-1 text-center font-bold text-gray-500 whitespace-nowrap">
+                                            <td className="px-2 py-1 text-center w-1 text-gray-400 font-bold">{row.SL}</td>
+                                            <td className="px-2 py-1 text-center font-bold text-gray-500 whitespace-nowrap">
                                                 {(() => {
                                                     const pid = row.PID;
                                                     const normalize = (id: string) => String(id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
@@ -221,12 +242,26 @@ export const StudentView: React.FC = () => {
                                                     return shortName ? `${pid} ${shortName}` : pid;
                                                 })()}
                                             </td>
-                                            <td className="px-1 py-1 font-bold text-blue-600">{row['Student ID']}</td>
-                                            <td className="px-1 py-1">{row['Student Name']}</td>
-                                            <td className="px-1 py-1 text-center">{row.Sex}</td>
-                                            <td className="px-1 py-1 text-gray-600">{row.Mobile}</td>
-                                            <td className="px-1 py-1 text-gray-500">{row.Email}</td>
-                                            <td className="px-1 py-1 text-center">
+                                            <td className="px-2 py-1 font-bold text-blue-600 font-mono">{row['Student ID']}</td>
+                                            <td className="px-2 py-1 font-medium">{row['Student Name']}</td>
+                                            
+                                            <td className="px-2 py-1 text-center text-gray-600">{row['Credit Requirement'] || '-'}</td>
+                                            <td className="px-2 py-1 text-center font-bold text-slate-700">{row['Credit Completed'] || '-'}</td>
+
+                                            {/* Familial & Mentor Details */}
+                                            <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Mentor']}>{row['Mentor'] || '-'}</td>
+                                            <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Father Name']}>{row['Father Name'] || '-'}</td>
+                                            <td className="px-2 py-1 text-left text-[10px] font-mono text-gray-500">{row['Father Mobile'] || '-'}</td>
+                                            <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Mother Name']}>{row['Mother Name'] || '-'}</td>
+                                            <td className="px-2 py-1 text-left text-[10px] font-mono text-gray-500">{row['Mother Mobile'] || '-'}</td>
+
+                                            <td className="px-2 py-1 text-center text-gray-500">{row['Defense Registration'] || '-'}</td>
+                                            <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Defense Supervisor']}>{row['Defense Supervisor'] || '-'}</td>
+                                            <td className="px-2 py-1 text-center italic text-gray-500">{row['Defense Status'] || '-'}</td>
+                                            <td className="px-2 py-1 text-center font-bold text-purple-600">{row['Degree Status'] || '-'}</td>
+
+                                            <td className="px-2 py-1 text-gray-600 font-mono">{row.Mobile || '-'}</td>
+                                            <td className="px-2 py-1 text-center">
                                                 {registeredIdSet.has(String(row['Student ID']).trim()) ? (
                                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700"><CheckCircle className="w-2.5 h-2.5 mr-1" />Registered</span>
                                                 ) : (
@@ -236,7 +271,7 @@ export const StudentView: React.FC = () => {
                                         </>
                                     ) : (
                                         registeredColumns.map((col) => (
-                                            <td key={col} className="px-1 py-1 font-medium text-gray-600 text-center whitespace-nowrap">
+                                            <td key={col} className="px-2 py-1 font-medium text-gray-600 text-center whitespace-nowrap">
                                                 {row[col]}
                                             </td>
                                         ))

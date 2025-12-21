@@ -1,13 +1,13 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ProgramDataRow, CourseSectionData, StudentDataRow } from '../types';
-// Added ChevronLeft and ChevronRight to imports
-import { RefreshCw, Plus, School, ArrowLeft, Filter, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { RefreshCw, Plus, School, ArrowLeft, Filter, Search } from 'lucide-react';
 import { useSheetData } from '../hooks/useSheetData';
 import { useSectionFilters } from '../hooks/useSectionFilters';
 import { useResponsivePagination } from '../hooks/useResponsivePagination';
-import { useCourseAggregation } from '../hooks/useCourseAggregation';
-import { useTeacherAggregation } from '../hooks/useTeacherAggregation';
+import { useCourseAggregation, CourseSummaryItem } from '../hooks/useCourseAggregation';
+import { useTeacherAggregation, TeacherSummaryItem } from '../hooks/useTeacherAggregation';
 import { EditEntryModal } from '../components/EditEntryModal';
 import { ProgramLeftPanel } from '../components/ProgramLeftPanel';
 import { ProgramDashboard } from '../components/ProgramDashboard';
@@ -19,7 +19,7 @@ import { AdmittedReportTable } from '../components/AdmittedReportTable';
 import { UnregisteredStudentsModal } from '../components/UnregisteredStudentsModal';
 import { FilterPanel } from '../components/FilterPanel';
 import { SHEET_NAMES, REF_SHEET_ID } from '../constants';
-import { normalizeId, submitSheetData } from '../services/sheetService';
+import { normalizeId, submitSheetData, extractSheetIdAndGid } from '../services/sheetService';
 
 const FACULTY_CHIP_COLORS: Record<string, string> = {
   'FBE': 'bg-red-100 text-red-700 border-red-200',
@@ -38,7 +38,7 @@ const FACULTY_HEADER_COLORS: Record<string, string> = {
 };
 
 export const ProgramView: React.FC = () => {
-  const { data: allSections, programData, facultyLeadershipData, diuEmployeeData, teacherData, loading, reloadData, updateProgramData, updateFacultyLeadershipData, updateDiuEmployeeData, semesterFilter, setSemesterFilter, uniqueSemesters, studentDataLinks, studentCache, loadStudentData, registeredData, loadRegisteredData } = useSheetData();
+  const { data: allSections, programData, facultyLeadershipData, diuEmployeeData, teacherData, loading, reloadData, updateProgramData, updateFacultyLeadershipData, updateDiuEmployeeData, semesterFilter, setSemesterFilter, uniqueSemesters, studentDataLinks, studentCache, loadStudentData, updateStudentData, registeredData, loadRegisteredData } = useSheetData();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFaculty, setSelectedFaculty] = useState<string>('All');
   const [selectedType, setSelectedType] = useState<string | null>(null);
@@ -49,10 +49,12 @@ export const ProgramView: React.FC = () => {
   const [activeUnregList, setActiveUnregList] = useState<{ semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string } | null>(null);
   const [selectedAdmittedSemesters, setSelectedAdmittedSemesters] = useState<Set<string>>(new Set());
   const [registrationFilters, setRegistrationFilters] = useState<Map<string, 'registered' | 'unregistered'>>(new Map());
-  const [selectedStudentForDetails, setSelectedStudentForDetails] = useState<StudentDataRow | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<StudentDataRow | null>(null);
 
   useEffect(() => {
-    if (activeReport === 'admitted' && registeredData.length === 0) loadRegisteredData();
+    if (activeReport === 'admitted') {
+        if (registeredData.length === 0) loadRegisteredData();
+    }
   }, [activeReport, registeredData.length, loadRegisteredData]);
 
   const admittedSemestersOptions = useMemo(() => {
@@ -77,7 +79,9 @@ export const ProgramView: React.FC = () => {
   }, [admittedSemestersOptions]);
 
   useEffect(() => {
-      selectedAdmittedSemesters.forEach(sem => { if (!studentCache.has(sem)) loadStudentData(sem); });
+      selectedAdmittedSemesters.forEach(sem => {
+          if (!studentCache.has(sem)) loadStudentData(sem);
+      });
   }, [selectedAdmittedSemesters, studentCache, loadStudentData]);
 
   const registeredSemesters = useMemo(() => {
@@ -98,6 +102,7 @@ export const ProgramView: React.FC = () => {
 
   const registrationLookup = useMemo(() => {
       const map = new Map<string, Set<string>>();
+      if (registeredData.length === 0) return map;
       registeredData.forEach(row => {
           Object.entries(row).forEach(([sem, idVal]) => {
               if (sem && idVal) {
@@ -128,7 +133,14 @@ export const ProgramView: React.FC = () => {
   const teacherSummaryData = useTeacherAggregation(filteredData);
 
   const tableOptions = useMemo(() => {
-      const programs = new Set<string>(), types = new Set<string>(), credits = new Set<string>(), totalSections = new Set<number>(), totalCapacity = new Set<number>(), totalStudents = new Set<number>(), totalVacancy = new Set<number>(), extraSections = new Set<number>();
+      const programs = new Set<string>();
+      const types = new Set<string>();
+      const credits = new Set<string>();
+      const totalSections = new Set<number>();
+      const totalCapacity = new Set<number>();
+      const totalStudents = new Set<number>();
+      const totalVacancy = new Set<number>();
+      const extraSections = new Set<number>();
       courseSummaryData.forEach(item => {
           programs.add(item.program); types.add(item.courseType); credits.add(item.credit);
           totalSections.add(item.totalSections); totalCapacity.add(item.totalCapacity);
@@ -147,13 +159,42 @@ export const ProgramView: React.FC = () => {
     return filteredData;
   }, [activeReport, filteredData, courseSummaryData, teacherSummaryData]);
 
-  const { currentPage, setCurrentPage, rowsPerPage, totalPages, paginatedData, containerRef } = useResponsivePagination(activeDataForReport);
+  const { currentPage, setCurrentPage, rowsPerPage, totalPages, paginatedData, containerRef } = useResponsivePagination<any>(activeDataForReport);
   const [forceEditTrigger, setForceEditTrigger] = useState<number>(0);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   useEffect(() => { if (programData.length > 0 && !selectedProgram) setSelectedProgram(programData[0]); }, [programData, selectedProgram]);
-  useEffect(() => { setReportSearch(''); clearAllFilters(); setActiveUnregList(null); setSelectedStudentForDetails(null); }, [selectedProgram?.PID]);
-  useEffect(() => { setActiveUnregList(null); setSelectedStudentForDetails(null); }, [activeReport]);
+  useEffect(() => { setReportSearch(''); clearAllFilters(); setActiveUnregList(null); setSelectedStudent(null); }, [selectedProgram?.PID]);
+  useEffect(() => { setActiveUnregList(null); }, [activeReport]);
+
+  useEffect(() => {
+    if (activeReport === 'admitted' && selectedProgram && !activeUnregList && admittedSemestersOptions.length > 0 && registeredSemesters.length > 0) {
+      const targetRegSem = registeredSemesters[0];
+      const pidNorm = normalizeId(selectedProgram.PID);
+      const allUnregStudents: StudentDataRow[] = [];
+
+      admittedSemestersOptions.forEach(sem => {
+          const students = studentCache.get(sem);
+          if (students) {
+              const unregForSem = students.filter(s => {
+                  if (normalizeId(s.PID) !== pidNorm) return false;
+                  const id = String(s['Student ID']).trim();
+                  return !registrationLookup.get(id)?.has(targetRegSem);
+              });
+              const tagged = unregForSem.map(s => ({ ...s, _semester: sem }));
+              allUnregStudents.push(...tagged);
+          }
+      });
+
+      setActiveUnregList({
+          semester: 'All Semesters',
+          programId: selectedProgram.PID,
+          programName: selectedProgram['Program Short Name'],
+          students: allUnregStudents as any,
+          targetSemester: targetRegSem
+      });
+    }
+  }, [activeReport, selectedProgram, activeUnregList, admittedSemestersOptions, registeredSemesters, studentCache, registrationLookup]);
 
   const faculties = useMemo(() => {
     const set = new Set<string>();
@@ -209,7 +250,36 @@ export const ProgramView: React.FC = () => {
   const handleSaveFacultyLeadership = async (data: any) => { const extractIds = (v: string) => v ? v.split(',').map(i => { const m = i.trim().match(/\(([^)]+)\)$/); return m ? m[1] : i.trim(); }).join(', ') : ''; const payload = { ...data, 'Dean': extractIds(data.Dean), 'Associate Dean': extractIds(data['Associate Dean']), 'Administration': extractIds(data.Administration) }; updateFacultyLeadershipData(prev => { const exists = prev.some(f => f['Faculty Short Name'] === payload['Faculty Short Name']); return exists ? prev.map(f => f['Faculty Short Name'] === payload['Faculty Short Name'] ? payload : f) : [...prev, payload]; }); await submitSheetData('update', SHEET_NAMES.FACULTY_LEADERSHIP, payload, 'Faculty Short Name', payload['Faculty Short Name'], REF_SHEET_ID); };
   const handleSaveProgramLeadership = async (data: any) => { const extractIds = (v: string) => v ? v.split(',').map(i => { const m = i.trim().match(/\(([^)]+)\)$/); return m ? m[1] : i.trim(); }).join(', ') : ''; const payload = { ...data, 'Head': extractIds(data.Head), 'Associate Head': extractIds(data['Associate Head']), 'Administration': extractIds(data.Administration) }; updateProgramData(prev => prev.map(p => p.PID === payload.PID ? { ...p, ...payload } : p)); if (selectedProgram?.PID === payload.PID) setSelectedProgram({ ...selectedProgram, ...payload }); await submitSheetData('update', SHEET_NAMES.PROGRAM, payload, 'PID', payload.PID, REF_SHEET_ID); };
   const handleSaveProgramData = async (data: any) => { const payload = { ...data, 'Class Duration': `Theory ${data['Theory Duration']} Minutes, Lab ${data['Lab Duration']} Minutes`, 'Class Requirement': `Theory ${data['Theory Requirement']} Minutes, Lab ${data['Lab Requirement']} Minutes`, 'Semester Duration': `${data['Semester Duration Num']} Months` }; delete payload['Theory Duration']; delete payload['Lab Duration']; delete payload['Theory Requirement']; delete payload['Lab Requirement']; delete payload['Semester Duration Num']; updateProgramData(prev => prev.map(p => p.PID === payload.PID ? { ...p, ...payload } : p)); setSelectedProgram(prev => prev?.PID === payload.PID ? { ...prev, ...payload } : prev); await submitSheetData('update', SHEET_NAMES.PROGRAM, payload, 'PID', payload.PID, REF_SHEET_ID); };
-  const handleSaveEmployee = async (data: any, persist: boolean = true) => { updateDiuEmployeeData(prev => { const exists = prev.some(e => normalizeId(e['Employee ID']) === normalizeId(data['Employee ID'])); return exists ? prev.map(e => normalizeId(e['Employee ID']) === normalizeId(data['Employee ID']) ? { ...e, ...data } : e) : [data, ...prev]; }); if (persist) { let r = await submitSheetData('update', SHEET_NAMES.EMPLOYEE, data, 'Employee ID', data['Employee ID'].trim(), REF_SHEET_ID); if (r.result === 'error') await submitSheetData('add', SHEET_NAMES.EMPLOYEE, data, 'Employee ID', data['Employee ID'].trim(), REF_SHEET_ID); } };
+  const handleSaveEmployee = async (data: any, persist: boolean = true) => { updateDiuEmployeeData(prev => { const exists = prev.some(e => normalizeId(e['Employee ID']) === normalizeId(data['Employee ID'])); return exists ? prev.map(e => normalizeId(e['Employee ID']) === normalizeId(data['Employee ID']) ? { ...e, ...data } : e) : [data, ...prev]; }); if (persist) { let r = await submitSheetData('update', SHEET_NAMES.EMPLOYEE, data, 'Employee ID', data['Employee ID'].trim(), REF_SHEET_ID); if (r.result === 'error' && (r.message || '').toLowerCase().includes('not found')) await submitSheetData('add', SHEET_NAMES.EMPLOYEE, data, 'Employee ID', data['Employee ID'].trim(), REF_SHEET_ID); } };
+
+  const handleSaveStudent = async (semester: string, student: StudentDataRow) => {
+    const link = studentDataLinks.get(semester);
+    if (!link) return;
+    const { id } = extractSheetIdAndGid(link);
+    if (!id) return;
+    
+    // 1. Immediate local state update for current view
+    setSelectedStudent(prev => prev ? { ...prev, ...student } : null);
+
+    // 2. Prepare payload for API (remove internal props)
+    const { _semester, ...apiPayload } = student as any;
+
+    try {
+        // 3. Persist to API: sheetName must be the semester name as per tab names
+        await submitSheetData('update', semester, apiPayload, 'Student ID', student['Student ID'].trim(), id);
+        
+        // 4. Update the studentCache Map in global context
+        updateStudentData(semester, student['Student ID'], student);
+
+        // 5. Refresh unreg list UI if active
+        if (activeUnregList) {
+            const newStudents = activeUnregList.students.map(s => s['Student ID'] === student['Student ID'] ? { ...s, ...student } : s);
+            setActiveUnregList({ ...activeUnregList, students: newStudents });
+        }
+    } catch (e) {
+        console.error("Failed to persist student update", e);
+    }
+  };
 
   const currentFacultyLeadership = useMemo(() => selectedProgram ? facultyLeadershipData.find(f => f['Faculty Short Name'] === selectedProgram['Faculty Short Name']) : undefined, [selectedProgram, facultyLeadershipData]);
   const headerActionsTarget = document.getElementById('header-actions-area'), headerTitleTarget = document.getElementById('header-title-area');
@@ -217,7 +287,7 @@ export const ProgramView: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-gray-50 relative overflow-hidden">
-      {headerTitleTarget && createPortal(<div className="flex items-center space-x-3 animate-in fade-in slide-in-from-left-2 duration-300">{activeReport && (<button onClick={() => { setActiveReport(null); setActiveUnregList(null); }} className="p-1.5 hover:bg-white rounded-full text-gray-500 shadow-sm border border-gray-100 transition-all"><ArrowLeft className="w-4 h-4" /></button>)}<h2 className="text-[13px] md:text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center truncate"><School className="w-4 h-4 mr-2 text-blue-600" />{activeReport ? `${activeReport.replace('_', ' ')}` : 'Programs'}</h2></div>, headerTitleTarget)}
+      {headerTitleTarget && createPortal(<div className="flex items-center space-x-3 animate-in fade-in slide-in-from-left-2 duration-300">{activeReport && (<button onClick={() => { setActiveReport(null); setActiveUnregList(null); setSelectedStudent(null); }} className="p-1.5 hover:bg-white rounded-full text-gray-500 shadow-sm border border-gray-100 transition-all"><ArrowLeft className="w-4 h-4" /></button>)}<h2 className="text-[13px] md:text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center truncate"><School className="w-4 h-4 mr-2 text-blue-600" />{activeReport ? `${activeReport.replace('_', ' ')}` : 'Programs'}</h2></div>, headerTitleTarget)}
       {headerActionsTarget && createPortal(<div className="flex items-center space-x-1 animate-in fade-in slide-in-from-right-2 duration-300 overflow-hidden">{activeReport && (<><button onClick={() => setIsFilterPanelOpen(true)} className={`flex items-center space-x-1 px-3 py-1.5 text-[11px] font-bold rounded-full border transition-all ${activeFilterCount > 0 ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-600 border-gray-200'}`}><Filter className="w-3.5 h-3.5" /><span>Filter</span>{activeFilterCount > 0 && <span className="bg-blue-600 text-white text-[9px] px-1.5 rounded-full ml-1">{activeFilterCount}</span>}</button><div className="relative group"><Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" placeholder="Search..." value={reportSearch} onChange={e => setReportSearch(e.target.value)} className="pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-full text-xs outline-none focus:ring-1 focus:ring-blue-500 w-32 md:w-48 transition-all" /></div></>)}<button onClick={() => reloadData('all', true)} disabled={loading.status === 'loading'} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all"><RefreshCw className={`w-4 h-4 ${loading.status === 'loading' ? 'animate-spin' : ''}`} /></button></div>, headerActionsTarget)}
       <div className="flex-1 overflow-hidden flex flex-row relative">
         <ProgramLeftPanel searchTerm={searchTerm} setSearchTerm={setSearchTerm} selectedFaculty={selectedFaculty} setSelectedFaculty={setSelectedFaculty} faculties={faculties} selectedType={selectedType} setSelectedType={setSelectedType} selectedSemesterMode={selectedSemesterMode} setSelectedSemesterMode={setSelectedSemesterMode} semesterFilter={semesterFilter} setSemesterFilter={setSemesterFilter} uniqueSemesters={uniqueSemesters} sortedGroupKeys={sortedGroupKeys} groupedData={groupedData} selectedProgram={selectedProgram} onSelectProgram={setSelectedProgram} onEditProgram={(e, p) => { setSelectedProgram(p); setForceEditTrigger(prev => prev + 1); }} facultyColors={FACULTY_CHIP_COLORS} facultyHeaderColors={FACULTY_HEADER_COLORS} loading={loading.status === 'loading' && programData.length === 0} />
@@ -230,46 +300,33 @@ export const ProgramView: React.FC = () => {
                         </div>
                         {activeReport && (
                             <div className="flex-1 flex flex-col overflow-hidden bg-white animate-in slide-in-from-bottom-2 duration-300">
-                                <div className="flex-1 flex flex-col overflow-hidden relative">
-                                    {(activeReport === 'sections' || activeReport === 'unassigned' || activeReport === 'low_student' || activeReport === 'class_taken') && (
-                                        <div className="flex-1 overflow-auto" ref={containerRef}>
-                                            <SectionTable data={paginatedData} isDashboardMode={true} headerColor="bg-slate-700" />
-                                        </div>
-                                    )}
-                                    {activeReport === 'courses' && (
-                                        <div className="flex-1 overflow-auto" ref={containerRef}>
-                                            <CourseSummaryTable data={paginatedData} expandedKeys={new Set()} toggleRow={() => {}} headerColor="bg-slate-700" isCompact={true} options={tableOptions} filters={{ programs: new Set(), types: selectedCourseTypes, credits: selectedCredits, totalSections: new Set(), totalCapacity: new Set(), totalStudents: new Set(), totalVacancy: new Set(), extraSections: new Set() }} onFilterChange={{ setPrograms: () => {}, setTypes: setSelectedCourseTypes, setCredits: setSelectedCredits, setTotalSections: () => {}, setTotalCapacity: () => {}, setTotalStudents: () => {}, setTotalVacancy: () => {}, setExtraSections: () => {} }} />
-                                        </div>
-                                    )}
-                                    {activeReport === 'teachers' && (
-                                        <div className="flex-1 overflow-auto" ref={containerRef}>
-                                            <TeacherSummaryTable data={paginatedData} expandedKeys={new Set()} toggleRow={() => {}} headerColor="bg-slate-700" />
-                                        </div>
-                                    )}
+                                <div className="flex-1 overflow-auto relative p-2" ref={containerRef}>
+                                    {(activeReport === 'sections' || activeReport === 'unassigned' || activeReport === 'low_student' || activeReport === 'class_taken') && (<SectionTable data={paginatedData as CourseSectionData[]} isDashboardMode={true} headerColor="bg-slate-700" />)}
+                                    {activeReport === 'courses' && (<CourseSummaryTable data={paginatedData as CourseSummaryItem[]} expandedKeys={new Set()} toggleRow={() => {}} headerColor="bg-slate-700" isCompact={true} options={tableOptions} filters={{ programs: new Set(), types: selectedCourseTypes, credits: selectedCredits, totalSections: new Set(), totalCapacity: new Set(), totalStudents: new Set(), totalVacancy: new Set(), extraSections: new Set() }} onFilterChange={{ setPrograms: () => {}, setTypes: setSelectedCourseTypes, setCredits: setSelectedCredits, setTotalSections: () => {}, setTotalCapacity: () => {}, setTotalStudents: () => {}, setTotalVacancy: () => {}, setExtraSections: () => {} }} />)}
+                                    {activeReport === 'teachers' && (<TeacherSummaryTable data={paginatedData as TeacherSummaryItem[]} expandedKeys={new Set()} toggleRow={() => {}} headerColor="bg-slate-700" />)}
                                     {activeReport === 'admitted' && (
-                                        <div className="flex-1 flex flex-row p-2 md:p-4 gap-4 overflow-hidden">
-                                            {/* Semester Analysis Table - Left Side (50%) */}
-                                            <div className="w-1/2 overflow-auto thin-scrollbar">
-                                                <AdmittedReportTable 
-                                                    selectedAdmittedSemesters={selectedAdmittedSemesters}
-                                                    studentCache={studentCache}
-                                                    registrationLookup={registrationLookup}
-                                                    registeredSemesters={registeredSemesters}
-                                                    programMap={programMap}
-                                                    programData={programData}
-                                                    selectedPrograms={new Set([normalizeId(selectedProgram.PID)])}
-                                                    selectedFaculties={new Set()}
-                                                    setSelectedFaculties={() => {}}
-                                                    selectedProgramTypes={new Set()}
-                                                    selectedSemesterTypes={new Set()}
-                                                    onUnregClick={setActiveUnregList}
-                                                />
-                                            </div>
-                                            
-                                            {/* Unregistered List - Right Side (50%) */}
-                                            <div className="w-1/2 flex flex-col overflow-hidden">
-                                                {activeUnregList ? (
-                                                    <div className="flex-1 flex flex-col min-h-0 animate-in slide-in-from-left-2 duration-300 overflow-hidden">
+                                        <div className="flex flex-col h-full overflow-hidden">
+                                            <div className="flex flex-row h-full gap-2 p-1">
+                                                {/* Left Half: Semester Analysis */}
+                                                <div className="flex-1 border border-gray-200 rounded-lg overflow-auto thin-scrollbar bg-white shadow-sm">
+                                                    <AdmittedReportTable 
+                                                        selectedAdmittedSemesters={selectedAdmittedSemesters}
+                                                        studentCache={studentCache}
+                                                        registrationLookup={registrationLookup}
+                                                        registeredSemesters={registeredSemesters}
+                                                        programMap={programMap}
+                                                        programData={programData}
+                                                        selectedPrograms={new Set([normalizeId(selectedProgram.PID)])}
+                                                        selectedFaculties={new Set()}
+                                                        setSelectedFaculties={() => {}}
+                                                        selectedProgramTypes={new Set()}
+                                                        selectedSemesterTypes={new Set()}
+                                                        onUnregClick={setActiveUnregList}
+                                                    />
+                                                </div>
+                                                {/* Right Half: Unregistered List */}
+                                                <div className="flex-1 border border-gray-200 rounded-lg overflow-auto thin-scrollbar bg-white shadow-sm">
+                                                    {activeUnregList ? (
                                                         <UnregisteredStudentsModal 
                                                             isInline={true}
                                                             isOpen={true} 
@@ -281,21 +338,22 @@ export const ProgramView: React.FC = () => {
                                                             students={activeUnregList.students}
                                                             programMap={programMap}
                                                             registrationLookup={registrationLookup}
-                                                            onStudentClick={setSelectedStudentForDetails}
+                                                            onRowClick={(student) => setSelectedStudent(student)}
                                                         />
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex-1 flex flex-col items-center justify-center text-gray-300 border border-dashed border-gray-200 rounded-lg bg-gray-50/30">
-                                                        <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 text-center px-6">
-                                                            Click an "Unreg" count on the left to view the student list here
-                                                        </p>
-                                                    </div>
-                                                )}
+                                                    ) : (
+                                                        <div className="h-full flex flex-col items-center justify-center text-slate-300 p-8 text-center bg-slate-50/20">
+                                                            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mb-3 shadow-sm border border-slate-100">
+                                                                <ArrowLeft className="w-6 h-6 rotate-180 opacity-20" />
+                                                            </div>
+                                                            <p className="text-[11px] font-bold uppercase tracking-widest opacity-40">Click an Unregistered count to view students</p>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                                {activeReport !== 'admitted' && (<div className="p-2 border-t border-gray-100 bg-gray-50 flex justify-between items-center text-[10px] text-gray-500 font-bold shrink-0"><span>Records: {activeDataForReport.length}</span><div className="flex items-center space-x-2"><button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 hover:bg-white rounded disabled:opacity-30 transition-all"><ChevronLeft className="w-3.5 h-3.5" /></button><span className="px-2">{currentPage} / {totalPages || 1}</span><button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="p-1 hover:bg-white rounded disabled:opacity-30 transition-all"><ChevronRight className="w-3.5 h-3.5" /></button></div></div>)}
+                                {activeReport !== 'admitted' && (<div className="p-2 border-t border-gray-100 bg-gray-50 flex justify-between items-center text-[10px] text-gray-500 font-bold shrink-0"><span>Records: {activeDataForReport.length}</span><div className="flex items-center space-x-2"><button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 bg-white border border-gray-200 rounded disabled:opacity-40 shadow-sm">Prev</button><span className="px-2">{currentPage} / {totalPages || 1}</span><button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 bg-white border border-gray-200 rounded disabled:opacity-40 shadow-sm">Next</button></div></div>)}
                             </div>
                         )}
                     </div>
@@ -310,17 +368,19 @@ export const ProgramView: React.FC = () => {
                         onSaveFacultyLeadership={handleSaveFacultyLeadership} 
                         onSaveProgramLeadership={handleSaveProgramLeadership} 
                         onSaveProgramData={handleSaveProgramData} 
-                        onSaveEmployee={handleSaveEmployee} 
+                        onSaveEmployee={handleSaveEmployee}
+                        onSaveStudent={handleSaveStudent}
                         forceEditTrigger={forceEditTrigger} 
-                        selectedStudent={selectedStudentForDetails}
-                        onClearStudent={() => setSelectedStudentForDetails(null)}
+                        selectedStudent={selectedStudent}
+                        studentSemester={selectedStudent ? (selectedStudent as any)._semester : undefined}
+                        onCloseStudent={() => setSelectedStudent(null)}
                     />
                 </>
             ) : (<div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-slate-50/50"><School className="w-16 h-16 mb-4 opacity-10" /><p className="text-sm font-medium">Select a program to view details</p></div>)}
         </div>
         <button onClick={() => setIsAddModalOpen(true)} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 group z-30" title="Add New Program"><Plus className="w-7 h-7 group-hover:rotate-90 transition-transform duration-300" /></button>
       </div>
-      <FilterPanel isOpen={isFilterPanelOpen} onClose={() => setIsFilterPanelOpen(false)} programData={programData} semesterFilter={semesterFilter} setSemesterFilter={setSemesterFilter} uniqueSemesters={uniqueSemesters} selectedFaculties={new Set()} setSelectedFaculties={() => {}} selectedProgramTypes={new Set()} setSelectedProgramTypes={() => {}} selectedSemesterTypes={new Set()} setSelectedSemesterTypes={() => {}} selectedPrograms={new Set()} setSelectedPrograms={() => {}} attributeOptions={attributeOptions} selectedTeachers={selectedTeachers} setSelectedTeachers={setSelectedTeachers} selectedCourseTypes={selectedCourseTypes} setSelectedCourseTypes={setSelectedCourseTypes} selectedTypes={selectedTypes} setSelectedTypes={setSelectedTypes} selectedCredits={selectedCredits} setSelectedCredits={setSelectedCredits} selectedCapacities={selectedCapacities} setSelectedCapacities={setSelectedCapacities} studentMin={studentMin} setStudentMin={setStudentMin} studentMax={studentMax} setStudentMax={setStudentMax} selectedStudentCounts={selectedStudentCounts} setSelectedStudentCounts={setSelectedStudentCounts} classTakenMin={classTakenMin} setClassTakenMin={setClassTakenMin} classTakenMax={classTakenMax} setClassTakenMax={setClassTakenMax} selectedClassTakens={selectedClassTakens} setSelectedClassTakens={setSelectedClassTakens} selectedMissingFields={selectedMissingFields} setSelectedMissingFields={setSelectedMissingFields} onClearAll={clearAllFilters} hideProgramTab={true} viewMode={activeReport === 'admitted' ? 'admitted' : undefined} admittedSemestersOptions={admittedSemestersOptions} selectedAdmittedSemesters={selectedAdmittedSemesters} onAdmittedSemesterChange={setSelectedAdmittedSemesters} registeredSemestersOptions={registeredSemesters} registrationFilters={registrationFilters} onRegistrationFilterChange={setRegistrationFilters} />
+      <FilterPanel isOpen={isFilterPanelOpen} onClose={() => setIsFilterPanelOpen(false)} programData={programData} semesterFilter={semesterFilter} setSemesterFilter={setSemesterFilter} uniqueSemesters={uniqueSemesters} selectedFaculties={new Set()} setSelectedFaculties={() => {}} selectedProgramTypes={new Set()} setSelectedProgramTypes={() => {}} selectedSemesterTypes={new Set()} setSelectedSemesterTypes={() => {}} selectedPrograms={new Set()} setSelectedPrograms={() => {}} attributeOptions={attributeOptions} selectedTeachers={selectedTeachers} setSelectedTeachers={setSelectedTeachers} selectedCourseTypes={selectedCourseTypes} setSelectedCourseTypes={setSelectedCourseTypes} selectedTypes={selectedTypes} setSelectedTypes={setSelectedTypes} selectedCredits={selectedCredits} setSelectedCredits={setSelectedCredits} selectedCapacities={selectedCapacities} setSelectedCapacities={setSelectedCapacities} studentMin={studentMin} setStudentMin={setStudentMin} studentMax={studentMax} setStudentMax={setStudentMax} studentCache={studentCache} selectedStudentCounts={selectedStudentCounts} setSelectedStudentCounts={setSelectedStudentCounts} classTakenMin={classTakenMin} setClassTakenMin={setClassTakenMin} classTakenMax={classTakenMax} setClassTakenMax={setClassTakenMax} selectedClassTakens={selectedClassTakens} setSelectedClassTakens={setSelectedClassTakens} selectedMissingFields={selectedMissingFields} setSelectedMissingFields={setSelectedMissingFields} onClearAll={clearAllFilters} hideProgramTab={true} viewMode={activeReport === 'admitted' ? 'admitted' : undefined} admittedSemestersOptions={admittedSemestersOptions} selectedAdmittedSemesters={selectedAdmittedSemesters} onAdmittedSemesterChange={setSelectedAdmittedSemesters} registeredSemestersOptions={registeredSemesters} registrationFilters={registrationFilters} onRegistrationFilterChange={setRegistrationFilters} />
       <EditEntryModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} mode="add" title="Add New Program" sheetName={SHEET_NAMES.PROGRAM} columns={['PID','Faculty Short Name','Faculty Full Name','Program Full Name','Program Short Name','Department Name','Program Type','Semester Type','Semester Duration Num','Theory Duration','Lab Duration','Theory Requirement','Lab Requirement']} hiddenFields={['Class Duration', 'Class Requirement', 'Semester Duration']} initialData={{ 'Semester Duration Num': '4', 'Theory Duration': '90', 'Lab Duration': '120', 'Theory Requirement': '0', 'Lab Requirement': '0' }} keyColumn="PID" spreadsheetId={REF_SHEET_ID} transformData={(data) => { const tDur = data['Theory Duration'] || '0', lDur = data['Lab Duration'] || '0', tReq = data['Theory Requirement'] || '0', lReq = data['Lab Requirement'] || '0', sDur = data['Semester Duration Num'] || '0'; return { ...data, 'Class Duration': `Theory ${tDur} Minutes, Lab ${lDur} Minutes`, 'Class Requirement': `Theory ${tReq} Minutes, Lab ${lReq} Minutes`, 'Semester Duration': `${sDur} Months` }; }} onSuccess={(newData) => { updateProgramData(prev => [newData, ...prev]); setSelectedProgram(newData); }} />
     </div>
   );

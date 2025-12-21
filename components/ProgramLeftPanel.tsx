@@ -34,7 +34,7 @@ export const ProgramLeftPanel: React.FC<ProgramLeftPanelProps> = ({
     facultyColors, facultyHeaderColors, loading
 }) => {
     return (
-        <div className="w-full md:w-[240px] flex flex-col bg-white border-r border-gray-200 overflow-hidden shrink-0">
+        <div className="w-full md:w-[200px] flex flex-col bg-white border-r border-gray-200 overflow-hidden shrink-0">
             <div className="p-2 space-y-2.5 shrink-0 bg-white">
                 <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar pb-1">
                     <button 

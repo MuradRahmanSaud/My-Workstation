@@ -53,8 +53,22 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!link) return;
     try {
         const studentRows = await fetchSubSheet(link);
-        setStudentCache(prev => new Map(prev).set(semester, studentRows as unknown as StudentDataRow[]));
+        setStudentCache((prev: Map<string, StudentDataRow[]>) => {
+            const newMap = new Map<string, StudentDataRow[]>(prev);
+            newMap.set(semester, studentRows as unknown as StudentDataRow[]);
+            return newMap;
+        });
     } catch (e) {}
+  };
+
+  const updateStudentData = (semester: string, studentId: string, newData: Partial<StudentDataRow>) => {
+    setStudentCache((prev: Map<string, StudentDataRow[]>) => {
+        const newMap = new Map<string, StudentDataRow[]>(prev);
+        const list = newMap.get(semester) || [];
+        const updatedList = list.map(s => s['Student ID'] === studentId ? { ...s, ...newData } : s);
+        newMap.set(semester, updatedList);
+        return newMap;
+    });
   };
 
   const loadRegisteredData = async (force?: boolean) => {
@@ -69,22 +83,30 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setLoading({ status: 'loading', message: 'Optimizing Workflow...' });
     
     if (force) {
-        // Clear specific DB caches from sessionStorage to bypass caching in sheetService
+        // Clear session storage caches
         ['reference', 'teacher', 'program', 'faculty_leadership', 'employee'].forEach(key => {
             sessionStorage.removeItem(`cache_${key}`);
         });
+        // IMPORTANT: Clear in-memory caches to force re-fetch in views
+        setStudentCache(new Map());
+        setRegisteredData([]);
     }
 
     try {
-      // Lazy load secondary data in background
       if (mode === 'all' || mode === 'admitted') {
-          fetchStudentLinks().then(links => {
-              const map = new Map<string, string>();
-              links.forEach(row => { if (row.Semester && row['Student Data Link']) map.set(row.Semester, row['Student Data Link']); });
-              setStudentDataLinks(map);
+          const links = await fetchStudentLinks();
+          const map = new Map<string, string>();
+          links.forEach(row => { 
+              if (row.Semester && row['Student Data Link']) map.set(row.Semester, row['Student Data Link']); 
           });
-          loadRegisteredData(force);
-          if (mode === 'admitted') { setLoading({ status: 'success' }); return; }
+          setStudentDataLinks(map);
+          
+          await loadRegisteredData(force);
+          
+          if (mode === 'admitted') { 
+              setLoading({ status: 'success' }); 
+              return; 
+          }
       }
 
       if (mode === 'all' || mode === 'sections') {
@@ -123,7 +145,7 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   return (
     <SheetContext.Provider value={{ 
-        data, programData, teacherData, classroomData, diuEmployeeData, referenceData, facultyLeadershipData, semesterLinks, admittedLinks, registeredLinks, studentDataLinks, studentCache, loadStudentData, registeredData, loadRegisteredData, loading, semesterFilter, setSemesterFilter: (v) => { setSemesterFilter(v); setUserHasSelected(true); }, uniqueSemesters, reloadData: loadData, updateClassroomData, updateReferenceData, updateSectionData, updateDiuEmployeeData, updateProgramData, updateFacultyLeadershipData
+        data, programData, teacherData, classroomData, diuEmployeeData, referenceData, facultyLeadershipData, semesterLinks, admittedLinks, registeredLinks, studentDataLinks, studentCache, loadStudentData, updateStudentData, registeredData, loadRegisteredData, loading, semesterFilter, setSemesterFilter: (v) => { setSemesterFilter(v); setUserHasSelected(true); }, uniqueSemesters, reloadData: loadData, updateClassroomData, updateReferenceData, updateSectionData, updateDiuEmployeeData, updateProgramData, updateFacultyLeadershipData
     }}>
       {children}
     </SheetContext.Provider>
