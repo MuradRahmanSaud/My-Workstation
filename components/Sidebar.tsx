@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { ViewState } from '../types';
-import { LayoutDashboard, TableProperties, Settings, GraduationCap, School, FileText, Building2, IdCard, FileSpreadsheet, UserX } from 'lucide-react';
+import { LayoutDashboard, TableProperties, Settings, GraduationCap, School, FileText, Building2, IdCard, FileSpreadsheet, UserX, MessageSquareQuote } from 'lucide-react';
 
 interface SidebarProps {
   currentView: ViewState;
@@ -15,6 +15,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
     { id: 'program', label: 'Program', icon: School },
     { id: 'dropout', label: 'Dropout', icon: UserX },
     { id: 'student', label: 'Student', icon: FileText },
+    { id: 'student_followup', label: 'Student Follow-up', icon: MessageSquareQuote },
     { id: 'employee', label: 'Employee', icon: IdCard },
     { id: 'classroom', label: 'Class Room', icon: Building2 },
     { id: 'pdf_to_excel', label: 'PDF to Excel', icon: FileSpreadsheet },
@@ -45,6 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
         justify-around md:justify-start 
         py-0 md:py-4
         space-y-0 md:space-y-1
+        overflow-x-auto md:overflow-x-hidden no-scrollbar
       ">
         {menuItems.map((item) => {
           const isActive = currentView === item.id;
@@ -54,18 +56,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
               onClick={() => setView(item.id as ViewState)}
               className={`
                 flex items-center justify-center md:justify-start
-                px-1 md:px-5 
+                px-3 md:px-5 
                 py-2 md:py-3.5
                 h-full md:h-auto
                 text-xs md:text-sm font-medium transition-colors 
-                
+                whitespace-nowrap
                 /* Border logic: Top on Mobile, Left on Desktop */
                 border-t-2 md:border-t-0 md:border-l-4
                 ${isActive 
                   ? 'bg-slate-800 text-blue-400 border-blue-500' 
                   : 'border-transparent hover:bg-slate-800 hover:text-slate-200'
                 } 
-                group w-full md:w-auto
+                group min-w-max md:w-auto
               `}
               title={item.label}
             >

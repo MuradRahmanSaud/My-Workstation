@@ -1,6 +1,6 @@
 
-import { MAIN_SHEET_ID, MAIN_SHEET_GID, REF_SHEET_ID, REF_SHEET_GID, TEACHER_SHEET_GID, PROGRAM_SHEET_GID, CLASSROOM_SHEET_GID, DIU_EMPLOYEE_SHEET_GID, FACULTY_LEADERSHIP_SHEET_GID, STUDENT_LINK_SHEET_ID, STUDENT_LINK_SHEET_GID, REGISTERED_STUDENT_SHEET_GID, CORS_PROXY, GOOGLE_SCRIPT_URL } from '../constants';
-import { MainSheetRow, CourseSectionData, ReferenceDataRow, TeacherDataRow, ProgramDataRow, StudentLinkRow, StudentDataRow, ClassRoomDataRow, DiuEmployeeRow, FacultyLeadershipRow } from '../types';
+import { MAIN_SHEET_ID, MAIN_SHEET_GID, REF_SHEET_ID, REF_SHEET_GID, TEACHER_SHEET_GID, PROGRAM_SHEET_GID, CLASSROOM_SHEET_GID, DIU_EMPLOYEE_SHEET_GID, FACULTY_LEADERSHIP_SHEET_GID, STUDENT_LINK_SHEET_ID, STUDENT_LINK_SHEET_GID, REGISTERED_STUDENT_SHEET_GID, STUDENT_FOLLOWUP_SHEET_GID, CORS_PROXY, GOOGLE_SCRIPT_URL } from '../constants';
+import { MainSheetRow, CourseSectionData, ReferenceDataRow, TeacherDataRow, ProgramDataRow, StudentLinkRow, StudentDataRow, ClassRoomDataRow, DiuEmployeeRow, FacultyLeadershipRow, StudentFollowupRow } from '../types';
 import { parseCSV, extractSheetIdAndGid } from '../utils/csvParser';
 
 // Exporting extractSheetIdAndGid to resolve import dependency in other views
@@ -115,6 +115,11 @@ export const fetchStudentLinks = async (): Promise<StudentLinkRow[]> => {
 export const fetchRegisteredStudentData = async (): Promise<any[]> => {
   const url = `https://docs.google.com/spreadsheets/d/${STUDENT_LINK_SHEET_ID}/export?format=csv&gid=${REGISTERED_STUDENT_SHEET_GID}&t=${Date.now()}`;
   return fetchSheet<any>(url);
+};
+
+export const fetchStudentFollowupData = async (): Promise<StudentFollowupRow[]> => {
+  const url = `https://docs.google.com/spreadsheets/d/${STUDENT_LINK_SHEET_ID}/export?format=csv&gid=${STUDENT_FOLLOWUP_SHEET_GID}&t=${Date.now()}`;
+  return fetchSheet<StudentFollowupRow>(url);
 };
 
 export const fetchSubSheet = async (sheetLink: string): Promise<CourseSectionData[]> => {
@@ -237,7 +242,38 @@ export const fetchMergedSectionData = async (
 
 export const submitSheetData = async (action: 'add' | 'update' | 'delete', sheetName: string, data: any, keyColumn?: string, keyValue?: string, spreadsheetId?: string, options: any = { insertMethod: 'first_empty' }): Promise<any> => {
     try {
-        const response = await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action, sheetName, data, keyColumn, keyValue, spreadsheetId, insertMethod: options.insertMethod }) });
-        return await response.json();
-    } catch (error) { return { result: 'error', message: 'API communication failed' }; }
+        console.log(`Submitting ${action} request for ${sheetName}...`);
+        
+        // Google Apps Script requires some specific fetch options for POST
+        const response = await fetch(GOOGLE_SCRIPT_URL, { 
+            method: 'POST', 
+            mode: 'cors', // Ensure CORS is explicitly enabled
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8', // Using text/plain avoids some preflight issues
+            },
+            body: JSON.stringify({ 
+                action, 
+                sheetName, 
+                data, 
+                keyColumn, 
+                keyValue, 
+                spreadsheetId, 
+                insertMethod: options.insertMethod 
+            }) 
+        });
+
+        if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log("Response received:", result);
+        return result;
+    } catch (error: any) { 
+        console.error("API Error details:", error);
+        return { 
+            result: 'error', 
+            message: error.message || 'API communication failed' 
+        }; 
+    }
 };

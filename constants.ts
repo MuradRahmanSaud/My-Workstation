@@ -13,12 +13,13 @@ export const FACULTY_LEADERSHIP_SHEET_GID = '1130435623';
 export const STUDENT_LINK_SHEET_ID = '1agI_X0JjNyEu90bWfX-JnZgFQt__EAMI3kTmgVviHes';
 export const STUDENT_LINK_SHEET_GID = '1064007862';
 export const REGISTERED_STUDENT_SHEET_GID = '742235954';
+export const STUDENT_FOLLOWUP_SHEET_GID = '406332388';
 
 // Using corsproxy.io for better reliability with Google Sheets CSV exports
 export const CORS_PROXY = 'https://corsproxy.io/?';
 
-// API Configuration - Updated with User's Deployment URL
-export const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwppRFyVIfRsHbQsf_cKU4ZgMEbJ9ESvklY5jdhnpRPahZ2xsSqEWNN3_EGcayFUPs-IQ/exec';
+// API Configuration - Updated with User's New Deployment URL
+export const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx5ROevSt18X2uRjwfwOycTVqchvm1Ky1De9w6Dy12mibOa0INcMSEQF7ljFYEGCj41ug/exec';
 
 export const SHEET_NAMES = {
     CLASSROOM: 'Class Room_DB',
@@ -26,5 +27,6 @@ export const SHEET_NAMES = {
     EMPLOYEE: 'Employee_DB', 
     PROGRAM: 'Program_DB',
     REFERENCE: 'Course_Setting_DB',
-    FACULTY_LEADERSHIP: 'Faculty_DB'
+    FACULTY_LEADERSHIP: 'Faculty_DB',
+    FOLLOWUP: 'Student Remark'
 };

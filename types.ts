@@ -154,7 +154,19 @@ export interface StudentDataRow {
     [key: string]: string | undefined;
 }
 
-export type ViewState = 'dashboard' | 'section' | 'program' | 'dropout' | 'employee' | 'settings' | 'student' | 'classroom' | 'pdf_to_excel';
+export interface StudentFollowupRow {
+    'uniqueid'?: string;
+    'Timestamp'?: string;
+    'Date': string;
+    'Student ID': string;
+    'Student Name': string;
+    Remark: string;
+    'Re-follow up': string;
+    Status: string;
+    'Contacted By': string;
+}
+
+export type ViewState = 'dashboard' | 'section' | 'program' | 'dropout' | 'employee' | 'settings' | 'student' | 'classroom' | 'pdf_to_excel' | 'student_followup';
 
 export interface LoadingState {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -169,6 +181,7 @@ export interface SheetContextType {
   diuEmployeeData: DiuEmployeeRow[];
   referenceData: ReferenceDataRow[];
   facultyLeadershipData: FacultyLeadershipRow[];
+  studentFollowupData: StudentFollowupRow[];
   semesterLinks: Map<string, string>;
   admittedLinks: Map<string, string>;
   registeredLinks: Map<string, string>;
@@ -178,6 +191,7 @@ export interface SheetContextType {
   updateStudentData: (semester: string, studentId: string, newData: Partial<StudentDataRow>) => void;
   registeredData: any[];
   loadRegisteredData: (force?: boolean) => Promise<void>;
+  loadStudentFollowupData: (force?: boolean) => Promise<void>;
   loading: LoadingState;
   
   // Lifted Semester Filter State
@@ -185,7 +199,7 @@ export interface SheetContextType {
   setSemesterFilter: (semester: string) => void;
   uniqueSemesters: string[];
 
-  reloadData: (mode?: 'all' | 'admitted' | 'sections', force?: boolean) => Promise<void>;
+  reloadData: (mode?: 'all' | 'admitted' | 'sections' | 'followup', force?: boolean) => Promise<void>;
   updateClassroomData: (updater: (prev: ClassRoomDataRow[]) => ClassRoomDataRow[]) => void;
   updateReferenceData: (updater: (prev: ReferenceDataRow[]) => ReferenceDataRow[]) => void;
   updateSectionData: (updater: (prev: CourseSectionData[]) => CourseSectionData[]) => void;

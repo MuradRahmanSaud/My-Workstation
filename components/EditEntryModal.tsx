@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { X, Save, AlertCircle, CheckCircle, ChevronDown, Plus, Search, Check, User } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { X, Save, AlertCircle, CheckCircle, ChevronDown, Plus, Search, Check, User, Loader2 } from 'lucide-react';
 import { submitSheetData } from '../services/sheetService';
 
 interface EditEntryModalProps {
@@ -20,6 +20,7 @@ interface EditEntryModalProps {
     onSuccess: (data?: any) => void;
     fileColumns?: string[]; 
     uploadFolderId?: string; 
+    closeOnSubmit?: boolean; // New prop for immediate closing
 }
 
 export const MultiSearchableSelect = ({ 
@@ -87,12 +88,10 @@ export const MultiSearchableSelect = ({
         if (!search.trim()) return;
         const newVal = search.trim();
         
-        // If an external add logic exists (like opening a registration form), call it
         if (onAddNew) {
             onAddNew(newVal);
             setIsOpen(false);
         } else {
-            // Default behavior: just add as text
             if (!selectedItems.includes(newVal)) {
                 updateValue([...selectedItems, newVal]);
             }
@@ -104,6 +103,7 @@ export const MultiSearchableSelect = ({
         const lowerSearch = search.toLowerCase();
         return options
             .filter(opt => opt.toLowerCase().includes(lowerSearch))
+            // Fix: Property 'name' does not exist on type 'string'. Using localeCompare directly on the string items.
             .sort((a, b) => a.localeCompare(b))
             .slice(0, 100); 
     }, [options, search]);
@@ -196,7 +196,7 @@ export const MultiSearchableSelect = ({
                                         className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[10px] md:text-xs font-medium transition-all border ${
                                             isSelected 
                                             ? 'bg-blue-600 text-white border-blue-600 shadow-sm' 
-                                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                                            : 'bg-white text-gray-700 border-gray-100 hover:border-blue-300 hover:bg-blue-50'
                                         }`}
                                     >
                                         <span className="truncate">{opt}</span>
@@ -352,23 +352,28 @@ export const SearchableSelect = ({
 };
 
 export const EditEntryModal: React.FC<EditEntryModalProps> = ({ 
-    isOpen, onClose, mode, title, sheetName, columns, initialData, keyColumn, spreadsheetId, fieldOptions, hiddenFields = [], multiSelectFields = [], transformData, onSuccess, fileColumns, uploadFolderId 
+    isOpen, onClose, mode, title, sheetName, columns, initialData, keyColumn, spreadsheetId, fieldOptions, hiddenFields = [], multiSelectFields = [], transformData, onSuccess, fileColumns, uploadFolderId, closeOnSubmit = false
 }) => {
     const [formData, setFormData] = useState<any>({});
     const [insertAtFirstEmpty, setInsertAtFirstEmpty] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
+    // Reset state on open
     useEffect(() => {
         if (isOpen) {
             setFormData(initialData || {});
             setInsertAtFirstEmpty(true);
+            setIsSubmitting(false);
+            setError(null);
         }
     }, [isOpen, initialData]);
 
-    const handleChange = (key: string, value: string) => {
+    const handleChange = useCallback((key: string, value: string) => {
         setFormData((prev: any) => ({ ...prev, [key]: value }));
-    };
+    }, []);
 
-    const handleFileChange = (key: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = useCallback((key: string, e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
             const reader = new FileReader();
@@ -388,38 +393,80 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
             };
             reader.readAsDataURL(file);
         }
-    };
+    }, [uploadFolderId]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Standardize key extraction - strictly use initialData's ID to find the row
         let keyValue = undefined;
         if (mode === 'edit' && keyColumn) {
-            keyValue = initialData[keyColumn];
+            keyValue = String(initialData?.[keyColumn] || '').trim();
         }
+
         let payload = { ...formData };
         if (transformData) {
             payload = transformData(payload);
         }
+
+        // Add missing columns as empty strings
         columns.forEach(col => {
             if (payload[col] === undefined) {
                 payload[col] = '';
             }
         });
 
-        onSuccess(payload);
-        onClose();
+        // OPTIMISTIC UPDATE: If closeOnSubmit is true, notify parent immediately
+        if (closeOnSubmit) {
+            onSuccess(payload);
+        } else {
+            setIsSubmitting(true);
+            setError(null);
+        }
 
-        const apiAction = mode === 'edit' ? 'update' : 'add';
-        (async () => {
-            try {
-                let result = await submitSheetData(apiAction, sheetName, payload, keyColumn, keyValue, spreadsheetId, { insertMethod: insertAtFirstEmpty ? 'first_empty' : 'append' });
-                if (result.result === 'error' && mode === 'edit' && result.message && result.message.toLowerCase().includes('not found')) {
-                    result = await submitSheetData('add', sheetName, payload, keyColumn, keyValue, spreadsheetId, { insertMethod: insertAtFirstEmpty ? 'first_empty' : 'append' });
-                }
-            } catch (error) {
-                console.error("Background API Error:", error);
+        // Explicitly typed apiAction to match submitSheetData expectation and avoid string widening.
+        const apiAction: 'add' | 'update' | 'delete' = mode === 'edit' ? 'update' : 'add';
+        
+        try {
+            let result = await submitSheetData(
+                apiAction, 
+                sheetName, 
+                payload, 
+                keyColumn, 
+                keyValue, 
+                spreadsheetId, 
+                { insertMethod: insertAtFirstEmpty ? 'first_empty' : 'append' }
+            );
+
+            // FALLBACK LOGIC: If update fails because the record was not found, attempt to ADD it instead.
+            if (apiAction === 'update' && result.result === 'error' && (result.message || '').toLowerCase().includes('not found')) {
+                console.debug(`Record not found for update. Retrying with 'add' action for key: ${keyValue}`);
+                result = await submitSheetData(
+                    'add', 
+                    sheetName, 
+                    payload, 
+                    keyColumn, 
+                    undefined, 
+                    spreadsheetId, 
+                    { insertMethod: insertAtFirstEmpty ? 'first_empty' : 'append' }
+                );
             }
-        })();
+
+            if (result.result === 'error') {
+                throw new Error(result.message || "গুগল শিটের সাথে সিঙ্ক করতে সমস্যা হচ্ছে।");
+            }
+
+            // If not already closed, close now
+            if (!closeOnSubmit) {
+                onSuccess(payload);
+            }
+        } catch (error: any) {
+            console.error("API Error:", error);
+            if (!closeOnSubmit) {
+                setError(error.message || "ডাটা সেভ করা যায়নি। আপনার ইন্টারনেট কানেকশন চেক করুন।");
+                setIsSubmitting(false);
+            }
+        }
     };
 
     if (!isOpen) return null;
@@ -428,21 +475,37 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 animate-in fade-in duration-200">
             <div className="bg-white w-full md:w-full md:max-w-lg md:rounded-lg rounded-t-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 md:zoom-in-95 duration-200 max-h-[90vh] md:max-h-[85vh]">
                 <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-white shrink-0 sticky top-0 z-10">
-                    <h3 className="text-lg font-bold text-gray-800">{title}</h3>
-                    <button onClick={onClose} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors">
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-800">{title}</h3>
+                        {isSubmitting && <p className="text-[10px] text-blue-600 font-bold animate-pulse uppercase tracking-widest">Processing Sync...</p>}
+                    </div>
+                    <button onClick={onClose} disabled={isSubmitting} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors disabled:opacity-50">
                         <X className="w-5 h-5 text-gray-600" />
                     </button>
                 </div>
+                
                 <div className="flex-1 overflow-y-auto p-5 bg-gray-50/50">
+                    {error && (
+                        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start text-red-700 text-xs font-bold leading-relaxed shadow-sm animate-in shake duration-300">
+                            <AlertCircle className="w-5 h-5 mr-3 shrink-0 text-red-500" />
+                            <span>{error}</span>
+                        </div>
+                    )}
+
                     <form id="edit-form" onSubmit={handleSubmit} className="space-y-4">
                         {columns.map((col) => {
                             if (hiddenFields.includes(col)) return null;
+                            
+                            // Check if this field should be disabled (Only for key column in edit mode)
+                            const isKeyField = col === keyColumn;
+                            const isDisabled = isSubmitting || (mode === 'edit' && isKeyField);
+
                             if (fileColumns && fileColumns.includes(col)) {
                                 return (
                                     <div key={col}>
                                         <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">{col}</label>
                                         <div className="relative">
-                                            <input type="file" onChange={(e) => handleFileChange(col, e)} className="w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-200 rounded-lg bg-white" accept="image/*" />
+                                            <input type="file" disabled={isDisabled} onChange={(e) => handleFileChange(col, e)} className="w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-200 rounded-lg bg-white disabled:opacity-50" accept="image/*" />
                                         </div>
                                         {typeof formData[col] === 'string' && formData[col] && (
                                             <div className="text-[10px] text-gray-400 mt-1 truncate px-1" title={formData[col]}>Current: {formData[col]}</div>
@@ -454,25 +517,36 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
                                 return (
                                     <div key={col}>
                                         <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">{col}</label>
-                                        <MultiSearchableSelect value={formData[col] || ''} onChange={(val) => handleChange(col, val)} options={fieldOptions && fieldOptions[col] ? fieldOptions[col] : []} placeholder={`Select or add ${col}`} />
+                                        <MultiSearchableSelect disabled={isDisabled} value={formData[col] || ''} onChange={(val) => handleChange(col, val)} options={fieldOptions && fieldOptions[col] ? fieldOptions[col] : []} placeholder={`Select or add ${col}`} />
                                     </div>
                                 );
                             }
                             const isDuration = col.toLowerCase().includes('duration');
                             const isRequirement = col.toLowerCase().includes('requirement');
                             const isMonths = col.toLowerCase().includes('semester duration');
+                            const isDate = col.toLowerCase() === 'date';
+
                             return (
                                 <div key={col}>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">{col}</label>
+                                    <label className={`block text-xs font-bold ${isDisabled && mode === 'edit' ? 'text-gray-400' : 'text-gray-700'} mb-1.5 uppercase tracking-wide`}>
+                                        {col} {isKeyField && mode === 'edit' && <span className="text-[9px] font-normal lowercase">(read-only)</span>}
+                                    </label>
                                     {fieldOptions && fieldOptions[col] ? (
-                                        <SearchableSelect value={formData[col] || ''} onChange={(val) => handleChange(col, val)} options={fieldOptions[col]} placeholder={`Select or add ${col}`} />
+                                        <SearchableSelect disabled={isDisabled} value={formData[col] || ''} onChange={(val) => handleChange(col, val)} options={fieldOptions[col]} placeholder={`Select or add ${col}`} />
                                     ) : (
                                         <div className="relative flex items-center">
-                                            <input type={isDuration || isRequirement || isMonths ? "number" : "text"} value={formData[col] || ''} onChange={(e) => handleChange(col, e.target.value)} className={`w-full text-sm border border-gray-300 rounded-lg px-3 py-2.5 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all bg-white text-gray-900 placeholder-gray-400 shadow-sm ${(isDuration || isRequirement) ? 'pr-12' : (isMonths ? 'pr-16' : '')}`} placeholder={`Enter ${col}`} />
-                                            {(isDuration || isRequirement) && !isMonths && (
+                                            <input 
+                                                disabled={isDisabled} 
+                                                type={isDate ? "date" : (isDuration || isRequirement || isMonths ? "number" : "text")} 
+                                                value={formData[col] || ''} 
+                                                onChange={(e) => handleChange(col, e.target.value)} 
+                                                className={`w-full text-sm border border-gray-300 rounded-lg px-3 py-2.5 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all ${isDisabled ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : 'bg-white text-gray-900 shadow-sm'} placeholder-gray-400 ${(isDuration || isRequirement) ? 'pr-12' : (isMonths ? 'pr-16' : '')}`} 
+                                                placeholder={`Enter ${col}`} 
+                                            />
+                                            {(isDuration || isRequirement) && !isMonths && !isDate && (
                                                 <span className="absolute right-3 text-[10px] font-bold text-gray-400 pointer-events-none uppercase">Min</span>
                                             )}
-                                            {isMonths && (
+                                            {isMonths && !isDate && (
                                                 <span className="absolute right-3 text-[10px] font-bold text-gray-400 pointer-events-none uppercase">Months</span>
                                             )}
                                         </div>
@@ -482,20 +556,32 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
                         })}
                     </form>
                 </div>
+                
                 <div className="px-5 py-4 bg-white border-t border-gray-100 flex flex-col md:flex-row items-center justify-between shrink-0 gap-4 md:gap-0 pb-8 md:pb-4">
                     {mode === 'add' ? (
                         <div className="flex items-center space-x-2 w-full md:w-auto">
-                            <input type="checkbox" id="fill-empty" checked={insertAtFirstEmpty} onChange={(e) => setInsertAtFirstEmpty(e.target.checked)} className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer" />
+                            <input disabled={isSubmitting} type="checkbox" id="fill-empty" checked={insertAtFirstEmpty} onChange={(e) => setInsertAtFirstEmpty(e.target.checked)} className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer disabled:opacity-50" />
                             <label htmlFor="fill-empty" className="text-xs font-medium text-gray-600 cursor-pointer select-none">Fill first empty row</label>
                         </div>
                     ) : (
-                        <div className="hidden md:block"></div> 
+                        <div className="flex items-center text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                            Syncing via {keyColumn}
+                        </div> 
                     )}
                     <div className="flex space-x-3 w-full md:w-auto">
-                        <button type="button" onClick={onClose} className="flex-1 md:flex-none px-5 py-2.5 text-sm font-bold text-gray-600 hover:text-gray-800 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
-                        <button type="submit" form="edit-form" className="flex-1 md:flex-none px-6 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center transform active:scale-95">
-                            <Save className="w-4 h-4 mr-2" />
-                            {mode === 'add' ? 'Add Entry' : 'Save Changes'}
+                        <button type="button" onClick={onClose} disabled={isSubmitting} className="flex-1 md:flex-none px-5 py-2.5 text-sm font-bold text-gray-600 hover:text-gray-800 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50">Cancel</button>
+                        <button type="submit" form="edit-form" disabled={isSubmitting} className="flex-1 md:flex-none px-6 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed min-w-[140px]">
+                            {isSubmitting ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Saving...
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="w-4 h-4 mr-2" />
+                                    {mode === 'add' ? 'Add Entry' : 'Save Changes'}
+                                </>
+                            )}
                         </button>
                     </div>
                 </div>
