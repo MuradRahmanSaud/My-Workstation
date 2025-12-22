@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ProgramDataRow, CourseSectionData, StudentDataRow } from '../types';
@@ -374,6 +373,7 @@ export const ProgramView: React.FC = () => {
                         selectedStudent={selectedStudent}
                         studentSemester={selectedStudent ? (selectedStudent as any)._semester : undefined}
                         onCloseStudent={() => setSelectedStudent(null)}
+                        registrationLookup={registrationLookup}
                     />
                 </>
             ) : (<div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-slate-50/50"><School className="w-16 h-16 mb-4 opacity-10" /><p className="text-sm font-medium">Select a program to view details</p></div>)}

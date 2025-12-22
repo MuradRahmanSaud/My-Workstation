@@ -45,6 +45,9 @@ export const DropOutView: React.FC = () => {
     const [selectedAdmittedSemesters, setSelectedAdmittedSemesters] = useState<Set<string>>(new Set());
     const [registrationFilters, setRegistrationFilters] = useState<Map<string, 'registered' | 'unregistered'>>(new Map());
     const [selectedStudent, setSelectedStudent] = useState<StudentDataRow | null>(null);
+    
+    // Lifted state for comparison semester to sync with summary cards
+    const [targetRegSem, setTargetRegSem] = useState<string>('');
 
     useEffect(() => {
         if (registeredData.length === 0) loadRegisteredData();
@@ -99,7 +102,12 @@ export const DropOutView: React.FC = () => {
         });
     }, [registeredData]);
 
-    const targetRegSem = useMemo(() => registeredSemesters[0] || '', [registeredSemesters]);
+    // Set initial target registration semester when data loads
+    useEffect(() => {
+        if (registeredSemesters.length > 0 && !targetRegSem) {
+            setTargetRegSem(registeredSemesters[0]);
+        }
+    }, [registeredSemesters, targetRegSem]);
 
     const registrationLookup = useMemo(() => {
         const map = new Map<string, Set<string>>();
@@ -144,7 +152,24 @@ export const DropOutView: React.FC = () => {
         const pidNorm = normalizeId(selectedProgram.PID);
         let enrolled = 0, registered = 0, totalCreditsCompleted = 0;
 
+        // Chronological Helper logic
+        const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
+        const parseSem = (sem: string) => {
+            const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/);
+            if (!match) return { year: 0, season: -1 };
+            let year = parseInt(match[2], 10); if (year < 100) year += 2000;
+            return { year, season: seasonWeight[match[1].toLowerCase()] ?? -1 };
+        };
+
+        const targetParsed = parseSem(targetRegSem);
+
         selectedAdmittedSemesters.forEach(sem => {
+            // Apply point-in-time filter: Enrollment semester must be <= Target comparison semester
+            const currentParsed = parseSem(sem);
+            const isOnOrBefore = currentParsed.year < targetParsed.year || (currentParsed.year === targetParsed.year && currentParsed.season <= targetParsed.season);
+            
+            if (!isOnOrBefore) return;
+
             const students = studentCache.get(sem) || [];
             students.forEach(s => {
                 if (normalizeId(s.PID) === pidNorm) {
@@ -165,7 +190,22 @@ export const DropOutView: React.FC = () => {
         if (selectedProgram && targetRegSem) {
             const pidNorm = normalizeId(selectedProgram.PID);
             const allUnreg: StudentDataRow[] = [];
+            
+            const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
+            const parseSem = (sem: string) => {
+                const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/);
+                if (!match) return { year: 0, season: -1 };
+                let year = parseInt(match[2], 10); if (year < 100) year += 2000;
+                return { year, season: seasonWeight[match[1].toLowerCase()] ?? -1 };
+            };
+            const targetParsed = parseSem(targetRegSem);
+
             selectedAdmittedSemesters.forEach(sem => {
+                const currentParsed = parseSem(sem);
+                const isOnOrBefore = currentParsed.year < targetParsed.year || (currentParsed.year === targetParsed.year && currentParsed.season <= targetParsed.season);
+                
+                if (!isOnOrBefore) return;
+
                 const students = studentCache.get(sem) || [];
                 students.forEach(s => {
                     if (normalizeId(s.PID) === pidNorm) {
@@ -304,6 +344,8 @@ export const DropOutView: React.FC = () => {
                                                 selectedProgramTypes={new Set()}
                                                 selectedSemesterTypes={new Set()}
                                                 onUnregClick={setActiveUnregList}
+                                                externalTargetRegSemester={targetRegSem}
+                                                onTargetRegSemesterChange={setTargetRegSem}
                                             />
                                         </div>
                                         <div className="flex-1 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
@@ -346,6 +388,7 @@ export const DropOutView: React.FC = () => {
                                 selectedStudent={selectedStudent}
                                 studentSemester={selectedStudent ? (selectedStudent as any)._semester : undefined}
                                 onCloseStudent={() => setSelectedStudent(null)}
+                                registrationLookup={registrationLookup}
                             />
                         </>
                     ) : (

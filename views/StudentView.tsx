@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { RefreshCw, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, List, CheckCircle, XCircle, ChevronDown, GraduationCap, ClipboardList, Users } from 'lucide-react';
+import { RefreshCw, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, List, CheckCircle, XCircle, ChevronDown, GraduationCap, ClipboardList, Users, Banknote } from 'lucide-react';
 import { useSheetData } from '../hooks/useSheetData';
 import { useResponsivePagination } from '../hooks/useResponsivePagination';
 
@@ -101,7 +101,6 @@ export const StudentView: React.FC = () => {
   const displayData = viewMode === 'details' ? filteredDetailsData : filteredRegisteredData;
   const { currentPage, setCurrentPage, rowsPerPage, totalPages, paginatedData, containerRef } = useResponsivePagination(displayData);
 
-  // Added the new familial and mentor columns to detailColumns
   const detailColumns = [
     'SL', 
     'Program', 
@@ -109,6 +108,7 @@ export const StudentView: React.FC = () => {
     'Student Name', 
     'Credit Req', 
     'Credit Com', 
+    'Dues',
     'Mentor',
     'Father Name',
     'Father Mob',
@@ -222,7 +222,7 @@ export const StudentView: React.FC = () => {
                         <thead className="bg-slate-100 sticky top-0 z-10 shadow-sm border-b border-gray-200">
                             <tr>
                                 {(viewMode === 'details' ? detailColumns : registeredColumns).map((col, idx) => (
-                                    <th key={idx} className={`px-2 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap ${col === 'SL' ? 'w-1' : ''} ${viewMode === 'registered' || ['Status', 'Program', 'Sex', 'Credit Req', 'Credit Com', 'Def Reg', 'Def Status', 'Deg Status'].includes(col) ? 'text-center' : 'text-left'}`}>
+                                    <th key={idx} className={`px-2 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap ${col === 'SL' ? 'w-1' : ''} ${viewMode === 'registered' || ['Status', 'Program', 'Sex', 'Credit Req', 'Credit Com', 'Def Reg', 'Def Status', 'Deg Status', 'Dues'].includes(col) ? 'text-center' : 'text-left'}`}>
                                         {col}
                                     </th>
                                 ))}
@@ -247,8 +247,9 @@ export const StudentView: React.FC = () => {
                                             
                                             <td className="px-2 py-1 text-center text-gray-600">{row['Credit Requirement'] || '-'}</td>
                                             <td className="px-2 py-1 text-center font-bold text-slate-700">{row['Credit Completed'] || '-'}</td>
+                                            
+                                            <td className="px-2 py-1 text-center font-black text-red-600">{row['Dues'] || '-'}</td>
 
-                                            {/* Familial & Mentor Details */}
                                             <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Mentor']}>{row['Mentor'] || '-'}</td>
                                             <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Father Name']}>{row['Father Name'] || '-'}</td>
                                             <td className="px-2 py-1 text-left text-[10px] font-mono text-gray-500">{row['Father Mobile'] || '-'}</td>

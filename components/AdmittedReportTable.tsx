@@ -18,6 +18,9 @@ interface AdmittedReportTableProps {
     selectedProgramTypes: Set<string>;
     selectedSemesterTypes: Set<string>;
     onUnregClick?: (data: { semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string }) => void;
+    // New props for external synchronization
+    externalTargetRegSemester?: string;
+    onTargetRegSemesterChange?: (val: string) => void;
 }
 
 const FACULTY_COLORS: Record<string, string> = {
@@ -41,16 +44,22 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
     setSelectedFaculties,
     selectedProgramTypes,
     selectedSemesterTypes,
-    onUnregClick
+    onUnregClick,
+    externalTargetRegSemester,
+    onTargetRegSemesterChange
 }) => {
-    const [targetRegSemester, setTargetRegSemester] = useState<string>('');
+    // If external prop provided, use it; otherwise use local state
+    const [localTargetRegSemester, setLocalTargetRegSemester] = useState<string>('');
+    const targetRegSemester = externalTargetRegSemester !== undefined ? externalTargetRegSemester : localTargetRegSemester;
+    const setTargetRegSemester = onTargetRegSemesterChange || setLocalTargetRegSemester;
+
     const [viewType, setViewType] = useState<'detailed' | 'summary'>('detailed');
     const [unregModalState, setUnregModalState] = useState<{ isOpen: boolean; semester: string; programId: string; programName: string; students: StudentDataRow[] } | null>(null);
     const [activeFaculty, setActiveFaculty] = useState<string>('');
 
     useEffect(() => {
         if (!targetRegSemester && registeredSemesters.length > 0) setTargetRegSemester(registeredSemesters[0]);
-    }, [registeredSemesters, targetRegSemester]);
+    }, [registeredSemesters, targetRegSemester, setTargetRegSemester]);
 
     const normalize = (id: string) => String(id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
@@ -79,6 +88,8 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
              return { year, season, original: sem };
         };
         const targetParsed = parseSemester(effectiveTarget);
+        
+        // Logical filter: only semesters chronologically on or before target semester
         let sortedSemesters = Array.from(selectedAdmittedSemesters)
             .map(parseSemester)
             .filter(s => s.year < targetParsed.year || (s.year === targetParsed.year && s.season <= targetParsed.season))
@@ -284,7 +295,13 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                     </div>
                     <div className="flex items-center space-x-1 shrink-0">
                         <span className="text-[9px] font-bold text-gray-500 uppercase whitespace-nowrap hidden md:inline">Compare:</span>
-                        <select value={targetRegSemester} onChange={(e) => setTargetRegSemester(e.target.value)} className="text-[10px] border-gray-300 rounded shadow-sm focus:border-blue-500 py-0.5 pl-1.5 pr-5 bg-white cursor-pointer">{registeredSemesters.map(s => <option key={s} value={s}>{s}</option>)}</select>
+                        <select 
+                            value={targetRegSemester} 
+                            onChange={(e) => setTargetRegSemester(e.target.value)} 
+                            className="text-[10px] border-gray-300 rounded shadow-sm focus:border-blue-500 py-0.5 pl-1.5 pr-5 bg-white cursor-pointer"
+                        >
+                            {registeredSemesters.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
                     </div>
                 </div>
             </div>
