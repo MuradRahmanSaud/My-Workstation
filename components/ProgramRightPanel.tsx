@@ -514,9 +514,18 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
                                         {/* Floating Follow-up Form overlay - Now absolutely positioned relative to content container */}
                                         {showFollowupForm && (
                                             <div className="absolute top-0 left-3 right-3 z-[50] mt-3 bg-white border border-rose-100 rounded-xl p-4 space-y-4 animate-in slide-in-from-top-2 duration-300 shadow-2xl ring-1 ring-black/5">
-                                                <div className="flex items-center space-x-2 border-b border-rose-100/50 pb-2">
-                                                    <MessageSquarePlus className="w-4 h-4 text-rose-500" />
-                                                    <h5 className="text-[10px] font-black text-rose-700 uppercase tracking-tight">New Conversation</h5>
+                                                <div className="flex flex-col space-y-1.5 border-b border-rose-100/50 pb-2">
+                                                    <div className="flex items-center space-x-2">
+                                                        <MessageSquarePlus className="w-4 h-4 text-rose-500" />
+                                                        <h5 className="text-[10px] font-black text-rose-700 uppercase tracking-tight">New Conversation</h5>
+                                                    </div>
+                                                    <div className="text-[9px] font-bold text-slate-500 py-0.5 flex items-center gap-1.5 flex-wrap">
+                                                        <span>Student: <span className="text-slate-800 font-mono">{selectedStudent.Mobile || '-'}</span></span>
+                                                        <span className="text-slate-300">|</span>
+                                                        <span>Father: <span className="text-slate-800 font-mono">{selectedStudent['Father Mobile'] || '-'}</span></span>
+                                                        <span className="text-slate-300">|</span>
+                                                        <span>Mother: <span className="text-slate-800 font-mono">{selectedStudent['Mother Mobile'] || '-'}</span></span>
+                                                    </div>
                                                 </div>
                                                 
                                                 <div className="grid grid-cols-2 gap-3">
