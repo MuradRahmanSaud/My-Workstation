@@ -1,4 +1,7 @@
 
+// Fix: Import React to resolve 'Cannot find namespace React' error for Dispatch and SetStateAction
+import React from 'react';
+
 export interface MainSheetRow {
   Semester: string;
   'Sheet Link': string;
@@ -206,4 +209,5 @@ export interface SheetContextType {
   updateDiuEmployeeData: (updater: (prev: DiuEmployeeRow[]) => DiuEmployeeRow[]) => void;
   updateProgramData: (updater: (prev: ProgramDataRow[]) => ProgramDataRow[]) => void;
   updateFacultyLeadershipData: (updater: (prev: FacultyLeadershipRow[]) => FacultyLeadershipRow[]) => void;
+  setStudentFollowupData: React.Dispatch<React.SetStateAction<StudentFollowupRow[]>>;
 }

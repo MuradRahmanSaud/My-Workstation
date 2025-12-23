@@ -163,7 +163,7 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   return (
     <SheetContext.Provider value={{ 
-        data, programData, teacherData, classroomData, diuEmployeeData, referenceData, facultyLeadershipData, studentFollowupData, semesterLinks, admittedLinks, registeredLinks, studentDataLinks, studentCache, loadStudentData, updateStudentData, registeredData, loadRegisteredData, loadStudentFollowupData, loading, semesterFilter, setSemesterFilter: (v) => { setSemesterFilter(v); setUserHasSelected(true); }, uniqueSemesters, reloadData: loadData, updateClassroomData, updateReferenceData, updateSectionData, updateDiuEmployeeData, updateProgramData, updateFacultyLeadershipData
+        data, programData, teacherData, classroomData, diuEmployeeData, referenceData, facultyLeadershipData, studentFollowupData, semesterLinks, admittedLinks, registeredLinks, studentDataLinks, studentCache, loadStudentData, updateStudentData, registeredData, loadRegisteredData, loadStudentFollowupData, loading, semesterFilter, setSemesterFilter: (v) => { setSemesterFilter(v); setUserHasSelected(true); }, uniqueSemesters, reloadData: loadData, updateClassroomData, updateReferenceData, updateSectionData, updateDiuEmployeeData, updateProgramData, updateFacultyLeadershipData, setStudentFollowupData
     }}>
       {children}
     </SheetContext.Provider>

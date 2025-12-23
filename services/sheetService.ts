@@ -31,11 +31,23 @@ const setCachedData = (key: string, data: any) => {
     } catch (e) { /* ignore storage limits */ }
 };
 
-const fetchSheet = async <T>(url: string, retries = 2): Promise<T[]> => {
+const fetchSheet = async <T>(url: string, retries = 3): Promise<T[]> => {
+  try {
+    const directResponse = await fetch(`${url}&direct=true`);
+    if (directResponse.ok) {
+        const text = await directResponse.text();
+        if (text && !text.trim().startsWith('<!doctype html') && !text.trim().startsWith('<html')) {
+            return parseCSV<T>(text);
+        }
+    }
+  } catch (e) {
+    console.debug("Direct fetch failed, falling back to proxies...");
+  }
+
   let proxyIndex = 0;
   for (let i = 0; i < retries; i++) {
     try {
-      if (i > 0) await sleep(200 * i); // Very short delay for fast retry
+      if (i > 0) await sleep(300 * i);
       const proxy = PROXY_LIST[proxyIndex % PROXY_LIST.length];
       const targetUrl = `${proxy}${encodeURIComponent(url)}`;
       const response = await fetch(targetUrl);
@@ -43,7 +55,6 @@ const fetchSheet = async <T>(url: string, retries = 2): Promise<T[]> => {
       const text = await response.text();
       if (!text || text.trim().startsWith('<!doctype html') || text.trim().startsWith('<html')) {
           proxyIndex++;
-          if (proxyIndex >= 2) return []; 
           continue; 
       }
       return parseCSV<T>(text);
@@ -147,19 +158,51 @@ export const getMobileNumber = (row: TeacherDataRow): string => {
   return '';
 };
 
-const getReqValues = (reqStr: string, durStr: string) => {
-    const getVal = (str: string, type: 'Theory' | 'Lab') => {
-        if (!str) return 0;
-        const pattern = type === 'Theory' ? /(?:theory|th|lecture|lec)[:\s-]*(\d+)/i : /(?:lab|laboratory|lb)[:\s-]*(\d+)/i;
-        const match = str.match(pattern);
-        if (match) return parseFloat(match[1]);
-        if (type === 'Theory' && !/(?:theory|th|lab|lb)/i.test(str)) {
-            const simpleMatch = str.match(/(\d+(\.\d+)?)/);
-            if (simpleMatch) return parseFloat(simpleMatch[1]);
+export const submitSheetData = async (
+    action: 'add' | 'update' | 'delete', 
+    sheetName: string, 
+    data: any, 
+    keyColumn?: string, 
+    keyValue?: string, 
+    spreadsheetId?: string, 
+    options: any = { insertMethod: 'first_empty' }
+): Promise<any> => {
+    try {
+        console.log(`[SheetService] ${action.toUpperCase()} Action on ${sheetName}`);
+        
+        const payload = { 
+            action, 
+            sheetName, 
+            data, 
+            keyColumn: keyColumn || 'uniqueid', 
+            keyValue: keyValue ? String(keyValue).trim() : '', 
+            spreadsheetId, 
+            insertMethod: options.insertMethod 
+        };
+
+        const response = await fetch(GOOGLE_SCRIPT_URL, { 
+            method: 'POST', 
+            mode: 'cors',
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8',
+            },
+            body: JSON.stringify(payload) 
+        });
+
+        if (!response.ok) {
+            throw new Error(`Server Response Error: ${response.status}`);
         }
-        return 0;
-    };
-    return { theory: getVal(durStr, 'Theory') > 0 ? Math.floor(getVal(reqStr, 'Theory') / getVal(durStr, 'Theory')) : 0, lab: getVal(durStr, 'Lab') > 0 ? Math.floor(getVal(reqStr, 'Lab') / getVal(durStr, 'Lab')) : 0 };
+
+        const result = await response.json();
+        console.log("[SheetService] API Response:", result);
+        return result;
+    } catch (error: any) { 
+        console.error("[SheetService] Sync Error:", error);
+        return { 
+            result: 'error', 
+            message: error.message || 'API connection failed' 
+        }; 
+    }
 };
 
 export const fetchMergedSectionData = async (
@@ -184,9 +227,23 @@ export const fetchMergedSectionData = async (
         const pData = programMap.get(normalizeId(item.PID));
         let classReq = '0';
         if (pData) {
-            const reqValues = getReqValues(pData['Class Requirement'] || '', pData['Class Duration'] || '');
+            const pattern = /(?:theory|th|lecture|lec)[:\s-]*(\d+)/i;
+            const patternLab = /(?:lab|laboratory|lb)[:\s-]*(\d+)/i;
+            const reqStr = pData['Class Requirement'] || '';
+            const durStr = pData['Class Duration'] || '';
+            
+            const getVal = (str: string, pat: RegExp) => {
+                const m = str.match(pat);
+                return m ? parseFloat(m[1]) : 0;
+            };
+
+            const theoryDur = getVal(durStr, pattern);
+            const labDur = getVal(durStr, patternLab);
+            const theoryReq = getVal(reqStr, pattern);
+            const labReq = getVal(reqStr, patternLab);
+
             const cType = (refData?.['Course Type'] || item['Course Type'] || '').toLowerCase();
-            const baseReq = (cType.includes('lab') || cType.includes('sessional') || cType.includes('practical')) ? reqValues.lab : reqValues.theory;
+            const baseReq = (cType.includes('lab') || cType.includes('sessional')) ? (labDur > 0 ? Math.floor(labReq/labDur) : 0) : (theoryDur > 0 ? Math.floor(theoryReq/theoryDur) : 0);
             classReq = (parseFloat(item.Credit || '0') > 0 ? baseReq * parseFloat(item.Credit) : baseReq).toString();
         }
         return {
@@ -204,9 +261,7 @@ export const fetchMergedSectionData = async (
         };
     };
 
-    // PRIORITY: Load the first semester immediately
     if (mainSheetRows.length > 0) {
-        onStatus('Prioritizing Latest Semester...');
         const firstRow = mainSheetRows[0];
         if (firstRow['Sheet Link']) {
             try {
@@ -217,14 +272,12 @@ export const fetchMergedSectionData = async (
         }
     }
 
-    // Load remaining in larger batches
     const remainingRows = mainSheetRows.slice(1);
     const batchSize = 15; 
     const allData: CourseSectionData[] = [];
     
     for (let i = 0; i < remainingRows.length; i += batchSize) {
         const batch = remainingRows.slice(i, i + batchSize);
-        onStatus(`Streaming History (Batch ${Math.floor(i/batchSize) + 1})...`);
         const batchPromises = batch.map(async (row) => {
             if (!row['Sheet Link']) return [];
             try {
@@ -238,42 +291,4 @@ export const fetchMergedSectionData = async (
         allData.push(...flatResults);
     }
     return allData;
-};
-
-export const submitSheetData = async (action: 'add' | 'update' | 'delete', sheetName: string, data: any, keyColumn?: string, keyValue?: string, spreadsheetId?: string, options: any = { insertMethod: 'first_empty' }): Promise<any> => {
-    try {
-        console.log(`Submitting ${action} request for ${sheetName}...`);
-        
-        // Google Apps Script requires some specific fetch options for POST
-        const response = await fetch(GOOGLE_SCRIPT_URL, { 
-            method: 'POST', 
-            mode: 'cors', // Ensure CORS is explicitly enabled
-            headers: {
-                'Content-Type': 'text/plain;charset=utf-8', // Using text/plain avoids some preflight issues
-            },
-            body: JSON.stringify({ 
-                action, 
-                sheetName, 
-                data, 
-                keyColumn, 
-                keyValue, 
-                spreadsheetId, 
-                insertMethod: options.insertMethod 
-            }) 
-        });
-
-        if (!response.ok) {
-            throw new Error(`Server responded with ${response.status}`);
-        }
-
-        const result = await response.json();
-        console.log("Response received:", result);
-        return result;
-    } catch (error: any) { 
-        console.error("API Error details:", error);
-        return { 
-            result: 'error', 
-            message: error.message || 'API communication failed' 
-        }; 
-    }
 };

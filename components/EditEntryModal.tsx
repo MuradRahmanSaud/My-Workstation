@@ -103,7 +103,6 @@ export const MultiSearchableSelect = ({
         const lowerSearch = search.toLowerCase();
         return options
             .filter(opt => opt.toLowerCase().includes(lowerSearch))
-            // Fix: Property 'name' does not exist on type 'string'. Using localeCompare directly on the string items.
             .sort((a, b) => a.localeCompare(b))
             .slice(0, 100); 
     }, [options, search]);
@@ -453,7 +452,7 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
             }
 
             if (result.result === 'error') {
-                throw new Error(result.message || "গুগল শিটের সাথে সিঙ্ক করতে সমস্যা হচ্ছে।");
+                throw new Error(result.message || "Error syncing with Google Sheets.");
             }
 
             // If not already closed, close now
@@ -463,7 +462,7 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
         } catch (error: any) {
             console.error("API Error:", error);
             if (!closeOnSubmit) {
-                setError(error.message || "ডাটা সেভ করা যায়নি। আপনার ইন্টারনেট কানেকশন চেক করুন।");
+                setError(error.message || "Could not save data. Please check your internet connection.");
                 setIsSubmitting(false);
             }
         }
