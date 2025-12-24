@@ -148,6 +148,7 @@ export interface StudentDataRow {
     'Defense Status'?: string;
     'Degree Status'?: string;
     Dues?: string;
+    'Disciplinary Action'?: string;
     // Familial & Mentor Fields
     'Father Name'?: string;
     'Father Mobile'?: string;
