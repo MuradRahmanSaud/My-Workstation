@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ProgramDataRow, CourseSectionData, StudentDataRow } from '../types';
@@ -46,7 +45,7 @@ export const ProgramView: React.FC = () => {
   const [selectedProgram, setSelectedProgram] = useState<ProgramDataRow | null>(null);
   const [activeReport, setActiveReport] = useState<string | null>('courses');
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
-  const [activeUnregList, setActiveUnregList] = useState<{ semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string } | null>(null);
+  const [activeUnregList, setActiveUnregList] = useState<{ semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string; listType: 'registered' | 'unregistered' } | null>(null);
   const [selectedAdmittedSemesters, setSelectedAdmittedSemesters] = useState<Set<string>>(new Set());
   const [registrationFilters, setRegistrationFilters] = useState<Map<string, 'registered' | 'unregistered'>>(new Map());
   const [selectedStudent, setSelectedStudent] = useState<StudentDataRow | null>(null);
@@ -191,7 +190,8 @@ export const ProgramView: React.FC = () => {
           programId: selectedProgram.PID,
           programName: selectedProgram['Program Short Name'],
           students: allUnregStudents as any,
-          targetSemester: targetRegSem
+          targetSemester: targetRegSem,
+          listType: 'unregistered'
       });
     }
   }, [activeReport, selectedProgram, activeUnregList, admittedSemestersOptions, registeredSemesters, studentCache, registrationLookup]);
@@ -208,7 +208,6 @@ export const ProgramView: React.FC = () => {
         const fac = p['Faculty Short Name'] || 'Other';
         if (!groups[fac]) groups[fac] = [];
         const matchesSearch = !searchTerm || p['Program Short Name'].toLowerCase().includes(searchTerm.toLowerCase()) || p.PID.toLowerCase().includes(searchTerm.toLowerCase()) || p['Program Full Name'].toLowerCase().includes(searchTerm.toLowerCase());
-        /* Fix: corrected setSelectedFaculty to selectedFaculty in filtering logic */
         const matchesFaculty = selectedFaculty === 'All' || p['Faculty Short Name'] === selectedFaculty;
         const matchesType = !selectedType || p['Program Type'] === selectedType;
         const matchesSemesterMode = !selectedSemesterMode || p['Semester Type']?.includes(selectedSemesterMode);
@@ -258,21 +257,11 @@ export const ProgramView: React.FC = () => {
     if (!link) return;
     const { id } = extractSheetIdAndGid(link);
     if (!id) return;
-    
-    // 1. Immediate local state update for current view
     setSelectedStudent(prev => prev ? { ...prev, ...student } : null);
-
-    // 2. Prepare payload for API (remove internal props)
     const { _semester, ...apiPayload } = student as any;
-
     try {
-        // 3. Persist to API: sheetName must be the semester name as per tab names
         await submitSheetData('update', semester, apiPayload, 'Student ID', student['Student ID'].trim(), id);
-        
-        // 4. Update the studentCache Map in global context
         updateStudentData(semester, student['Student ID'], student);
-
-        // 5. Refresh unreg list UI if active
         if (activeUnregList) {
             const newStudents = activeUnregList.students.map(s => s['Student ID'] === student['Student ID'] ? { ...s, ...student } : s);
             setActiveUnregList({ ...activeUnregList, students: newStudents });
@@ -308,7 +297,6 @@ export const ProgramView: React.FC = () => {
                                     {activeReport === 'admitted' && (
                                         <div className="flex flex-col h-full overflow-hidden">
                                             <div className="flex flex-row h-full gap-2 p-1">
-                                                {/* Left Half: Semester Analysis */}
                                                 <div className="flex-1 border border-gray-200 rounded-lg overflow-auto thin-scrollbar bg-white shadow-sm">
                                                     <AdmittedReportTable 
                                                         selectedAdmittedSemesters={selectedAdmittedSemesters}
@@ -325,7 +313,6 @@ export const ProgramView: React.FC = () => {
                                                         onUnregClick={setActiveUnregList}
                                                     />
                                                 </div>
-                                                {/* Right Half: Unregistered List */}
                                                 <div className="flex-1 border border-gray-200 rounded-lg overflow-auto thin-scrollbar bg-white shadow-sm">
                                                     {activeUnregList ? (
                                                         <UnregisteredStudentsModal 
@@ -340,13 +327,14 @@ export const ProgramView: React.FC = () => {
                                                             programMap={programMap}
                                                             registrationLookup={registrationLookup}
                                                             onRowClick={(student) => setSelectedStudent(student)}
+                                                            listType={activeUnregList.listType}
                                                         />
                                                     ) : (
                                                         <div className="h-full flex flex-col items-center justify-center text-slate-300 p-8 text-center bg-slate-50/20">
                                                             <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mb-3 shadow-sm border border-slate-100">
                                                                 <ArrowLeft className="w-6 h-6 rotate-180 opacity-20" />
                                                             </div>
-                                                            <p className="text-[11px] font-bold uppercase tracking-widest opacity-40">Click an Unregistered count to view students</p>
+                                                            <p className="text-[11px] font-bold uppercase tracking-widest opacity-40">Click an Unregistered or Registered count to view students</p>
                                                         </div>
                                                     )}
                                                 </div>
@@ -382,7 +370,6 @@ export const ProgramView: React.FC = () => {
         </div>
         <button onClick={() => setIsAddModalOpen(true)} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 group z-30" title="Add New Program"><Plus className="w-7 h-7 group-hover:rotate-90 transition-transform duration-300" /></button>
       </div>
-      {/* Fix: Removed invalid studentCache prop from FilterPanel */}
       <FilterPanel isOpen={isFilterPanelOpen} onClose={() => setIsFilterPanelOpen(false)} programData={programData} semesterFilter={semesterFilter} setSemesterFilter={setSemesterFilter} uniqueSemesters={uniqueSemesters} selectedFaculties={new Set()} setSelectedFaculties={() => {}} selectedProgramTypes={new Set()} setSelectedProgramTypes={() => {}} selectedSemesterTypes={new Set()} setSelectedSemesterTypes={() => {}} selectedPrograms={new Set()} setSelectedPrograms={() => {}} attributeOptions={attributeOptions} selectedTeachers={selectedTeachers} setSelectedTeachers={setSelectedTeachers} selectedCourseTypes={selectedCourseTypes} setSelectedCourseTypes={setSelectedCourseTypes} selectedTypes={selectedTypes} setSelectedTypes={setSelectedTypes} selectedCredits={selectedCredits} setSelectedCredits={setSelectedCredits} selectedCapacities={selectedCapacities} setSelectedCapacities={setSelectedCapacities} studentMin={studentMin} setStudentMin={setStudentMin} studentMax={studentMax} setStudentMax={setStudentMax} selectedStudentCounts={selectedStudentCounts} setSelectedStudentCounts={setSelectedStudentCounts} classTakenMin={classTakenMin} setClassTakenMin={setClassTakenMin} classTakenMax={classTakenMax} setClassTakenMax={setClassTakenMax} selectedClassTakens={selectedClassTakens} setSelectedClassTakens={setSelectedClassTakens} selectedMissingFields={selectedMissingFields} setSelectedMissingFields={setSelectedMissingFields} onClearAll={clearAllFilters} hideProgramTab={true} viewMode={activeReport === 'admitted' ? 'admitted' : undefined} admittedSemestersOptions={admittedSemestersOptions} selectedAdmittedSemesters={selectedAdmittedSemesters} onAdmittedSemesterChange={setSelectedAdmittedSemesters} registeredSemestersOptions={registeredSemesters} registrationFilters={registrationFilters} onRegistrationFilterChange={setRegistrationFilters} />
       <EditEntryModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} mode="add" title="Add New Program" sheetName={SHEET_NAMES.PROGRAM} columns={['PID','Faculty Short Name','Faculty Full Name','Program Full Name','Program Short Name','Department Name','Program Type','Semester Type','Semester Duration Num','Theory Duration','Lab Duration','Theory Requirement','Lab Requirement']} hiddenFields={['Class Duration', 'Class Requirement', 'Semester Duration']} initialData={{ 'Semester Duration Num': '4', 'Theory Duration': '90', 'Lab Duration': '120', 'Theory Requirement': '0', 'Lab Requirement': '0' }} keyColumn="PID" spreadsheetId={REF_SHEET_ID} transformData={(data) => { const tDur = data['Theory Duration'] || '0', lDur = data['Lab Duration'] || '0', tReq = data['Theory Requirement'] || '0', lReq = data['Lab Requirement'] || '0', sDur = data['Semester Duration Num'] || '0'; return { ...data, 'Class Duration': `Theory ${tDur} Minutes, Lab ${lDur} Minutes`, 'Class Requirement': `Theory ${tReq} Minutes, Lab ${lReq} Minutes`, 'Semester Duration': `${sDur} Months` }; }} onSuccess={(newData) => { updateProgramData(prev => [newData, ...prev]); setSelectedProgram(newData); }} />
     </div>

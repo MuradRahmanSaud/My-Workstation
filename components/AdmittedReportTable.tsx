@@ -1,7 +1,6 @@
-
 import React, { useMemo, useState, useEffect } from 'react';
 import { StudentDataRow, ProgramDataRow } from '../types';
-import { LayoutGrid, List as ListIcon, Check, Copy, BarChart3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { LayoutGrid, List as ListIcon, Check, Copy, BarChart3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, UserCheck, UserX } from 'lucide-react';
 import { UnregisteredStudentsModal } from './UnregisteredStudentsModal';
 import { useResponsivePagination } from '../hooks/useResponsivePagination';
 
@@ -17,8 +16,7 @@ interface AdmittedReportTableProps {
     setSelectedFaculties: (val: Set<string>) => void;
     selectedProgramTypes: Set<string>;
     selectedSemesterTypes: Set<string>;
-    onUnregClick?: (data: { semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string }) => void;
-    // New props for external synchronization
+    onUnregClick?: (data: { semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string; listType: 'registered' | 'unregistered' }) => void;
     externalTargetRegSemester?: string;
     onTargetRegSemesterChange?: (val: string) => void;
 }
@@ -48,13 +46,12 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
     externalTargetRegSemester,
     onTargetRegSemesterChange
 }) => {
-    // If external prop provided, use it; otherwise use local state
     const [localTargetRegSemester, setLocalTargetRegSemester] = useState<string>('');
     const targetRegSemester = externalTargetRegSemester !== undefined ? externalTargetRegSemester : localTargetRegSemester;
     const setTargetRegSemester = onTargetRegSemesterChange || setLocalTargetRegSemester;
 
     const [viewType, setViewType] = useState<'detailed' | 'summary'>('detailed');
-    const [unregModalState, setUnregModalState] = useState<{ isOpen: boolean; semester: string; programId: string; programName: string; students: StudentDataRow[] } | null>(null);
+    const [listModalState, setListModalState] = useState<{ isOpen: boolean; semester: string; programId: string; programName: string; students: StudentDataRow[]; listType: 'registered' | 'unregistered' } | null>(null);
     const [activeFaculty, setActiveFaculty] = useState<string>('');
 
     useEffect(() => {
@@ -89,7 +86,6 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
         };
         const targetParsed = parseSemester(effectiveTarget);
         
-        // Logical filter: only semesters chronologically on or before target semester
         let sortedSemesters = Array.from(selectedAdmittedSemesters)
             .map(parseSemester)
             .filter(s => s.year < targetParsed.year || (s.year === targetParsed.year && s.season <= targetParsed.season))
@@ -168,40 +164,40 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
 
     const { currentPage, setCurrentPage, rowsPerPage, totalPages, paginatedData, containerRef } = useResponsivePagination<any>(paginationDataInput);
 
-    const getUnregisteredStudents = (sem: string, pid: string) => {
+    const getStudentsByType = (sem: string, pid: string, type: 'registered' | 'unregistered') => {
         const targetPidNorm = normalize(pid);
         const target = targetRegSemester || registeredSemesters[0];
         
+        const filterFn = (s: StudentDataRow) => {
+            if (normalize(s.PID) !== targetPidNorm) return false;
+            const id = String(s['Student ID']).trim();
+            const hasReg = registrationLookup.get(id)?.has(target);
+            return type === 'registered' ? hasReg : !hasReg;
+        };
+
         if (sem !== 'ALL') {
             const students = studentCache.get(sem) || [];
-            return students.filter(s => {
-                if (normalize(s.PID) !== targetPidNorm) return false;
-                const id = String(s['Student ID']).trim();
-                return !registrationLookup.get(id)?.has(target);
-            }).map(s => ({ ...s, _semester: sem })); 
+            return students.filter(filterFn).map(s => ({ ...s, _semester: sem })); 
         }
         
         const allStudents: StudentDataRow[] = [];
         sortedAdmittedSemesters.forEach(sName => {
             const students = studentCache.get(sName) || [];
             students.forEach(s => {
-                if (normalize(s.PID) === targetPidNorm) {
-                    const id = String(s['Student ID']).trim();
-                    if (!registrationLookup.get(id)?.has(target)) {
-                        allStudents.push({ ...s, _semester: sName });
-                    }
+                if (filterFn(s)) {
+                    allStudents.push({ ...s, _semester: sName });
                 }
             });
         });
         return allStudents;
     };
 
-    const handleUnregClick = (semester: string, programId: string, programName: string) => {
-        const students = getUnregisteredStudents(semester, programId);
+    const handleListClick = (semester: string, programId: string, programName: string, listType: 'registered' | 'unregistered') => {
+        const students = getStudentsByType(semester, programId, listType);
         if (onUnregClick) {
-            onUnregClick({ semester, programId, programName, students, targetSemester: targetRegSemester });
+            onUnregClick({ semester, programId, programName, students, targetSemester: targetRegSemester, listType });
         } else {
-            setUnregModalState({ isOpen: true, semester, programId, programName, students });
+            setListModalState({ isOpen: true, semester, programId, programName, students, listType });
         }
     };
 
@@ -226,9 +222,9 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                     {progs.map((p: any) => (
                         <div key={p.pid} className="flex justify-between px-2 py-1 text-[11px] hover:bg-gray-50 items-center">
                             <span className="w-[40%] text-gray-700 truncate font-medium" title={`${p.pid} ${p.name}`}><span className="font-mono font-bold mr-1 text-gray-500">{p.pid}</span>{p.name}</span>
-                            <span className="w-[20%] text-center font-bold text-gray-900">{p.totalAdmitted}</span>
-                            <span className="w-[20%] text-center text-green-600">{p.totalRegistered}</span>
-                            <span className="w-[20%] text-right text-red-500 font-bold cursor-pointer" onClick={() => p.totalUnregistered > 0 && handleUnregClick('ALL', p.pid, p.name)}>{p.totalUnregistered}</span>
+                            <span className="w-[20%] text-center font-bold text-gray-900 cursor-pointer hover:underline underline-offset-2 decoration-slate-300" onClick={() => p.totalAdmitted > 0 && handleListClick('ALL', p.pid, p.name, 'registered')}>{p.totalAdmitted}</span>
+                            <span className="w-[20%] text-center text-green-600 font-bold cursor-pointer hover:underline underline-offset-2 decoration-green-300" onClick={() => p.totalRegistered > 0 && handleListClick('ALL', p.pid, p.name, 'registered')}>{p.totalRegistered}</span>
+                            <span className="w-[20%] text-right text-red-500 font-bold cursor-pointer hover:underline underline-offset-2 decoration-red-300" onClick={() => p.totalUnregistered > 0 && handleListClick('ALL', p.pid, p.name, 'unregistered')}>{p.totalUnregistered}</span>
                         </div>
                     ))}
                 </div>
@@ -334,16 +330,30 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                                         {sem}
                                                     </td>
                                                     <td className="px-3 py-1 text-center text-[11px] font-medium text-gray-800 border-r border-gray-50">
-                                                        {adm > 0 ? adm : <span className="text-gray-300">-</span>}
+                                                        {adm > 0 ? (
+                                                            <span 
+                                                                className="cursor-pointer hover:underline decoration-slate-400 decoration-dotted underline-offset-2"
+                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'registered')}
+                                                            >
+                                                                {adm}
+                                                            </span>
+                                                        ) : <span className="text-gray-300">-</span>}
                                                     </td>
                                                     <td className="px-3 py-1 text-center text-[11px] font-bold text-green-600 border-r border-gray-50">
-                                                        {reg > 0 ? reg : <span className="text-gray-300">-</span>}
+                                                        {reg > 0 ? (
+                                                            <span 
+                                                                className="cursor-pointer hover:underline decoration-green-500 decoration-dotted underline-offset-2"
+                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'registered')}
+                                                            >
+                                                                {reg}
+                                                            </span>
+                                                        ) : <span className="text-gray-300">-</span>}
                                                     </td>
                                                     <td className="px-3 py-1 text-center text-[11px] font-black text-red-500">
                                                         {unreg > 0 ? (
                                                             <span 
                                                                 className="cursor-pointer hover:underline decoration-red-500 decoration-dotted underline-offset-2"
-                                                                onClick={() => handleUnregClick(sem, prog.pid, prog.name)}
+                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'unregistered')}
                                                             >
                                                                 {unreg}
                                                             </span>
@@ -386,15 +396,19 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                                     return (
                                                         <td key={sem} className="px-1 py-1 border-r border-gray-100 text-center">
                                                             <div className="grid grid-cols-3 gap-1">
-                                                                <span className={`${adm > 0 ? 'text-gray-700' : 'text-gray-300'}`}>{adm}</span>
-                                                                <span className={`${reg > 0 ? 'text-green-600 font-bold' : 'text-gray-300'}`}>{reg}</span>
-                                                                <span className={`font-bold ${unreg > 0 ? 'text-red-500 cursor-pointer hover:underline decoration-red-500 decoration-dotted underline-offset-2' : 'text-gray-300'}`} onClick={() => unreg > 0 && handleUnregClick(sem, prog.pid, prog.name)}>{unreg}</span>
+                                                                <span className={`${adm > 0 ? 'text-gray-700 cursor-pointer hover:underline decoration-slate-400 decoration-dotted underline-offset-2' : 'text-gray-300'}`} onClick={() => adm > 0 && handleListClick(sem, prog.pid, prog.name, 'registered')}>{adm}</span>
+                                                                <span className={`${reg > 0 ? 'text-green-600 font-bold cursor-pointer hover:underline decoration-green-500 decoration-dotted underline-offset-2' : 'text-gray-300'}`} onClick={() => reg > 0 && handleListClick(sem, prog.pid, prog.name, 'registered')}>{reg}</span>
+                                                                <span className={`font-bold ${unreg > 0 ? 'text-red-500 cursor-pointer hover:underline decoration-red-500 decoration-dotted underline-offset-2' : 'text-gray-300'}`} onClick={() => unreg > 0 && handleListClick(sem, prog.pid, prog.name, 'unregistered')}>{unreg}</span>
                                                             </div>
                                                         </td>
                                                     );
                                                 })}
                                                 <td className="px-1 py-1 font-bold text-center bg-slate-50 border-l border-gray-200">
-                                                    <div className="grid grid-cols-3 gap-1"><span className="text-blue-800">{prog.totalAdmitted}</span><span className="text-green-700">{prog.totalAdmitted - prog.totalUnregistered}</span><span className="text-red-700 cursor-pointer hover:underline decoration-red-700 decoration-dotted underline-offset-2" onClick={() => prog.totalUnregistered > 0 && handleUnregClick('ALL', prog.pid, prog.name)}>{prog.totalUnregistered}</span></div>
+                                                    <div className="grid grid-cols-3 gap-1">
+                                                        <span className="text-blue-800 cursor-pointer hover:underline decoration-blue-400 decoration-dotted underline-offset-2" onClick={() => prog.totalAdmitted > 0 && handleListClick('ALL', prog.pid, prog.name, 'registered')}>{prog.totalAdmitted}</span>
+                                                        <span className="text-green-700 cursor-pointer hover:underline decoration-green-700 decoration-dotted underline-offset-2" onClick={() => prog.totalRegistered > 0 && handleListClick('ALL', prog.pid, prog.name, 'registered')}>{prog.totalRegistered}</span>
+                                                        <span className="text-red-700 cursor-pointer hover:underline decoration-red-700 decoration-dotted underline-offset-2" onClick={() => prog.totalUnregistered > 0 && handleListClick('ALL', prog.pid, prog.name, 'unregistered')}>{prog.totalUnregistered}</span>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -405,7 +419,6 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                 </table>
                             )}
                         </div>
-                        {/* Pagination Footer */}
                         <div className="px-3 py-1.5 bg-slate-50 border-t border-gray-200 flex justify-between items-center text-[9px] text-gray-500 shrink-0 select-none">
                             <div className="flex items-center space-x-2">
                                 <span className="font-bold">{currentPage * rowsPerPage - rowsPerPage + 1}-{Math.min(currentPage * rowsPerPage, paginationDataInput.length)}</span>
@@ -454,17 +467,18 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                     </div>
                 )}
             </div>
-            {unregModalState?.isOpen && (
+            {listModalState?.isOpen && (
                 <UnregisteredStudentsModal 
-                    isOpen={unregModalState.isOpen} 
-                    onClose={() => setUnregModalState(null)} 
-                    semester={unregModalState.semester} 
-                    programName={unregModalState.programName} 
-                    programId={unregModalState.programId} 
+                    isOpen={listModalState.isOpen} 
+                    onClose={() => setListModalState(null)} 
+                    semester={listModalState.semester} 
+                    programName={listModalState.programName} 
+                    programId={listModalState.programId} 
                     targetSemester={targetRegSemester} 
-                    students={unregModalState.students}
+                    students={listModalState.students}
                     programMap={programMap}
                     registrationLookup={registrationLookup}
+                    listType={listModalState.listType}
                 />
             )}
         </div>

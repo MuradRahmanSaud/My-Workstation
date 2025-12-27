@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { RefreshCw, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, List, CheckCircle, XCircle, ChevronDown, GraduationCap, ClipboardList, Users, Banknote, AlertTriangle } from 'lucide-react';
@@ -16,7 +15,8 @@ export const StudentView: React.FC = () => {
       programData,
       registeredData,
       loadRegisteredData,
-      reloadData
+      reloadData,
+      studentFollowupData
   } = useSheetData();
   
   const [viewMode, setViewMode] = useState<'details' | 'registered'>('details');
@@ -233,65 +233,71 @@ export const StudentView: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {paginatedData.map((row, idx) => (
-                                <tr key={idx} className="hover:bg-blue-50/60 transition-colors text-[11px] text-gray-700 leading-none h-[29px]">
-                                    {viewMode === 'details' ? (
-                                        <>
-                                            <td className="px-2 py-1 text-center w-1 text-gray-400 font-bold">{row.SL}</td>
-                                            <td className="px-2 py-1 text-center font-bold text-gray-500 whitespace-nowrap">
-                                                {(() => {
-                                                    const pid = row.PID;
-                                                    const normalize = (id: string) => String(id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                                                    const shortName = programMap.get(normalize(pid));
-                                                    return shortName ? `${pid} ${shortName}` : pid;
-                                                })()}
-                                            </td>
-                                            <td className="px-2 py-1 font-bold text-blue-600 font-mono">{row['Student ID']}</td>
-                                            <td className="px-2 py-1 font-medium">{row['Student Name']}</td>
-                                            
-                                            <td className="px-2 py-1 text-center text-gray-600">{row['Credit Requirement'] || '-'}</td>
-                                            <td className="px-2 py-1 text-center font-bold text-slate-700">{row['Credit Completed'] || '-'}</td>
-                                            
-                                            <td className="px-2 py-1 text-center font-black text-red-600">{row['Dues'] || '-'}</td>
+                            {paginatedData.map((row, idx) => {
+                                const sid = String(row['Student ID'] || '');
+                                
+                                return (
+                                    <tr key={idx} className="hover:bg-blue-50/60 transition-colors text-[11px] text-gray-700 leading-none h-[29px]">
+                                        {viewMode === 'details' ? (
+                                            <>
+                                                <td className="px-2 py-1 text-center w-1 text-gray-400 font-bold">{row.SL}</td>
+                                                <td className="px-2 py-1 text-center font-bold text-gray-500 whitespace-nowrap">
+                                                    {(() => {
+                                                        const pid = row.PID;
+                                                        const normalize = (id: string) => String(id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                                                        const shortName = programMap.get(normalize(pid));
+                                                        return shortName ? `${pid} ${shortName}` : pid;
+                                                    })()}
+                                                </td>
+                                                <td className="px-2 py-1 font-bold text-blue-600 font-mono">
+                                                    {row['Student ID']}
+                                                </td>
+                                                <td className="px-2 py-1 font-medium">{row['Student Name']}</td>
+                                                
+                                                <td className="px-2 py-1 text-center text-gray-600">{row['Credit Requirement'] || '-'}</td>
+                                                <td className="px-2 py-1 text-center font-bold text-slate-700">{row['Credit Completed'] || '-'}</td>
+                                                
+                                                <td className="px-2 py-1 text-center font-black text-red-600">{row['Dues'] || '-'}</td>
 
-                                            <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Mentor']}>{row['Mentor'] || '-'}</td>
-                                            <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Father Name']}>{row['Father Name'] || '-'}</td>
-                                            <td className="px-2 py-1 text-left text-[10px] font-mono text-gray-500">{row['Father Mobile'] || '-'}</td>
-                                            <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Mother Name']}>{row['Mother Name'] || '-'}</td>
-                                            <td className="px-2 py-1 text-left text-[10px] font-mono text-gray-500">{row['Mother Mobile'] || '-'}</td>
+                                                <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Mentor']}>{row['Mentor'] || '-'}</td>
+                                                <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Father Name']}>{row['Father Name'] || '-'}</td>
+                                                <td className="px-2 py-1 text-left text-[10px] font-mono text-gray-500">{row['Father Mobile'] || '-'}</td>
+                                                <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Mother Name']}>{row['Mother Name'] || '-'}</td>
+                                                <td className="px-2 py-1 text-left text-[10px] font-mono text-gray-500">{row['Mother Mobile'] || '-'}</td>
 
-                                            <td className="px-2 py-1 text-center text-gray-500">{row['Defense Registration'] || '-'}</td>
-                                            <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Defense Supervisor']}>{row['Defense Supervisor'] || '-'}</td>
-                                            <td className="px-2 py-1 text-center italic text-gray-500">{row['Defense Status'] || '-'}</td>
-                                            <td className="px-2 py-1 text-center font-bold text-purple-600">{row['Degree Status'] || '-'}</td>
+                                                <td className="px-2 py-1 text-center text-gray-500">{row['Defense Registration'] || '-'}</td>
+                                                <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Defense Supervisor']}>{row['Defense Supervisor'] || '-'}</td>
+                                                <td className="px-2 py-1 text-center italic text-gray-500">{row['Defense Status'] || '-'}</td>
+                                                <td className="px-2 py-1 text-center font-bold text-purple-600">{row['Degree Status'] || '-'}</td>
 
-                                            <td className="px-2 py-1 text-center truncate max-w-[150px]" title={row['Disciplinary Action']}>
-                                                {!isValEmpty(row['Disciplinary Action']) ? (
-                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                                        <AlertTriangle className="w-2.5 h-2.5 mr-1" />
-                                                        Active
-                                                    </span>
-                                                ) : <span className="text-gray-300">-</span>}
-                                            </td>
+                                                <td className="px-2 py-1 text-center truncate max-w-[150px]" title={row['Disciplinary Action']}>
+                                                    {!isValEmpty(row['Disciplinary Action']) ? (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                            <AlertTriangle className="w-2.5 h-2.5 mr-1" />
+                                                            Active
+                                                        </span>
+                                                    ) : <span className="text-gray-300">-</span>}
+                                                </td>
 
-                                            <td className="px-2 py-1 text-gray-600 font-mono">{row.Mobile || '-'}</td>
-                                            <td className="px-2 py-1 text-center">
-                                                {registeredIdSet.has(String(row['Student ID']).trim()) ? (
-                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700"><CheckCircle className="w-2.5 h-2.5 mr-1" />Registered</span>
-                                                ) : (
-                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700"><XCircle className="w-2.5 h-2.5 mr-1" />Unreg</span>
-                                                )}
-                                            </td>
-                                        </>
-                                    ) : (
-                                        registeredColumns.map((col) => (
-                                            <td key={col} className="px-2 py-1 font-medium text-gray-600 text-center whitespace-nowrap">
-                                                {row[col]}
-                                            </td>
-                                        ))
-                                    )}
-                                </tr>
-                            ))}
+                                                <td className="px-2 py-1 text-gray-600 font-mono">{row.Mobile || '-'}</td>
+                                                <td className="px-2 py-1 text-center">
+                                                    {registeredIdSet.has(String(row['Student ID']).trim()) ? (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700"><CheckCircle className="w-2.5 h-2.5 mr-1" />Registered</span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700"><XCircle className="w-2.5 h-2.5 mr-1" />Unreg</span>
+                                                    )}
+                                                </td>
+                                            </>
+                                        ) : (
+                                            registeredColumns.map((col) => (
+                                                <td key={col} className="px-2 py-1 font-medium text-gray-600 text-center whitespace-nowrap">
+                                                    {row[col]}
+                                                </td>
+                                            ))
+                                        )}
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

@@ -1,8 +1,8 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Copy, Check, Users, GripHorizontal, Download, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { X, Copy, Check, Users, GripHorizontal, Download, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, UserCheck, UserX } from 'lucide-react';
 import { StudentDataRow } from '../types';
 import { useResponsivePagination } from '../hooks/useResponsivePagination';
+import { useSheetData } from '../hooks/useSheetData';
 
 interface UnregisteredStudentsModalProps {
     isOpen: boolean;
@@ -17,12 +17,15 @@ interface UnregisteredStudentsModalProps {
     registrationLookup?: Map<string, Set<string>>;
     isInline?: boolean; 
     onRowClick?: (student: StudentDataRow) => void;
+    listType?: 'registered' | 'unregistered';
 }
 
 export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps> = ({
-    isOpen, onClose, semester, programName, programId, targetSemester, students, showProgramColumn = false, programMap, registrationLookup, isInline = false, onRowClick
+    isOpen, onClose, semester, programName, programId, targetSemester, students, showProgramColumn = false, programMap, registrationLookup, isInline = false, onRowClick, listType = 'unregistered'
 }) => {
+    const { studentFollowupData } = useSheetData();
     const [copySuccess, setCopySuccess] = useState(false);
+    const [selectedId, setSelectedId] = useState<string | null>(null);
     
     // Draggable State (Only for non-inline mode)
     const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -73,8 +76,6 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
         setIsDragging(true);
     };
 
-    if (!isOpen) return null;
-
     const getProgramLabel = (pid: string) => {
         if (!programMap) return pid;
         const normalize = (id: string) => String(id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
@@ -113,9 +114,11 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
         });
         const worksheet = (window as any).XLSX.utils.json_to_sheet(exportData);
         const workbook = (window as any).XLSX.utils.book_new();
-        (window as any).XLSX.utils.book_append_sheet(workbook, worksheet, "Unregistered Students");
-        (window as any).XLSX.writeFile(workbook, `Unregistered_${semester}_${programName.replace(/\s+/g, '_')}.xlsx`);
+        (window as any).XLSX.utils.book_append_sheet(workbook, worksheet, listType === 'registered' ? "Registered Students" : "Unregistered Students");
+        (window as any).XLSX.writeFile(workbook, `${listType === 'registered' ? 'Registered' : 'Unregistered'}_${semester}_${programName.replace(/\s+/g, '_')}.xlsx`);
     };
+
+    if (!isOpen) return null;
 
     const containerStyle: React.CSSProperties = isInline 
         ? { position: 'relative', width: '100%', height: '100%' }
@@ -124,6 +127,13 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
     const containerClasses = isInline 
         ? "flex flex-col bg-white overflow-hidden h-full"
         : "flex flex-col bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden animate-in zoom-in-95 duration-200";
+
+    const isReg = listType === 'registered';
+    const HeaderIcon = isReg ? UserCheck : UserX;
+    const themeColorClass = isReg ? 'emerald' : 'red';
+    const accentColor = isReg ? 'text-emerald-600' : 'text-red-600';
+    const bgAccent = isReg ? 'bg-emerald-50' : 'bg-red-50';
+    const borderAccent = isReg ? 'border-emerald-100' : 'border-red-100';
 
     return (
         <div ref={modalRef} style={containerStyle} className={containerClasses}>
@@ -135,13 +145,13 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
                     {!isInline && <GripHorizontal className="w-4 h-4 text-gray-400" />}
                     <div>
                         <h3 className="text-[10px] font-bold text-gray-800 flex items-center uppercase tracking-wider">
-                            <Users className="w-3 h-3 mr-1.5 text-red-600" />
-                            Unregistered List
+                            <HeaderIcon className={`w-3.5 h-3.5 mr-1.5 ${accentColor}`} />
+                            {isReg ? 'Registered List' : 'Unregistered List'}
                         </h3>
                     </div>
                 </div>
                 <div className="flex items-center space-x-1.5" onMouseDown={(e) => e.stopPropagation()}>
-                    <span className="text-[9px] font-bold bg-red-50 text-red-600 px-1.5 py-0.5 rounded border border-red-100 mr-1">{students.length}</span>
+                    <span className={`text-[9px] font-bold ${bgAccent} ${accentColor} px-1.5 py-0.5 rounded border ${borderAccent} mr-1`}>{students.length}</span>
                     <button onClick={handleDownload} className="p-1 text-gray-400 hover:text-green-600 transition-colors"><Download className="w-3.5 h-3.5" /></button>
                     <button onClick={handleCopy} className="p-1 text-gray-400 hover:text-blue-600 transition-colors">{copySuccess ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}</button>
                     <button onClick={onClose} className="p-1 hover:bg-red-50 hover:text-red-600 rounded text-gray-400 transition-colors"><X className="w-4 h-4" /></button>
@@ -168,15 +178,27 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
                         {paginatedData.map((student, idx) => {
                             const registeredIn = getRegisteredSemesters(student['Student ID']);
                             const globalIdx = (currentPage - 1) * rowsPerPage + idx + 1;
+                            const isSelected = selectedId === student['Student ID'];
+                            const hoverBg = isReg ? 'hover:bg-emerald-50/40' : 'hover:bg-red-50/40';
+                            
                             return (
                                 <tr 
                                     key={idx} 
-                                    onClick={() => onRowClick && onRowClick(student)}
-                                    className={`transition-colors text-[11px] h-[28px] cursor-pointer ${onRowClick ? 'hover:bg-blue-50/60' : 'hover:bg-red-50/40'}`}
+                                    onClick={() => {
+                                        setSelectedId(student['Student ID']);
+                                        if (onRowClick) onRowClick(student);
+                                    }}
+                                    className={`transition-all text-[11px] h-[28px] cursor-pointer relative z-0 ${
+                                        isSelected 
+                                        ? 'bg-blue-100 ring-1 ring-blue-300 ring-inset shadow-[inset_0_0_0_1px_rgba(59,130,246,0.2)] z-10' 
+                                        : (onRowClick ? 'hover:bg-blue-50/60' : hoverBg)
+                                    }`}
                                 >
-                                    <td className="px-2 py-1 text-center text-gray-400 font-medium">{globalIdx}</td>
-                                    <td className="px-2 py-1 font-bold text-blue-600 font-mono">{student['Student ID']}</td>
-                                    <td className="px-2 py-1 text-gray-700 font-medium truncate max-w-[150px]" title={student['Student Name']}>{student['Student Name']}</td>
+                                    <td className={`px-2 py-1 text-center font-medium ${isSelected ? 'text-blue-700' : 'text-gray-400'}`}>{globalIdx}</td>
+                                    <td className={`px-2 py-1 font-bold font-mono ${isSelected ? 'text-blue-800' : 'text-blue-600'}`}>
+                                        {student['Student ID']}
+                                    </td>
+                                    <td className={`px-2 py-1 font-medium truncate max-w-[150px] ${isSelected ? 'text-blue-900' : 'text-gray-700'}`} title={student['Student Name']}>{student['Student Name']}</td>
                                     {!isInline && (
                                         <>
                                             <td className="px-2 py-1 text-gray-600 font-mono">{student.Mobile}</td>
@@ -196,7 +218,6 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
                 </table>
             </div>
 
-            {/* Pagination Footer */}
             <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-200 text-[9px] text-gray-500 flex justify-between items-center shrink-0 select-none">
                 <div className="flex items-center space-x-2">
                     {!isInline && <span>Target Check: <span className="font-medium text-gray-600">{targetSemester}</span></span>}
@@ -207,11 +228,11 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
                     </div>
                 </div>
                 <div className="flex items-center space-x-1">
-                    <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsLeft className="w-3 h-3" /></button>
-                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronLeft className="w-3 h-3" /></button>
+                    <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsLeft className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronLeft className="w-3.5 h-3.5" /></button>
                     <span className="min-w-[15px] text-center font-black">{currentPage}</span>
-                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronRight className="w-3 h-3" /></button>
-                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsRight className="w-3 h-3" /></button>
+                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronRight className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsRight className="w-3.5 h-3.5" /></button>
                 </div>
             </div>
         </div>
