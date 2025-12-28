@@ -1,5 +1,6 @@
 import React from 'react';
-import { User, ShieldAlert, GraduationCap, Calendar, Award, Banknote, CalendarCheck, ShieldQuestion, Trash2 } from 'lucide-react';
+/* Removed MessageCircle as it's no longer used */
+import { User, ShieldAlert, GraduationCap, Calendar, Award, Banknote, CalendarCheck, ShieldQuestion, Trash2, Pencil, Plus } from 'lucide-react';
 import { StudentDataRow, ProgramDataRow } from '../types';
 
 interface StudentProfileHeaderProps {
@@ -45,11 +46,23 @@ export const StudentProfileHeader: React.FC<StudentProfileHeaderProps> = ({
                     <div className="flex items-center mt-1">
                         <p className="text-[10px] font-mono font-bold text-blue-600 tracking-wider flex items-center">
                             {student['Student ID']}
-                            {dropInfo && (
-                                <span className={`ml-2 px-1 rounded text-[8px] font-black uppercase tracking-tighter border border-current ${dropInfo.color} bg-white shadow-sm`}>
-                                    ({dropInfo.label})
-                                </span>
-                            )}
+                            <button 
+                                onClick={() => onCardClick('dropout')}
+                                className={`ml-2 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border transition-all flex items-center group/badge shadow-sm ${dropInfo ? `${dropInfo.color} border-current bg-white hover:bg-slate-50` : 'text-slate-400 border-dashed border-slate-200 hover:border-blue-400 hover:text-blue-500'}`}
+                                title="Click to edit Dropout Classification"
+                            >
+                                {dropInfo ? (
+                                    <>
+                                        <span>({dropInfo.label})</span>
+                                        <Pencil className="w-2 h-2 ml-1 opacity-0 group-hover/badge:opacity-100 transition-opacity" />
+                                    </>
+                                ) : (
+                                    <>
+                                        <Plus className="w-2 h-2 mr-1" />
+                                        <span>Set Drop Status</span>
+                                    </>
+                                )}
+                            </button>
                         </p>
                     </div>
                     <p className="text-sm font-semibold text-slate-700 mt-1.5 truncate">{program['Program Full Name']}</p>

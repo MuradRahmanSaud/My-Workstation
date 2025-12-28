@@ -9,34 +9,24 @@ interface FollowupFormProps {
     setFormData: (val: any) => void;
     employeeOptions: string[];
     isSaving: boolean;
-    onSave: (finalData?: any) => void; // Updated to accept final data
+    onSave: (finalData?: any) => void; 
     onClose: () => void;
 }
 
 export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
     student, formData, setFormData, employeeOptions, isSaving, onSave, onClose
 }) => {
-    // Local state for drop type selection
-    const [selectedDropType, setSelectedDropType] = useState<'Permanent Drop' | 'Temporary Drop' | null>(null);
-
-    const handleDropToggle = (type: 'Permanent Drop' | 'Temporary Drop') => {
-        setSelectedDropType(prev => prev === type ? null : type);
-    };
-
     const handleInternalSave = () => {
-        // Construct the final status immediately to avoid waiting for async state update
-        const baseStatus = formData.Status || 'Call Busy';
-        const finalStatus = selectedDropType ? `${baseStatus} (${selectedDropType})` : baseStatus;
-        
-        // Construct the full payload to pass to the parent
+        // We ensure a default status if none is selected
         const finalData = { 
             ...formData, 
-            Status: finalStatus 
+            Status: formData.Status || 'Call Busy'
         };
         
-        // Pass constructing object directly to onSave
         onSave(finalData);
     };
+
+    const isEdit = !!formData.uniqueid;
 
     return (
         <div className="absolute inset-x-3 top-12 bottom-3 z-[150] bg-white border border-rose-100 rounded-xl flex flex-col shadow-2xl ring-1 ring-black/5 animate-in slide-in-from-top-2">
@@ -44,7 +34,9 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
                 <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                         <MessageSquarePlus className="w-4 h-4 text-rose-500" />
-                        <h5 className="text-[10px] font-black text-rose-700 uppercase tracking-tight">New Conversation</h5>
+                        <h5 className="text-[10px] font-black text-rose-700 uppercase tracking-tight">
+                            {isEdit ? 'Update Conversation' : 'New Conversation'}
+                        </h5>
                     </div>
                     <button onClick={onClose} className="p-1 hover:bg-rose-100 rounded-full text-rose-400 transition-colors">
                         <X className="w-4 h-4" />
@@ -85,41 +77,10 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
                     <textarea 
                         value={formData.Remark} 
                         onChange={e => setFormData({...formData, Remark: e.target.value})} 
-                        rows={2} 
+                        rows={3} 
                         className="w-full px-3 py-2 text-xs border rounded shadow-sm font-medium resize-none focus:ring-1 focus:ring-rose-200 outline-none" 
                         placeholder="What did you talk about?" 
                     />
-                </div>
-
-                {/* Drop Status Tabs Section */}
-                <div className="pt-2 border-t border-gray-100">
-                    <label className="block text-[9px] font-black text-slate-500 uppercase mb-2 tracking-widest text-center">Dropout Classification</label>
-                    <div className="flex space-x-2">
-                        <button 
-                            type="button"
-                            onClick={() => handleDropToggle('Permanent Drop')}
-                            className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-tight shadow-sm ${
-                                selectedDropType === 'Permanent Drop' 
-                                ? 'bg-red-600 text-white border-red-700 ring-4 ring-red-100' 
-                                : 'bg-white text-red-500 border-red-100 hover:bg-red-50 hover:border-red-200'
-                            }`}
-                        >
-                            <Trash2 className={`w-3.5 h-3.5 ${selectedDropType === 'Permanent Drop' ? 'text-white' : 'text-red-400'}`} />
-                            <span>Permanent Drop</span>
-                        </button>
-                        <button 
-                            type="button"
-                            onClick={() => handleDropToggle('Temporary Drop')}
-                            className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-tight shadow-sm ${
-                                selectedDropType === 'Temporary Drop' 
-                                ? 'bg-orange-500 text-white border-orange-600 ring-4 ring-orange-100' 
-                                : 'bg-white text-orange-500 border-orange-100 hover:bg-orange-50 hover:border-orange-200'
-                            }`}
-                        >
-                            <Clock className={`w-3.5 h-3.5 ${selectedDropType === 'Temporary Drop' ? 'text-white' : 'text-orange-400'}`} />
-                            <span>Temporary Drop</span>
-                        </button>
-                    </div>
                 </div>
             </div>
             
@@ -130,7 +91,7 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
                     disabled={isSaving} 
                     className="flex-[1.5] py-2.5 text-[10px] font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-md flex items-center justify-center uppercase transition-all active:scale-95"
                 >
-                    {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Save className="w-3.5 h-3.5 mr-1.5" />} Save Record
+                    {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Save className="w-3.5 h-3.5 mr-1.5" />} {isEdit ? 'Update Record' : 'Save Record'}
                 </button>
             </div>
         </div>

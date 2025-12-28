@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { ProgramDataRow } from '../types';
 import { X, Search, RotateCcw, ChevronDown, ChevronRight, UserPlus, UserMinus, FileSpreadsheet, AlertTriangle, Check, Plus } from 'lucide-react';
@@ -99,6 +98,13 @@ interface FilterPanelProps {
     setRoomCapacityMax?: (val: string) => void;
     onClearAll?: () => void;
     hideProgramTab?: boolean;
+    // New props for selection behavior (used in Dropout)
+    selectedType?: string | null;
+    setSelectedType?: (val: string | null) => void;
+    selectedSemesterMode?: string | null;
+    setSelectedSemesterMode?: (val: string | null) => void;
+    onSelectProgram?: (p: ProgramDataRow) => void;
+    selectedProgram?: ProgramDataRow | null;
 }
 
 export const MultiSearchableSelect = ({ 
@@ -119,7 +125,6 @@ export const MultiSearchableSelect = ({
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
-    // Fixed: useRef is now properly imported from React
     const wrapperRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -167,12 +172,10 @@ export const MultiSearchableSelect = ({
         if (!search.trim()) return;
         const newVal = search.trim();
         
-        // If an external add logic exists (like opening a registration form), call it
         if (onAddNew) {
             onAddNew(newVal);
             setIsOpen(false);
         } else {
-            // Default behavior: just add as text
             if (!selectedItems.includes(newVal)) {
                 updateValue([...selectedItems, newVal]);
             }
@@ -263,7 +266,6 @@ export const MultiSearchableSelect = ({
                                                 <div className={`text-[11px] font-bold truncate ${isSelected ? 'text-white' : 'text-gray-900'}`}>{name}</div>
                                                 <div className={`text-[9px] truncate ${isSelected ? 'text-blue-100' : 'text-gray-500'}`}>{subtext}</div>
                                             </div>
-                                            {/* Fixed: Check icon is now properly imported from lucide-react */}
                                             {isSelected && <Check className="w-3.5 h-3.5 ml-2 shrink-0" />}
                                         </button>
                                     );
@@ -281,7 +283,6 @@ export const MultiSearchableSelect = ({
                                         }`}
                                     >
                                         <span className="truncate">{opt}</span>
-                                        {/* Fixed: Check icon is now properly imported from lucide-react */}
                                         {isSelected && <Check className="w-3 h-3 ml-1 shrink-0" />}
                                     </button>
                                 );
@@ -293,7 +294,6 @@ export const MultiSearchableSelect = ({
                                     onClick={(e) => { e.stopPropagation(); handleAddNewClick(); }}
                                     className="flex items-center justify-center px-3 py-2 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-all col-span-full mt-1 shadow-sm"
                                 >
-                                    {/* Fixed: Plus icon is now properly imported from lucide-react */}
                                     <Plus className="w-3.5 h-3.5 mr-1.5" />
                                     Add "{search}"
                                 </button>
@@ -342,7 +342,6 @@ export const SearchableSelect = ({
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState(value || '');
-    // Fixed: useRef is now properly imported from React
     const wrapperRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -449,7 +448,10 @@ export const FilterPanel: React.FC<FilterPanelProps> = (props) => {
         registeredSemestersOptions = [], registrationFilters = new Map(), onRegistrationFilterChange,
         classroomOptions, selectedBuildings = new Set(), setSelectedBuildings, selectedFloors = new Set(), setSelectedFloors,
         selectedRoomTypes = new Set(), setSelectedRoomTypes, roomCapacityMin = '', setRoomCapacityMin,
-        roomCapacityMax = '', setRoomCapacityMax, onClearAll, hideProgramTab = false
+        roomCapacityMax = '', setRoomCapacityMax, onClearAll, hideProgramTab = false,
+        // Selection Props
+        selectedType, setSelectedType, selectedSemesterMode, setSelectedSemesterMode, 
+        onSelectProgram, selectedProgram
     } = props;
 
     const [activeTab, setActiveTab] = useState<'Program' | 'Attributes'>('Program');
@@ -533,15 +535,26 @@ export const FilterPanel: React.FC<FilterPanelProps> = (props) => {
     }, [programData]);
 
     const filteredGroupedPrograms = useMemo(() => {
-        if (!programSearch) return facultiesMetadata.groupedPrograms;
         const lower = programSearch.toLowerCase();
         const result: Record<string, ProgramDataRow[]> = {};
         (Object.entries(facultiesMetadata.groupedPrograms) as [string, ProgramDataRow[]][]).forEach(([fac, progs]) => {
-            const matches = progs.filter(p => p['Program Short Name'].toLowerCase().includes(lower) || p.PID.toLowerCase().includes(lower) || p['Program Full Name'].toLowerCase().includes(lower));
+            const matches = progs.filter(p => {
+                // 1. Text Search
+                const matchesSearch = !programSearch || p['Program Short Name'].toLowerCase().includes(lower) || p.PID.toLowerCase().includes(lower) || p['Program Full Name'].toLowerCase().includes(lower);
+                if (!matchesSearch) return false;
+
+                // 2. Program Type Filter
+                if (selectedType && p['Program Type'] !== selectedType) return false;
+
+                // 3. Semester Mode Filter
+                if (selectedSemesterMode && !p['Semester Type']?.includes(selectedSemesterMode)) return false;
+
+                return true;
+            });
             if (matches.length > 0) result[fac] = matches;
         });
         return result;
-    }, [facultiesMetadata.groupedPrograms, programSearch]);
+    }, [facultiesMetadata.groupedPrograms, programSearch, selectedType, selectedSemesterMode]);
 
     const filteredTeachers = useMemo<TeacherOption[]>(() => {
         const teachers = attributeOptions?.teachers || [];
@@ -575,17 +588,72 @@ export const FilterPanel: React.FC<FilterPanelProps> = (props) => {
                 <h3 className="text-[10px] font-bold text-gray-400 mb-2 uppercase">By Faculty</h3>
                 <div className="flex flex-wrap gap-1.5">{facultiesMetadata.faculties.map(fac => (<button key={fac} onClick={() => toggleSetItem(selectedFaculties, fac, setSelectedFaculties)} className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${selectedFaculties.has(fac) ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>{fac}</button>))}</div>
             </div>
+            
+            {/* Integrated Type/Mode Filters from Sidebar */}
+            <div className="pt-2 border-t border-gray-100 space-y-2">
+                <div className="flex flex-wrap gap-1">
+                    {['Graduate', 'Undergraduate'].map((cat) => (
+                        <button 
+                            key={cat}
+                            onClick={() => setSelectedType?.(selectedType === cat ? null : cat)}
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all 
+                                ${selectedType === cat 
+                                    ? 'bg-blue-600 text-white border-blue-700' 
+                                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                                }`}
+                        >
+                            {cat}
+                        </button>
+                    ))}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                    {['Bi-Semester', 'Tri-Semester'].map((cat) => (
+                        <button 
+                            key={cat}
+                            onClick={() => setSelectedSemesterMode?.(selectedSemesterMode === cat ? null : cat)}
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all 
+                                ${selectedSemesterMode === cat 
+                                    ? 'bg-indigo-600 text-white border-indigo-700' 
+                                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                                }`}
+                        >
+                            {cat}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
             <div className="pt-2 border-t border-gray-100">
-                <div className="relative mb-2"><Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" placeholder="Search programs..." value={programSearch} onChange={e => setProgramSearch(e.target.value)} className="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none" /></div>
-                <div className="space-y-3">{Object.entries(filteredGroupedPrograms).map(([fac, progs]) => (selectedFaculties.size && !selectedFaculties.has(fac)) ? null : (
-                    <div key={fac}>
-                        <h4 className={`text-[10px] font-bold px-1.5 py-0.5 mb-1 rounded inline-block ${selectedFaculties.has(fac) ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-600'}`}>{fac}</h4>
-                        <div className="space-y-0.5">{(progs as ProgramDataRow[]).map(p => { 
-                            const normPid = normalize(p.PID); 
-                            return (<div key={p.PID} onClick={() => toggleSetItem(selectedPrograms, normPid, setSelectedPrograms)} className="flex items-center p-1 hover:bg-blue-50 rounded cursor-pointer group"><div className="w-1.5 h-1.5 rounded-full mr-2 shrink-0 bg-blue-400"></div><div className="flex-1 text-[10px] text-gray-700 leading-tight"><span className="font-mono text-gray-400 mr-1">{p.PID}</span>{p['Program Short Name']}</div>{selectedPrograms.has(normPid) && <div className="w-1.5 h-1.5 bg-blue-600 rounded-full ml-1"></div>}</div>);
-                        })}</div>
-                    </div>
-                ))}</div>
+                <div className="relative mb-2">
+                    <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input type="text" placeholder="Search programs..." value={programSearch} onChange={e => setProgramSearch(e.target.value)} className="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none" />
+                </div>
+                <div className="space-y-3">
+                    {Object.entries(filteredGroupedPrograms).map(([fac, progs]) => (selectedFaculties.size && !selectedFaculties.has(fac)) ? null : (
+                        <div key={fac}>
+                            <h4 className={`text-[10px] font-bold px-1.5 py-0.5 mb-1 rounded inline-block ${selectedFaculties.has(fac) ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-600'}`}>{fac}</h4>
+                            <div className="space-y-0.5">{(progs as ProgramDataRow[]).map(p => { 
+                                const normPid = normalize(p.PID); 
+                                const isSelected = onSelectProgram ? selectedProgram?.PID === p.PID : selectedPrograms.has(normPid);
+                                
+                                return (
+                                    <div 
+                                        key={p.PID} 
+                                        onClick={() => onSelectProgram ? onSelectProgram(p) : toggleSetItem(selectedPrograms, normPid, setSelectedPrograms)} 
+                                        className={`flex items-center p-1 hover:bg-blue-50 rounded cursor-pointer group transition-colors border-l-2 ${isSelected ? 'bg-blue-50 border-blue-600' : 'border-transparent'}`}
+                                    >
+                                        <div className={`w-1.5 h-1.5 rounded-full mr-2 shrink-0 ${isSelected ? 'bg-blue-600' : 'bg-gray-200 group-hover:bg-blue-400'}`}></div>
+                                        <div className="flex-1 text-[10px] text-gray-700 leading-tight">
+                                            <span className="font-mono text-gray-400 mr-1">{p.PID}</span>
+                                            <span className={isSelected ? 'font-bold text-blue-900' : ''}>{p['Program Short Name']}</span>
+                                        </div>
+                                        {isSelected && <Check className="w-2.5 h-2.5 text-blue-600 ml-1" />}
+                                    </div>
+                                );
+                            })}</div>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     );
@@ -631,13 +699,13 @@ export const FilterPanel: React.FC<FilterPanelProps> = (props) => {
         const top12 = admittedSemestersOptions.slice(0, 12);
         const allSelected = top12.length > 0 && top12.every(s => selectedAdmittedSemesters.has(s));
         return (
-            <>
-                <h3 className="text-[11px] font-bold text-gray-700 px-1 mb-2 uppercase tracking-wide">Configuration</h3>
+            <div className="flex flex-col h-full overflow-hidden">
+                <h3 className="text-[11px] font-bold text-gray-700 px-1 mb-2 uppercase tracking-wide shrink-0">Analysis Settings</h3>
                 <button onClick={() => {
                     const newSet = new Set(selectedAdmittedSemesters);
                     if (allSelected) top12.forEach(s => newSet.delete(s)); else top12.forEach(s => newSet.add(s));
                     onAdmittedSemesterChange?.(newSet);
-                }} className={`mx-1 mb-2 w-full px-2 py-1.5 text-[10px] font-bold rounded border transition-colors flex items-center justify-center ${allSelected ? 'bg-red-50 text-red-600 border-red-200' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>{allSelected ? <><UserMinus className="w-3 h-3 mr-1.5" />Deselect Latest 12</> : <><UserPlus className="w-3 h-3 mr-1.5" />Select Latest 12</>}</button>
+                }} className={`mx-1 mb-2 w-full px-2 py-1.5 text-[10px] font-bold rounded border transition-colors flex items-center justify-center shrink-0 ${allSelected ? 'bg-red-50 text-red-600 border-red-200' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>{allSelected ? <><UserMinus className="w-3 h-3 mr-1.5" />Deselect Latest 12</> : <><UserPlus className="w-3 h-3 mr-1.5" />Select Latest 12</>}</button>
                 <div className="flex-1 overflow-y-auto thin-scrollbar pb-2">{admittedSemestersOptions.map(sem => (
                     <div key={sem} className="flex items-center py-1.5 border-b border-gray-50 last:border-0 px-1">
                         <button onClick={() => {
@@ -659,9 +727,12 @@ export const FilterPanel: React.FC<FilterPanelProps> = (props) => {
                         ) : <span className="text-[9px] text-gray-300 italic">-</span>}
                     </div>
                 ))}</div>
-            </>
+            </div>
         );
     };
+
+    const isAdmittedOrDropout = viewMode === 'admitted' || viewMode === 'dropout';
+    const attributeTabLabel = isAdmittedOrDropout ? 'Configuration' : 'Attributes';
 
     return (
         <>
@@ -673,20 +744,20 @@ export const FilterPanel: React.FC<FilterPanelProps> = (props) => {
                         <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded text-gray-500"><X className="w-4 h-4" /></button>
                     </div>
                 </div>
-                {!viewMode?.includes('admitted') && viewMode !== 'classroom' && (
+                {!isAdmittedOrDropout && viewMode !== 'classroom' && (
                     <div className="px-3 py-2 border-b bg-gray-50 shrink-0"><label className="block text-[10px] font-semibold text-gray-500 mb-1">By Semester</label><select value={semesterFilter} onChange={e => setSemesterFilter(e.target.value)} className="w-full text-xs border-gray-300 rounded p-1">{uniqueSemesters.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                 )}
                 {!hideProgramTab && (
                     <div className="flex border-b shrink-0">
                         <button className={`flex-1 py-2 text-xs font-medium border-b-2 ${activeTab === 'Program' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`} onClick={() => setActiveTab('Program')}>Program</button>
-                        <button className={`flex-1 py-2 text-xs font-medium border-b-2 ${activeTab === 'Attributes' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`} onClick={() => setActiveTab('Attributes')}>Attributes</button>
+                        <button className={`flex-1 py-2 text-xs font-medium border-b-2 ${activeTab === 'Attributes' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`} onClick={() => setActiveTab('Attributes')}>{attributeTabLabel}</button>
                     </div>
                 )}
                 <div className="flex-1 overflow-y-auto p-3 thin-scrollbar">
                     {activeTab === 'Program' && !hideProgramTab ? renderProgramTab() : (
                         <div className="space-y-1 h-full flex flex-col">
                             {missingDataOptions && selectedMissingFields && renderAccordionSection('Has Missing Data', (<div className="flex flex-wrap gap-1.5">{missingDataOptions.map(f => (<button key={f} onClick={() => handleMissingDataToggle(f)} className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${selectedMissingFields.has(f) ? 'bg-red-100 text-red-700 border-red-200' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>{f}</button>))}</div>), selectedMissingFields.size, true)}
-                            {viewMode === 'classroom' ? renderClassroomFilters() : viewMode?.includes('admitted') ? renderAdmittedFilters() : renderStandardFilters()}
+                            {viewMode === 'classroom' ? renderClassroomFilters() : isAdmittedOrDropout ? renderAdmittedFilters() : renderStandardFilters()}
                         </div>
                     )}
                 </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ProgramDataRow, CourseSectionData, StudentDataRow } from '../types';
@@ -45,7 +46,8 @@ export const ProgramView: React.FC = () => {
   const [selectedProgram, setSelectedProgram] = useState<ProgramDataRow | null>(null);
   const [activeReport, setActiveReport] = useState<string | null>('courses');
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
-  const [activeUnregList, setActiveUnregList] = useState<{ semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string; listType: 'registered' | 'unregistered' } | null>(null);
+  // Fix: Update activeUnregList state type to include 'regPending' in listType
+  const [activeUnregList, setActiveUnregList] = useState<{ semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string; listType: 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' } | null>(null);
   const [selectedAdmittedSemesters, setSelectedAdmittedSemesters] = useState<Set<string>>(new Set());
   const [registrationFilters, setRegistrationFilters] = useState<Map<string, 'registered' | 'unregistered'>>(new Map());
   const [selectedStudent, setSelectedStudent] = useState<StudentDataRow | null>(null);
@@ -255,17 +257,21 @@ export const ProgramView: React.FC = () => {
   const handleSaveStudent = async (semester: string, student: StudentDataRow) => {
     const link = studentDataLinks.get(semester);
     if (!link) return;
-    const { id } = extractSheetIdAndGid(link);
-    if (!id) return;
+    const { id: sheetId } = extractSheetIdAndGid(link);
+    if (!sheetId) return;
+
+    // OPTIMISTIC UPDATE: Update local state immediately before waiting for network
     setSelectedStudent(prev => prev ? { ...prev, ...student } : null);
+    updateStudentData(semester, student['Student ID'], student);
+    
+    if (activeUnregList) {
+        const newStudents = activeUnregList.students.map(s => s['Student ID'] === student['Student ID'] ? { ...s, ...student } : s);
+        setActiveUnregList({ ...activeUnregList, students: newStudents });
+    }
+
     const { _semester, ...apiPayload } = student as any;
     try {
-        await submitSheetData('update', semester, apiPayload, 'Student ID', student['Student ID'].trim(), id);
-        updateStudentData(semester, student['Student ID'], student);
-        if (activeUnregList) {
-            const newStudents = activeUnregList.students.map(s => s['Student ID'] === student['Student ID'] ? { ...s, ...student } : s);
-            setActiveUnregList({ ...activeUnregList, students: newStudents });
-        }
+        await submitSheetData('update', semester, apiPayload, 'Student ID', student['Student ID'].trim(), sheetId);
     } catch (e) {
         console.error("Failed to persist student update", e);
     }

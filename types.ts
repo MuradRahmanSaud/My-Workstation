@@ -146,9 +146,12 @@ export interface StudentDataRow {
     'Defense Registration'?: string;
     'Defense Supervisor'?: string;
     'Defense Status'?: string;
+    'Defense Type'?: string;
     'Degree Status'?: string;
     Dues?: string;
     'Disciplinary Action'?: string;
+    'Dropout Classification'?: string;
+    'Discussion Remark'?: string;
     // Familial & Mentor Fields
     'Father Name'?: string;
     'Father Mobile'?: string;
@@ -170,7 +173,7 @@ export interface StudentFollowupRow {
     'Contacted By': string;
 }
 
-export type ViewState = 'dashboard' | 'section' | 'program' | 'dropout' | 'employee' | 'settings' | 'student' | 'classroom' | 'pdf_to_excel' | 'student_followup';
+export type ViewState = 'dashboard' | 'section' | 'program' | 'dropout' | 'employee' | 'settings' | 'student' | 'classroom' | 'pdf_to_excel';
 
 export interface LoadingState {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -185,6 +188,7 @@ export interface SheetContextType {
   diuEmployeeData: DiuEmployeeRow[];
   referenceData: ReferenceDataRow[];
   facultyLeadershipData: FacultyLeadershipRow[];
+  // Fix: Add studentFollowupData property to SheetContextType
   studentFollowupData: StudentFollowupRow[];
   semesterLinks: Map<string, string>;
   admittedLinks: Map<string, string>;
@@ -195,6 +199,7 @@ export interface SheetContextType {
   updateStudentData: (semester: string, studentId: string, newData: Partial<StudentDataRow>) => void;
   registeredData: any[];
   loadRegisteredData: (force?: boolean) => Promise<void>;
+  // Fix: Add loadStudentFollowupData property to SheetContextType
   loadStudentFollowupData: (force?: boolean) => Promise<void>;
   loading: LoadingState;
   
@@ -203,6 +208,7 @@ export interface SheetContextType {
   setSemesterFilter: (semester: string) => void;
   uniqueSemesters: string[];
 
+  // Fix: Extend reloadData mode type to include 'followup'
   reloadData: (mode?: 'all' | 'admitted' | 'sections' | 'followup', force?: boolean) => Promise<void>;
   updateClassroomData: (updater: (prev: ClassRoomDataRow[]) => ClassRoomDataRow[]) => void;
   updateReferenceData: (updater: (prev: ReferenceDataRow[]) => ReferenceDataRow[]) => void;
@@ -210,5 +216,4 @@ export interface SheetContextType {
   updateDiuEmployeeData: (updater: (prev: DiuEmployeeRow[]) => DiuEmployeeRow[]) => void;
   updateProgramData: (updater: (prev: ProgramDataRow[]) => ProgramDataRow[]) => void;
   updateFacultyLeadershipData: (updater: (prev: FacultyLeadershipRow[]) => FacultyLeadershipRow[]) => void;
-  setStudentFollowupData: React.Dispatch<React.SetStateAction<StudentFollowupRow[]>>;
 }

@@ -2,7 +2,6 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { UserX, RefreshCw, ArrowLeft, School, Search, Filter } from 'lucide-react';
 import { useSheetData } from '../hooks/useSheetData';
-import { DropOutLeftPanel } from '../components/DropOutLeftPanel';
 import { DropOutDashboard } from '../components/DropOutDashboard';
 import { AdmittedReportTable } from '../components/AdmittedReportTable';
 import { UnregisteredStudentsModal } from '../components/UnregisteredStudentsModal';
@@ -10,6 +9,7 @@ import { ProgramRightPanel } from '../components/ProgramRightPanel';
 import { FilterPanel } from '../components/FilterPanel';
 import { ProgramDataRow, StudentDataRow } from '../types';
 import { normalizeId, submitSheetData, extractSheetIdAndGid } from '../services/sheetService';
+import { isValEmpty } from './EmployeeView';
 
 const FACULTY_CHIP_COLORS: Record<string, string> = {
   'FBE': 'bg-red-100 text-red-700 border-red-200',
@@ -31,7 +31,7 @@ export const DropOutView: React.FC = () => {
     const { 
         programData, facultyLeadershipData, diuEmployeeData, teacherData, loading, reloadData,
         studentDataLinks, studentCache, loadStudentData, updateStudentData, registeredData, loadRegisteredData,
-        updateProgramData, updateFacultyLeadershipData, updateDiuEmployeeData
+        updateProgramData, updateFacultyLeadershipData, updateDiuEmployeeData, semesterFilter, uniqueSemesters
     } = useSheetData();
 
     const [searchTerm, setSearchTerm] = useState('');
@@ -40,7 +40,7 @@ export const DropOutView: React.FC = () => {
     const [selectedSemesterMode, setSelectedSemesterMode] = useState<string | null>(null);
     const [selectedProgram, setSelectedProgram] = useState<ProgramDataRow | null>(null);
     const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
-    const [activeUnregList, setActiveUnregList] = useState<{ semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string; listType: 'registered' | 'unregistered' } | null>(null);
+    const [activeUnregList, setActiveUnregList] = useState<{ semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string; listType: 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' } | null>(null);
     const [selectedAdmittedSemesters, setSelectedAdmittedSemesters] = useState<Set<string>>(new Set());
     const [registrationFilters, setRegistrationFilters] = useState<Map<string, 'registered' | 'unregistered'>>(new Map());
     const [selectedStudent, setSelectedStudent] = useState<StudentDataRow | null>(null);
@@ -126,35 +126,20 @@ export const DropOutView: React.FC = () => {
         return map;
     }, [programData]);
 
-    const groupedData = useMemo(() => {
-        const groups: Record<string, ProgramDataRow[]> = {};
-        programData.forEach(p => {
-            const fac = p['Faculty Short Name'] || 'Other';
-            if (!groups[fac]) groups[fac] = [];
-            const matchesSearch = !searchTerm || p['Program Short Name'].toLowerCase().includes(searchTerm.toLowerCase()) || p.PID.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesFaculty = selectedFaculty === 'All' || p['Faculty Short Name'] === selectedFaculty;
-            const matchesType = !selectedType || p['Program Type'] === selectedType;
-            const matchesSemesterMode = !selectedSemesterMode || p['Semester Type']?.includes(selectedSemesterMode);
-            if (matchesSearch && matchesFaculty && matchesType && matchesSemesterMode) groups[fac].push(p);
-        });
-        Object.keys(groups).forEach(key => { if (groups[key].length === 0) delete groups[key]; else groups[key].sort((a, b) => a['Program Short Name'].localeCompare(b['Program Short Name'])); });
-        return groups;
-    }, [programData, searchTerm, selectedFaculty, selectedType, selectedSemesterMode]);
-
-    const sortedGroupKeys = useMemo(() => Object.keys(groupedData).sort(), [groupedData]);
-
     const kpiStats = useMemo(() => {
-        if (!selectedProgram || !targetRegSem) return { enrolled: 0, registered: 0, unregistered: 0, totalCreditsCompleted: 0 };
+        if (!selectedProgram || !targetRegSem) return { enrolled: 0, registered: 0, unregistered: 0, pDrop: 0, tDrop: 0, crCom: 0, defense: 0, regPending: 0 };
         const pidNorm = normalizeId(selectedProgram.PID);
-        let enrolled = 0, registered = 0, totalCreditsCompleted = 0;
+        let enrolled = 0, registered = 0, pDrop = 0, tDrop = 0, crCom = 0, defense = 0, regPending = 0;
+        
         const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
         const parseSem = (sem: string) => {
-            const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/);
+            const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/;
             if (!match) return { year: 0, season: -1 };
             let year = parseInt(match[2], 10); if (year < 100) year += 2000;
             return { year, season: seasonWeight[match[1].toLowerCase()] ?? -1 };
         };
         const targetParsed = parseSem(targetRegSem);
+
         selectedAdmittedSemesters.forEach(sem => {
             const currentParsed = parseSem(sem);
             const isOnOrBefore = currentParsed.year < targetParsed.year || (currentParsed.year === targetParsed.year && currentParsed.season <= targetParsed.season);
@@ -164,13 +149,28 @@ export const DropOutView: React.FC = () => {
                 if (normalizeId(s.PID) === pidNorm) {
                     enrolled++;
                     const id = String(s['Student ID']).trim();
-                    if (registrationLookup.get(id)?.has(targetRegSem)) registered++;
-                    const credits = parseFloat(s['Credit Completed'] || '0');
-                    if (!isNaN(credits)) totalCreditsCompleted += credits;
+                    const isRegistered = registrationLookup.get(id)?.has(targetRegSem) || false;
+                    if (isRegistered) registered++;
+
+                    const dropClass = s['Dropout Classification'] || '';
+                    const isPDrop = dropClass.includes('Permanent');
+                    const isTDrop = dropClass.includes('Temporary');
+                    if (isPDrop) pDrop++;
+                    if (isTDrop) tDrop++;
+
+                    const credReq = parseFloat(s['Credit Requirement'] || '0');
+                    const credCom = parseFloat(s['Credit Completed'] || '0');
+                    const hasCrCom = !isNaN(credReq) && !isNaN(credCom) && credReq > 0 && (credCom >= credReq);
+                    if (hasCrCom) crCom++;
+
+                    if (!isValEmpty(s['Defense Registration'])) defense++;
+
+                    // Reg Pending = Unregistered AND Not Permanent Drop AND Not Credit Completed
+                    if (!isRegistered && !isPDrop && !hasCrCom) regPending++;
                 }
             });
         });
-        return { enrolled, registered, unregistered: enrolled - registered, totalCreditsCompleted };
+        return { enrolled, registered, unregistered: enrolled - registered, pDrop, tDrop, crCom, defense, regPending };
     }, [selectedProgram, selectedAdmittedSemesters, studentCache, registrationLookup, targetRegSem]);
 
     useEffect(() => {
@@ -179,7 +179,7 @@ export const DropOutView: React.FC = () => {
             const allUnreg: StudentDataRow[] = [];
             const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
             const parseSem = (sem: string) => {
-                const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/);
+                const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/;
                 if (!match) return { year: 0, season: -1 };
                 let year = parseInt(match[2], 10); if (year < 100) year += 2000;
                 return { year, season: seasonWeight[match[1].toLowerCase()] ?? -1 };
@@ -239,17 +239,20 @@ export const DropOutView: React.FC = () => {
     const handleSaveStudent = async (semester: string, student: StudentDataRow) => {
         const link = studentDataLinks.get(semester);
         if (!link) return;
-        const { id } = extractSheetIdAndGid(link);
-        if (!id) return;
+        const { id: sheetId } = extractSheetIdAndGid(link);
+        if (!sheetId) return;
+
         setSelectedStudent(prev => prev ? { ...prev, ...student } : null);
+        updateStudentData(semester, student['Student ID'], student);
+        
+        if (activeUnregList) {
+            const newStudents = activeUnregList.students.map(s => s['Student ID'] === student['Student ID'] ? { ...s, ...student } : s);
+            setActiveUnregList({ ...activeUnregList, students: newStudents });
+        }
+
         const { _semester, ...apiPayload } = student as any;
         try {
-            await submitSheetData('update', semester, apiPayload, 'Student ID', student['Student ID'].trim(), id);
-            updateStudentData(semester, student['Student ID'], student);
-            if (activeUnregList) {
-                const newStudents = activeUnregList.students.map(s => s['Student ID'] === student['Student ID'] ? { ...s, ...student } : s);
-                setActiveUnregList({ ...activeUnregList, students: newStudents });
-            }
+            await submitSheetData('update', semester, apiPayload, 'Student ID', student['Student ID'].trim(), sheetId);
         } catch (e) {
             console.error("Failed to persist student update in DropOutView", e);
         }
@@ -273,7 +276,7 @@ export const DropOutView: React.FC = () => {
                 <div className="flex items-center space-x-1 animate-in fade-in slide-in-from-right-2 duration-300 overflow-hidden">
                     <button onClick={() => setIsFilterPanelOpen(true)} className={`flex items-center space-x-1 px-3 py-1.5 text-[11px] font-bold rounded-full border bg-white text-gray-600 border-gray-200 transition-all hover:bg-gray-100`}>
                         <Filter className="w-3.5 h-3.5" />
-                        <span>Filter Semesters</span>
+                        <span>Filter Program & Data</span>
                     </button>
                     <button onClick={() => reloadData('admitted', true)} disabled={loading.status === 'loading'} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all">
                         <RefreshCw className={`w-4 h-4 ${loading.status === 'loading' ? 'animate-spin' : ''}`} />
@@ -282,16 +285,6 @@ export const DropOutView: React.FC = () => {
                 headerActionsTarget
             )}
             <div className="flex-1 overflow-hidden flex flex-row relative">
-                <DropOutLeftPanel 
-                    searchTerm={searchTerm} setSearchTerm={setSearchTerm}
-                    selectedFaculty={selectedFaculty} setSelectedFaculty={setSelectedFaculty} faculties={Array.from(new Set(programData.map(p => p['Faculty Short Name']))).sort()}
-                    selectedType={selectedType} setSelectedType={setSelectedType}
-                    selectedSemesterMode={selectedSemesterMode} setSelectedSemesterMode={setSelectedSemesterMode}
-                    sortedGroupKeys={sortedGroupKeys} groupedData={groupedData}
-                    selectedProgram={selectedProgram} onSelectProgram={setSelectedProgram}
-                    facultyColors={FACULTY_CHIP_COLORS} facultyHeaderColors={FACULTY_HEADER_COLORS}
-                    loading={loading.status === 'loading' && programData.length === 0}
-                />
                 <div className="flex-1 min-w-0 bg-white overflow-hidden flex flex-col lg:flex-row">
                     {selectedProgram ? (
                         <>
@@ -301,7 +294,7 @@ export const DropOutView: React.FC = () => {
                                 </div>
                                 <div className="flex-1 flex flex-col overflow-hidden">
                                     <div className="flex flex-row h-full gap-2 p-2">
-                                        <div className="flex-1 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col">
+                                        <div className="flex-[1.6] border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col">
                                             <AdmittedReportTable 
                                                 selectedAdmittedSemesters={selectedAdmittedSemesters}
                                                 studentCache={studentCache}
@@ -366,12 +359,66 @@ export const DropOutView: React.FC = () => {
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-slate-50/50">
                             <UserX className="w-16 h-16 mb-4 opacity-10" />
-                            <p className="text-sm font-medium">Select a program to analyze dropouts</p>
+                            <p className="text-sm font-medium">Select a program via Filter to analyze dropouts</p>
                         </div>
                     )}
                 </div>
             </div>
-            <FilterPanel isOpen={isFilterPanelOpen} onClose={() => setIsFilterPanelOpen(false)} programData={programData} semesterFilter="All" setSemesterFilter={() => {}} uniqueSemesters={[]} selectedFaculties={new Set()} setSelectedFaculties={() => {}} selectedProgramTypes={new Set()} setSelectedProgramTypes={() => {}} selectedSemesterTypes={new Set()} setSelectedSemesterTypes={() => {}} selectedPrograms={new Set()} setSelectedPrograms={() => {}} attributeOptions={{ teachers: [], courseTypes: [], types: [], credits: [], capacities: [], studentCounts: [], classTakenCounts: [] }} selectedTeachers={new Set()} setSelectedTeachers={() => {}} selectedCourseTypes={new Set()} setSelectedCourseTypes={() => {}} selectedTypes={new Set()} setSelectedTypes={() => {}} selectedCredits={new Set()} setSelectedCredits={() => {}} selectedCapacities={new Set()} setSelectedCapacities={() => {}} studentMin="" setStudentMin={() => {}} studentMax="" setStudentMax={() => {}} selectedStudentCounts={new Set()} setSelectedStudentCounts={() => {}} classTakenMin="" setClassTakenMin={() => {}} classTakenMax="" setClassTakenMax={() => {}} selectedClassTakens={new Set()} setSelectedClassTakens={() => {}} onClearAll={() => {}} hideProgramTab={true} viewMode="admitted" admittedSemestersOptions={admittedSemestersOptions} selectedAdmittedSemesters={selectedAdmittedSemesters} onAdmittedSemesterChange={setSelectedAdmittedSemesters} registeredSemestersOptions={registeredSemesters} registrationFilters={registrationFilters} onRegistrationFilterChange={setRegistrationFilters} />
+            
+            <FilterPanel 
+                isOpen={isFilterPanelOpen} 
+                onClose={() => setIsFilterPanelOpen(false)} 
+                programData={programData} 
+                semesterFilter="All" 
+                setSemesterFilter={() => {}} 
+                uniqueSemesters={[]} 
+                selectedFaculties={selectedFaculty === 'All' ? new Set() : new Set([selectedFaculty])} 
+                setSelectedFaculties={(f) => setSelectedFaculty(Array.from(f)[0] || 'All')} 
+                selectedProgramTypes={new Set()} 
+                setSelectedProgramTypes={() => {}} 
+                selectedSemesterTypes={new Set()} 
+                setSelectedSemesterTypes={() => {}} 
+                selectedPrograms={new Set()} 
+                setSelectedPrograms={() => {}} 
+                attributeOptions={{ teachers: [], courseTypes: [], types: [], credits: [], capacities: [], studentCounts: [], classTakenCounts: [] }} 
+                selectedTeachers={new Set()} 
+                setSelectedTeachers={() => {}} 
+                selectedCourseTypes={new Set()} 
+                setSelectedCourseTypes={() => {}} 
+                selectedTypes={new Set()} 
+                setSelectedTypes={() => {}} 
+                selectedCredits={new Set()} 
+                setSelectedCredits={() => {}} 
+                selectedCapacities={new Set()} 
+                setSelectedCapacities={() => {}} 
+                studentMin="" 
+                setStudentMin={() => {}} 
+                studentMax="" 
+                setStudentMax={() => {}} 
+                selectedStudentCounts={new Set()} 
+                setSelectedStudentCounts={() => {}} 
+                classTakenMin="" 
+                setClassTakenMin={() => {}} 
+                classTakenMax="" 
+                setClassTakenMax={() => {}} 
+                selectedClassTakens={new Set()} 
+                setSelectedClassTakens={() => {}} 
+                onClearAll={() => {}} 
+                hideProgramTab={false} 
+                viewMode="dropout" 
+                admittedSemestersOptions={admittedSemestersOptions} 
+                selectedAdmittedSemesters={selectedAdmittedSemesters} 
+                onAdmittedSemesterChange={setSelectedAdmittedSemesters} 
+                registeredSemestersOptions={registeredSemesters} 
+                registrationFilters={registrationFilters} 
+                onRegistrationFilterChange={setRegistrationFilters}
+                selectedType={selectedType}
+                setSelectedType={setSelectedType}
+                selectedSemesterMode={selectedSemesterMode}
+                setSelectedSemesterMode={setSelectedSemesterMode}
+                onSelectProgram={(p) => { setSelectedProgram(p); }}
+                selectedProgram={selectedProgram}
+            />
         </div>
     );
 };

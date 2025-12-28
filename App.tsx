@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -7,7 +6,6 @@ import { ProgramView } from './views/ProgramView';
 import { DropOutView } from './views/DropOutView';
 import { EmployeeView } from './views/EmployeeView';
 import { StudentView } from './views/StudentView';
-import { StudentFollowupView } from './views/StudentFollowupView';
 import { ClassRoomView } from './views/ClassRoomView';
 import { PdfToExcelView } from './views/PdfToExcelView';
 import { SettingsView } from './views/SettingsView';
@@ -21,7 +19,6 @@ const VIEW_BACKGROUNDS: Record<string, string> = {
   program: 'https://images.unsplash.com/photo-1523050335392-9bc567597b81?auto=format&fit=crop&q=80&w=2070',
   dropout: 'https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&q=80&w=2070',
   student: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=2070',
-  student_followup: 'https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&q=80&w=2070',
   employee: 'https://images.unsplash.com/photo-1556761175-4b464b461175-4b46?auto=format&fit=crop&q=80&w=1974',
   classroom: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&q=80&w=2132',
   pdf_to_excel: 'https://images.unsplash.com/photo-1454165833767-027ff3399ae7?auto=format&fit=crop&q=80&w=2070',
@@ -47,8 +44,6 @@ function AppContent() {
         return <EmployeeView />;
       case 'student':
         return <StudentView />;
-      case 'student_followup':
-        return <StudentFollowupView />;
       case 'classroom':
         return <ClassRoomView />;
       case 'pdf_to_excel':

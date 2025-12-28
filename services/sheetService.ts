@@ -1,5 +1,5 @@
 
-import { MAIN_SHEET_ID, MAIN_SHEET_GID, REF_SHEET_ID, REF_SHEET_GID, TEACHER_SHEET_GID, PROGRAM_SHEET_GID, CLASSROOM_SHEET_GID, DIU_EMPLOYEE_SHEET_GID, FACULTY_LEADERSHIP_SHEET_GID, STUDENT_LINK_SHEET_ID, STUDENT_LINK_SHEET_GID, REGISTERED_STUDENT_SHEET_GID, STUDENT_FOLLOWUP_SHEET_GID, CORS_PROXY, GOOGLE_SCRIPT_URL } from '../constants';
+import { MAIN_SHEET_ID, MAIN_SHEET_GID, REF_SHEET_ID, REF_SHEET_GID, TEACHER_SHEET_GID, PROGRAM_SHEET_GID, CLASSROOM_SHEET_GID, DIU_EMPLOYEE_SHEET_GID, FACULTY_LEADERSHIP_SHEET_GID, STUDENT_LINK_SHEET_ID, STUDENT_LINK_SHEET_GID, REGISTERED_STUDENT_SHEET_GID, CORS_PROXY, GOOGLE_SCRIPT_URL, FOLLOWUP_SHEET_GID } from '../constants';
 import { MainSheetRow, CourseSectionData, ReferenceDataRow, TeacherDataRow, ProgramDataRow, StudentLinkRow, StudentDataRow, ClassRoomDataRow, DiuEmployeeRow, FacultyLeadershipRow, StudentFollowupRow } from '../types';
 import { parseCSV, extractSheetIdAndGid } from '../utils/csvParser';
 
@@ -128,8 +128,9 @@ export const fetchRegisteredStudentData = async (): Promise<any[]> => {
   return fetchSheet<any>(url);
 };
 
+// Fix: Add fetchStudentFollowupData function
 export const fetchStudentFollowupData = async (): Promise<StudentFollowupRow[]> => {
-  const url = `https://docs.google.com/spreadsheets/d/${STUDENT_LINK_SHEET_ID}/export?format=csv&gid=${STUDENT_FOLLOWUP_SHEET_GID}&t=${Date.now()}`;
+  const url = `https://docs.google.com/spreadsheets/d/${STUDENT_LINK_SHEET_ID}/export?format=csv&gid=${FOLLOWUP_SHEET_GID}&t=${Date.now()}`;
   return fetchSheet<StudentFollowupRow>(url);
 };
 

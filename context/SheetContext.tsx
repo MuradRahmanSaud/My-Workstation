@@ -13,6 +13,7 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [diuEmployeeData, setDiuEmployeeData] = useState<DiuEmployeeRow[]>([]);
   const [referenceData, setReferenceData] = useState<ReferenceDataRow[]>([]);
   const [facultyLeadershipData, setFacultyLeadershipData] = useState<FacultyLeadershipRow[]>([]);
+  // Fix: Implement studentFollowupData state
   const [studentFollowupData, setStudentFollowupData] = useState<StudentFollowupRow[]>([]);
   const [semesterLinks, setSemesterLinks] = useState<Map<string, string>>(new Map());
   const [admittedLinks, setAdmittedLinks] = useState<Map<string, string>>(new Map());
@@ -80,29 +81,37 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } catch (e) {}
   };
 
+  // Fix: Implement loadStudentFollowupData function
   const loadStudentFollowupData = async (force?: boolean) => {
     if (!force && studentFollowupData.length > 0) return;
     try {
-        const followup = await fetchStudentFollowupData();
-        setStudentFollowupData(followup);
+        const data = await fetchStudentFollowupData();
+        setStudentFollowupData(data);
     } catch (e) {}
   };
 
+  // Fix: Update loadData signature and implementation to include 'followup' mode
   const loadData = async (mode: 'all' | 'admitted' | 'sections' | 'followup' = 'all', force: boolean = false) => {
     setLoading({ status: 'loading', message: 'Optimizing Workflow...' });
     
     if (force) {
-        // Clear session storage caches
         ['reference', 'teacher', 'program', 'faculty_leadership', 'employee'].forEach(key => {
             sessionStorage.removeItem(`cache_${key}`);
         });
-        // IMPORTANT: Clear in-memory caches to force re-fetch in views
         setStudentCache(new Map());
         setRegisteredData([]);
         setStudentFollowupData([]);
     }
 
     try {
+      if (mode === 'all' || mode === 'followup') {
+          await loadStudentFollowupData(force);
+          if (mode === 'followup') { 
+              setLoading({ status: 'success' }); 
+              return; 
+          }
+      }
+
       if (mode === 'all' || mode === 'admitted') {
           const links = await fetchStudentLinks();
           const map = new Map<string, string>();
@@ -110,20 +119,10 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               if (row.Semester && row['Student Data Link']) map.set(row.Semester, row['Student Data Link']); 
           });
           setStudentDataLinks(map);
-          
           await loadRegisteredData(force);
-          
           if (mode === 'admitted') { 
               setLoading({ status: 'success' }); 
               return; 
-          }
-      }
-
-      if (mode === 'all' || mode === 'followup') {
-          await loadStudentFollowupData(force);
-          if (mode === 'followup') {
-              setLoading({ status: 'success' });
-              return;
           }
       }
 
@@ -163,7 +162,7 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   return (
     <SheetContext.Provider value={{ 
-        data, programData, teacherData, classroomData, diuEmployeeData, referenceData, facultyLeadershipData, studentFollowupData, semesterLinks, admittedLinks, registeredLinks, studentDataLinks, studentCache, loadStudentData, updateStudentData, registeredData, loadRegisteredData, loadStudentFollowupData, loading, semesterFilter, setSemesterFilter: (v) => { setSemesterFilter(v); setUserHasSelected(true); }, uniqueSemesters, reloadData: loadData, updateClassroomData, updateReferenceData, updateSectionData, updateDiuEmployeeData, updateProgramData, updateFacultyLeadershipData, setStudentFollowupData
+        data, programData, teacherData, classroomData, diuEmployeeData, referenceData, facultyLeadershipData, studentFollowupData, semesterLinks, admittedLinks, registeredLinks, studentDataLinks, studentCache, loadStudentData, updateStudentData, registeredData, loadRegisteredData, loadStudentFollowupData, loading, semesterFilter, setSemesterFilter: (v) => { setSemesterFilter(v); setUserHasSelected(true); }, uniqueSemesters, reloadData: loadData, updateClassroomData, updateReferenceData, updateSectionData, updateDiuEmployeeData, updateProgramData, updateFacultyLeadershipData
     }}>
       {children}
     </SheetContext.Provider>

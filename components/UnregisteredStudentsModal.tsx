@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Copy, Check, Users, GripHorizontal, Download, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, UserCheck, UserX } from 'lucide-react';
+import { X, Copy, Check, Users, GripHorizontal, Download, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, UserCheck, UserX, UserMinus, PowerOff, Clock, Calculator, ShieldCheck, GraduationCap, Target, AlertCircle } from 'lucide-react';
 import { StudentDataRow } from '../types';
 import { useResponsivePagination } from '../hooks/useResponsivePagination';
 import { useSheetData } from '../hooks/useSheetData';
@@ -17,7 +17,7 @@ interface UnregisteredStudentsModalProps {
     registrationLookup?: Map<string, Set<string>>;
     isInline?: boolean; 
     onRowClick?: (student: StudentDataRow) => void;
-    listType?: 'registered' | 'unregistered';
+    listType?: 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'dropout' | 'crcom' | 'defense' | 'regPending';
 }
 
 export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps> = ({
@@ -114,8 +114,9 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
         });
         const worksheet = (window as any).XLSX.utils.json_to_sheet(exportData);
         const workbook = (window as any).XLSX.utils.book_new();
-        (window as any).XLSX.utils.book_append_sheet(workbook, worksheet, listType === 'registered' ? "Registered Students" : "Unregistered Students");
-        (window as any).XLSX.writeFile(workbook, `${listType === 'registered' ? 'Registered' : 'Unregistered'}_${semester}_${programName.replace(/\s+/g, '_')}.xlsx`);
+        const sheetNameStr = listType === 'registered' ? "Registered Students" : (listType === 'pdrop' ? "Permanent Dropout" : (listType === 'tdrop' ? "Temporary Dropout" : (listType === 'crcom' ? "Credit Completed Students" : (listType === 'defense' ? "Defense Registration" : (listType === 'regPending' ? "Reg. Pending Students" : "Unregistered Students")))));
+        (window as any).XLSX.utils.book_append_sheet(workbook, worksheet, sheetNameStr);
+        (window as any).XLSX.writeFile(workbook, `${sheetNameStr}_${semester}_${programName.replace(/\s+/g, '_')}.xlsx`);
     };
 
     if (!isOpen) return null;
@@ -129,11 +130,18 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
         : "flex flex-col bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden animate-in zoom-in-95 duration-200";
 
     const isReg = listType === 'registered';
-    const HeaderIcon = isReg ? UserCheck : UserX;
-    const themeColorClass = isReg ? 'emerald' : 'red';
-    const accentColor = isReg ? 'text-emerald-600' : 'text-red-600';
-    const bgAccent = isReg ? 'bg-emerald-50' : 'bg-red-50';
-    const borderAccent = isReg ? 'border-emerald-100' : 'border-red-100';
+    const isPDrop = listType === 'pdrop' || (listType === 'dropout' && students.some(s => s['Dropout Classification']?.includes('Permanent')));
+    const isTDrop = listType === 'tdrop' || (listType === 'dropout' && students.some(s => s['Dropout Classification']?.includes('Temporary')));
+    const isCrCom = listType === 'crcom';
+    const isDefense = listType === 'defense';
+    const isRegPending = listType === 'regPending';
+    
+    const HeaderIcon = isReg ? UserCheck : (isPDrop ? PowerOff : (isTDrop ? Clock : (isCrCom ? GraduationCap : (isDefense ? ShieldCheck : (isRegPending ? AlertCircle : UserX)))));
+    const accentColor = isReg ? 'text-emerald-600' : (isPDrop ? 'text-rose-700' : (isTDrop ? 'text-amber-600' : (isCrCom ? 'text-emerald-600' : (isDefense ? 'text-teal-600' : (isRegPending ? 'text-amber-600' : 'text-red-600')))));
+    const bgAccent = isReg ? 'bg-emerald-50' : (isPDrop ? 'bg-rose-50' : (isTDrop ? 'bg-amber-50' : (isCrCom ? 'bg-emerald-50' : (isDefense ? 'bg-teal-50' : (isRegPending ? 'bg-amber-50' : 'bg-red-50')))));
+    const borderAccent = isReg ? 'border-emerald-100' : (isPDrop ? 'border-rose-100' : (isTDrop ? 'border-amber-100' : (isCrCom ? 'border-emerald-100' : (isDefense ? 'border-teal-100' : (isRegPending ? 'border-amber-100' : 'border-red-100')))));
+    
+    const titleLabel = isReg ? 'Registered List' : (isPDrop ? 'Permanent Dropout List' : (isTDrop ? 'Temporary Dropout List' : (isCrCom ? 'Credit Completed List' : (isDefense ? 'Defense Registration' : (isRegPending ? 'Reg. Pending List' : 'Unregistered List')))));
 
     return (
         <div ref={modalRef} style={containerStyle} className={containerClasses}>
@@ -146,7 +154,7 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
                     <div>
                         <h3 className="text-[10px] font-bold text-gray-800 flex items-center uppercase tracking-wider">
                             <HeaderIcon className={`w-3.5 h-3.5 mr-1.5 ${accentColor}`} />
-                            {isReg ? 'Registered List' : 'Unregistered List'}
+                            {titleLabel}
                         </h3>
                     </div>
                 </div>
@@ -179,7 +187,7 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
                             const registeredIn = getRegisteredSemesters(student['Student ID']);
                             const globalIdx = (currentPage - 1) * rowsPerPage + idx + 1;
                             const isSelected = selectedId === student['Student ID'];
-                            const hoverBg = isReg ? 'hover:bg-emerald-50/40' : 'hover:bg-red-50/40';
+                            const hoverBg = isReg ? 'hover:bg-emerald-50/40' : (isPDrop ? 'hover:bg-rose-50/40' : (isTDrop ? 'hover:bg-amber-50/40' : (isCrCom ? 'hover:bg-emerald-50/40' : (isDefense ? 'hover:bg-teal-50/40' : (isRegPending ? 'hover:bg-amber-50/40' : 'hover:bg-red-50/40')))));
                             
                             return (
                                 <tr 

@@ -13,7 +13,8 @@ export const FACULTY_LEADERSHIP_SHEET_GID = '1130435623';
 export const STUDENT_LINK_SHEET_ID = '1agI_X0JjNyEu90bWfX-JnZgFQt__EAMI3kTmgVviHes';
 export const STUDENT_LINK_SHEET_GID = '1064007862';
 export const REGISTERED_STUDENT_SHEET_GID = '742235954';
-export const STUDENT_FOLLOWUP_SHEET_GID = '406332388';
+// Fix: Define FOLLOWUP_SHEET_GID
+export const FOLLOWUP_SHEET_GID = '1517726462';
 
 // Using corsproxy.io for better reliability with Google Sheets CSV exports
 export const CORS_PROXY = 'https://corsproxy.io/?';
@@ -28,5 +29,6 @@ export const SHEET_NAMES = {
     PROGRAM: 'Program_DB',
     REFERENCE: 'Course_Setting_DB',
     FACULTY_LEADERSHIP: 'Faculty_DB',
-    FOLLOWUP: 'Student Remark'
+    // Fix: Add FOLLOWUP property to SHEET_NAMES
+    FOLLOWUP: 'Followup_DB'
 };

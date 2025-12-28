@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { StudentDataRow, ProgramDataRow } from '../types';
-import { LayoutGrid, List as ListIcon, Check, Copy, BarChart3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, UserCheck, UserX } from 'lucide-react';
+import { LayoutGrid, List as ListIcon, Check, Copy, BarChart3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, UserCheck, UserX, UserMinus, PowerOff, Clock, Calculator, ShieldCheck, GraduationCap, Target, AlertCircle } from 'lucide-react';
 import { UnregisteredStudentsModal } from './UnregisteredStudentsModal';
 import { useResponsivePagination } from '../hooks/useResponsivePagination';
+import { isValEmpty } from '../views/EmployeeView';
 
 interface AdmittedReportTableProps {
     selectedAdmittedSemesters: Set<string>;
@@ -16,7 +17,7 @@ interface AdmittedReportTableProps {
     setSelectedFaculties: (val: Set<string>) => void;
     selectedProgramTypes: Set<string>;
     selectedSemesterTypes: Set<string>;
-    onUnregClick?: (data: { semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string; listType: 'registered' | 'unregistered' }) => void;
+    onUnregClick?: (data: { semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string; listType: 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' }) => void;
     externalTargetRegSemester?: string;
     onTargetRegSemesterChange?: (val: string) => void;
 }
@@ -51,7 +52,7 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
     const setTargetRegSemester = onTargetRegSemesterChange || setLocalTargetRegSemester;
 
     const [viewType, setViewType] = useState<'detailed' | 'summary'>('detailed');
-    const [listModalState, setListModalState] = useState<{ isOpen: boolean; semester: string; programId: string; programName: string; students: StudentDataRow[]; listType: 'registered' | 'unregistered' } | null>(null);
+    const [listModalState, setListModalState] = useState<{ isOpen: boolean; semester: string; programId: string; programName: string; students: StudentDataRow[]; listType: 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' } | null>(null);
     const [activeFaculty, setActiveFaculty] = useState<string>('');
 
     useEffect(() => {
@@ -92,8 +93,8 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
             .sort((a, b) => a.year !== b.year ? b.year - a.year : b.season - a.season)
             .map(s => s.original);
 
-        const progStats: Record<string, Record<string, { admitted: number, unregistered: number }>> = {};
-        const progTotals: Record<string, { admitted: number, unregistered: number }> = {};
+        const progStats: Record<string, Record<string, { admitted: number, unregistered: number, pDrop: number, tDrop: number, crCom: number, defense: number, regPending: number }>> = {};
+        const progTotals: Record<string, { admitted: number, unregistered: number, pDrop: number, tDrop: number, crCom: number, defense: number, regPending: number }> = {};
         const progNames = new Set<string>();
 
         sortedSemesters.forEach((sem: string) => {
@@ -104,15 +105,39 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                 progNames.add(normalizePid);
                 const isRegistered = registrationLookup.get(id)?.has(effectiveTarget) || false;
                 const isUnregistered = !isRegistered;
+                const dropClass = student['Dropout Classification'] || '';
+                const isPDrop = dropClass.includes('Permanent');
+                const isTDrop = dropClass.includes('Temporary');
+                
+                // Logic for Credit Completed (Requirement Met)
+                const credReq = parseFloat(student['Credit Requirement'] || '0');
+                const credCom = parseFloat(student['Credit Completed'] || '0');
+                const isCrCom = !isNaN(credReq) && !isNaN(credCom) && credReq > 0 && (credCom >= credReq);
+
+                // Logic for Defense Registration
+                const isDefense = !isValEmpty(student['Defense Registration']);
+
+                // Reg Pending = Unregistered AND Not Permanent Drop AND Not Credit Completed
+                const isRegPending = isUnregistered && !isPDrop && !isCrCom;
 
                 if (!progStats[normalizePid]) progStats[normalizePid] = {};
-                if (!progStats[normalizePid][sem]) progStats[normalizePid][sem] = { admitted: 0, unregistered: 0 };
+                if (!progStats[normalizePid][sem]) progStats[normalizePid][sem] = { admitted: 0, unregistered: 0, pDrop: 0, tDrop: 0, crCom: 0, defense: 0, regPending: 0 };
                 progStats[normalizePid][sem].admitted++;
                 if (isUnregistered) progStats[normalizePid][sem].unregistered++;
+                if (isPDrop) progStats[normalizePid][sem].pDrop++;
+                if (isTDrop) progStats[normalizePid][sem].tDrop++;
+                if (isCrCom) progStats[normalizePid][sem].crCom++;
+                if (isDefense) progStats[normalizePid][sem].defense++;
+                if (isRegPending) progStats[normalizePid][sem].regPending++;
 
-                if (!progTotals[normalizePid]) progTotals[normalizePid] = { admitted: 0, unregistered: 0 };
+                if (!progTotals[normalizePid]) progTotals[normalizePid] = { admitted: 0, unregistered: 0, pDrop: 0, tDrop: 0, crCom: 0, defense: 0, regPending: 0 };
                 progTotals[normalizePid].admitted++;
                 if (isUnregistered) progTotals[normalizePid].unregistered++;
+                if (isPDrop) progTotals[normalizePid].pDrop++;
+                if (isTDrop) progTotals[normalizePid].tDrop++;
+                if (isCrCom) progTotals[normalizePid].crCom++;
+                if (isDefense) progTotals[normalizePid].defense++;
+                if (isRegPending) progTotals[normalizePid].regPending++;
             });
         });
 
@@ -137,7 +162,12 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                         data: progStats[pid] || {},
                         totalAdmitted: progTotals[pid]?.admitted || 0,
                         totalUnregistered: progTotals[pid]?.unregistered || 0,
-                        totalRegistered: (progTotals[pid]?.admitted || 0) - (progTotals[pid]?.unregistered || 0)
+                        totalRegistered: (progTotals[pid]?.admitted || 0) - (progTotals[pid]?.unregistered || 0),
+                        totalPDrop: progTotals[pid]?.pDrop || 0,
+                        totalTDrop: progTotals[pid]?.tDrop || 0,
+                        totalCrCom: progTotals[pid]?.crCom || 0,
+                        totalDefense: progTotals[pid]?.defense || 0,
+                        totalRegPending: progTotals[pid]?.regPending || 0
                     });
                 }
             }
@@ -164,15 +194,29 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
 
     const { currentPage, setCurrentPage, rowsPerPage, totalPages, paginatedData, containerRef } = useResponsivePagination<any>(paginationDataInput);
 
-    const getStudentsByType = (sem: string, pid: string, type: 'registered' | 'unregistered') => {
+    const getStudentsByType = (sem: string, pid: string, type: 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending') => {
         const targetPidNorm = normalize(pid);
         const target = targetRegSemester || registeredSemesters[0];
         
         const filterFn = (s: StudentDataRow) => {
             if (normalize(s.PID) !== targetPidNorm) return false;
             const id = String(s['Student ID']).trim();
-            const hasReg = registrationLookup.get(id)?.has(target);
-            return type === 'registered' ? hasReg : !hasReg;
+            if (type === 'registered') return registrationLookup.get(id)?.has(target);
+            if (type === 'unregistered') return !registrationLookup.get(id)?.has(target);
+            const dropClass = s['Dropout Classification'] || '';
+            if (type === 'pdrop') return dropClass.includes('Permanent');
+            if (type === 'tdrop') return dropClass.includes('Temporary');
+            
+            const credReq = parseFloat(s['Credit Requirement'] || '0');
+            const credCom = parseFloat(s['Credit Completed'] || '0');
+            const hasCrCom = !isNaN(credReq) && !isNaN(credCom) && credReq > 0 && (credCom >= credReq);
+
+            if (type === 'crcom') return hasCrCom;
+            if (type === 'defense') return !isValEmpty(s['Defense Registration']);
+            if (type === 'regPending') {
+                return !registrationLookup.get(id)?.has(target) && !dropClass.includes('Permanent') && !hasCrCom;
+            }
+            return false;
         };
 
         if (sem !== 'ALL') {
@@ -192,7 +236,7 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
         return allStudents;
     };
 
-    const handleListClick = (semester: string, programId: string, programName: string, listType: 'registered' | 'unregistered') => {
+    const handleListClick = (semester: string, programId: string, programName: string, listType: 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending') => {
         const students = getStudentsByType(semester, programId, listType);
         if (onUnregClick) {
             onUnregClick({ semester, programId, programName, students, targetSemester: targetRegSemester, listType });
@@ -207,32 +251,52 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
         const totalAdm = progs.reduce((acc, p) => acc + p.totalAdmitted, 0);
         const totalReg = progs.reduce((acc, p) => acc + p.totalRegistered, 0);
         const totalUnreg = progs.reduce((acc, p) => acc + p.totalUnregistered, 0);
+        const totalP = progs.reduce((acc, p) => acc + p.totalPDrop, 0);
+        const totalT = progs.reduce((acc, p) => acc + p.totalTDrop, 0);
+        const totalCC = progs.reduce((acc, p) => acc + p.totalCrCom, 0);
+        const totalDef = progs.reduce((acc, p) => acc + p.totalDefense, 0);
+        const totalPnd = progs.reduce((acc, p) => acc + p.totalRegPending, 0);
         const headerColor = FACULTY_COLORS[fac] || 'bg-gray-400';
 
         return (
-            <div className={`bg-white rounded border shadow-sm flex flex-col overflow-hidden ${mobile ? 'w-full h-auto mb-4' : 'min-w-[300px] max-w-[350px] shrink-0'}`}>
+            <div className={`bg-white rounded border shadow-sm flex flex-col overflow-hidden ${mobile ? 'w-full h-auto mb-4' : 'min-w-[480px] max-w-[520px] shrink-0'}`}>
                 {!mobile && <div className="py-1.5 px-2 text-center border-b font-bold text-xs text-gray-700 bg-gray-50">{fac}</div>}
-                <div className={`flex justify-between px-2 py-1 ${headerColor} text-white text-[10px] font-bold`}>
-                    <span className="w-[40%]">Program</span>
-                    <span className="w-[20%] text-center">Enroll</span>
-                    <span className="w-[20%] text-center">Reg</span>
-                    <span className="w-[20%] text-right">Unreg</span>
+                <div className={`flex justify-between px-2 py-1 ${headerColor} text-white text-[9px] font-bold`}>
+                    <span className="w-[18%]">Program</span>
+                    <span className="w-[10%] text-center" title="Enrolled Students">Enroll</span>
+                    <span className="w-[10%] text-center" title="Registered Students">Reg</span>
+                    <span className="w-[10%] text-center" title="Unregistered Students">Unreg</span>
+                    <span className="w-[8%] text-center" title="Permanent Dropout">P-Dr</span>
+                    <span className="w-[8%] text-center" title="Temporary Dropout">T-Dr</span>
+                    <span className="w-[12%] text-center whitespace-nowrap" title="Credit Completed Students">Cr. Com</span>
+                    <span className="w-[12%] text-center whitespace-nowrap" title="Defense Registration">Def. Reg</span>
+                    <span className="w-[12%] text-right whitespace-nowrap" title="Reg. Pending (Unreg - PDrop - CrCom)">Pnd. Reg</span>
                 </div>
                 <div className={`divide-y divide-gray-100 overflow-y-auto thin-scrollbar ${mobile ? 'max-h-[400px]' : 'max-h-[300px]'}`}>
                     {progs.map((p: any) => (
-                        <div key={p.pid} className="flex justify-between px-2 py-1 text-[11px] hover:bg-gray-50 items-center">
-                            <span className="w-[40%] text-gray-700 truncate font-medium" title={`${p.pid} ${p.name}`}><span className="font-mono font-bold mr-1 text-gray-500">{p.pid}</span>{p.name}</span>
-                            <span className="w-[20%] text-center font-bold text-gray-900 cursor-pointer hover:underline underline-offset-2 decoration-slate-300" onClick={() => p.totalAdmitted > 0 && handleListClick('ALL', p.pid, p.name, 'registered')}>{p.totalAdmitted}</span>
-                            <span className="w-[20%] text-center text-green-600 font-bold cursor-pointer hover:underline underline-offset-2 decoration-green-300" onClick={() => p.totalRegistered > 0 && handleListClick('ALL', p.pid, p.name, 'registered')}>{p.totalRegistered}</span>
-                            <span className="w-[20%] text-right text-red-500 font-bold cursor-pointer hover:underline underline-offset-2 decoration-red-300" onClick={() => p.totalUnregistered > 0 && handleListClick('ALL', p.pid, p.name, 'unregistered')}>{p.totalUnregistered}</span>
+                        <div key={p.pid} className="flex justify-between px-2 py-1 text-[10px] hover:bg-gray-50 items-center">
+                            <span className="w-[18%] text-gray-700 truncate font-medium" title={`${p.pid} ${p.name}`}><span className="font-mono font-bold mr-1 text-gray-500">{p.pid}</span>{p.name}</span>
+                            <span className="w-[10%] text-center font-bold text-gray-900 cursor-pointer hover:underline" onClick={() => p.totalAdmitted > 0 && handleListClick('ALL', p.pid, p.name, 'registered')}>{p.totalAdmitted}</span>
+                            <span className="w-[10%] text-center text-green-600 font-bold cursor-pointer hover:underline" onClick={() => p.totalRegistered > 0 && handleListClick('ALL', p.pid, p.name, 'registered')}>{p.totalRegistered}</span>
+                            <span className="w-[10%] text-center text-red-500 font-bold cursor-pointer hover:underline" onClick={() => p.totalUnregistered > 0 && handleListClick('ALL', p.pid, p.name, 'unregistered')}>{p.totalUnregistered}</span>
+                            <span className="w-[8%] text-center text-rose-700 font-black cursor-pointer hover:underline" onClick={() => p.totalPDrop > 0 && handleListClick('ALL', p.pid, p.name, 'pdrop')}>{p.totalPDrop}</span>
+                            <span className="w-[8%] text-center text-orange-600 font-bold cursor-pointer hover:underline" onClick={() => p.totalTDrop > 0 && handleListClick('ALL', p.pid, p.name, 'tdrop')}>{p.totalTDrop}</span>
+                            <span className="w-[12%] text-center text-emerald-700 font-black cursor-pointer hover:underline" onClick={() => p.totalCrCom > 0 && handleListClick('ALL', p.pid, p.name, 'crcom')}>{p.totalCrCom}</span>
+                            <span className="w-[12%] text-center text-teal-700 font-black cursor-pointer hover:underline" onClick={() => p.totalDefense > 0 && handleListClick('ALL', p.pid, p.name, 'defense')}>{p.totalDefense}</span>
+                            <span className="w-[12%] text-right text-amber-700 font-black cursor-pointer hover:underline" onClick={() => p.totalRegPending > 0 && handleListClick('ALL', p.pid, p.name, 'regPending')}>{p.totalRegPending}</span>
                         </div>
                     ))}
                 </div>
-                <div className="bg-slate-50 border-t border-slate-200 px-2 py-1 flex justify-between text-[11px] font-bold text-gray-800">
-                    <span className="w-[40%]">Total</span>
-                    <span className="w-[20%] text-center">{totalAdm}</span>
-                    <span className="w-[20%] text-center text-green-700">{totalReg}</span>
-                    <span className="w-[20%] text-right text-red-600">{totalUnreg}</span>
+                <div className="bg-slate-50 border-t border-slate-200 px-2 py-1 flex justify-between text-[10px] font-bold text-gray-800">
+                    <span className="w-[18%]">Total</span>
+                    <span className="w-[10%] text-center">{totalAdm}</span>
+                    <span className="w-[10%] text-center text-green-700">{totalReg}</span>
+                    <span className="w-[10%] text-center text-red-600">{totalUnreg}</span>
+                    <span className="w-[8%] text-center text-rose-800">{totalP}</span>
+                    <span className="w-[8%] text-center text-orange-700">{totalT}</span>
+                    <span className="w-[12%] text-center text-emerald-900">{totalCC}</span>
+                    <span className="w-[12%] text-center text-teal-900">{totalDef}</span>
+                    <span className="w-[12%] text-right text-amber-900">{totalPnd}</span>
                 </div>
             </div>
         );
@@ -311,9 +375,14 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                     <thead className="bg-slate-700 sticky top-0 z-20 shadow-sm">
                                         <tr>
                                             <th className="px-3 py-1.5 text-[10px] font-bold text-white sticky left-0 z-30 bg-slate-700 w-48 uppercase tracking-wider">Semester</th>
-                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider">Enrollment</th>
-                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider">Registered</th>
-                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider">Unregistered</th>
+                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider" title="Enrolled Students">Enroll</th>
+                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider" title="Registered Students">Reg</th>
+                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider" title="Unregistered Students">Unreg</th>
+                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Permanent Dropout">P-Drop</th>
+                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Temporary Dropout">T-Drop</th>
+                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Credit Completed Students (Met Requirements)">Cr. Com</th>
+                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Defense Registration">Def. Reg</th>
+                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Registration Pending (Unreg - PDrop - CrCom)">Reg. Pending</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
@@ -322,6 +391,11 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                             const data = prog.data[sem];
                                             const adm = data?.admitted || 0;
                                             const unreg = data?.unregistered || 0;
+                                            const pDrop = data?.pDrop || 0;
+                                            const tDrop = data?.tDrop || 0;
+                                            const crCom = data?.crCom || 0;
+                                            const defense = data?.defense || 0;
+                                            const regPending = data?.regPending || 0;
                                             const reg = adm - unreg;
 
                                             return (
@@ -332,7 +406,7 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                                     <td className="px-3 py-1 text-center text-[11px] font-medium text-gray-800 border-r border-gray-50">
                                                         {adm > 0 ? (
                                                             <span 
-                                                                className="cursor-pointer hover:underline decoration-slate-400 decoration-dotted underline-offset-2"
+                                                                className="cursor-pointer hover:underline decoration-slate-400"
                                                                 onClick={() => handleListClick(sem, prog.pid, prog.name, 'registered')}
                                                             >
                                                                 {adm}
@@ -342,20 +416,70 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                                     <td className="px-3 py-1 text-center text-[11px] font-bold text-green-600 border-r border-gray-50">
                                                         {reg > 0 ? (
                                                             <span 
-                                                                className="cursor-pointer hover:underline decoration-green-500 decoration-dotted underline-offset-2"
+                                                                className="cursor-pointer hover:underline decoration-green-500"
                                                                 onClick={() => handleListClick(sem, prog.pid, prog.name, 'registered')}
                                                             >
                                                                 {reg}
                                                             </span>
                                                         ) : <span className="text-gray-300">-</span>}
                                                     </td>
-                                                    <td className="px-3 py-1 text-center text-[11px] font-black text-red-500">
+                                                    <td className="px-3 py-1 text-center text-[11px] font-black text-red-500 border-r border-gray-50">
                                                         {unreg > 0 ? (
                                                             <span 
-                                                                className="cursor-pointer hover:underline decoration-red-500 decoration-dotted underline-offset-2"
+                                                                className="cursor-pointer hover:underline decoration-red-500"
                                                                 onClick={() => handleListClick(sem, prog.pid, prog.name, 'unregistered')}
                                                             >
                                                                 {unreg}
+                                                            </span>
+                                                        ) : <span className="text-gray-300">-</span>}
+                                                    </td>
+                                                    <td className="px-3 py-1 text-center text-[11px] font-black text-rose-700 border-r border-gray-50">
+                                                        {pDrop > 0 ? (
+                                                            <span 
+                                                                className="cursor-pointer hover:underline decoration-rose-500"
+                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'pdrop')}
+                                                            >
+                                                                {pDrop}
+                                                            </span>
+                                                        ) : <span className="text-gray-300">-</span>}
+                                                    </td>
+                                                    <td className="px-3 py-1 text-center text-[11px] font-black text-orange-600 border-r border-gray-50">
+                                                        {tDrop > 0 ? (
+                                                            <span 
+                                                                className="cursor-pointer hover:underline decoration-orange-400"
+                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'tdrop')}
+                                                            >
+                                                                {tDrop}
+                                                            </span>
+                                                        ) : <span className="text-gray-300">-</span>}
+                                                    </td>
+                                                    <td className="px-3 py-1 text-center text-[11px] font-black text-emerald-700 border-r border-gray-50">
+                                                        {crCom > 0 ? (
+                                                            <span 
+                                                                className="cursor-pointer hover:underline decoration-emerald-400"
+                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'crcom')}
+                                                            >
+                                                                {crCom}
+                                                            </span>
+                                                        ) : <span className="text-gray-300">-</span>}
+                                                    </td>
+                                                    <td className="px-3 py-1 text-center text-[11px] font-black text-teal-700 border-r border-gray-50">
+                                                        {defense > 0 ? (
+                                                            <span 
+                                                                className="cursor-pointer hover:underline decoration-teal-400"
+                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'defense')}
+                                                            >
+                                                                {defense}
+                                                            </span>
+                                                        ) : <span className="text-gray-300">-</span>}
+                                                    </td>
+                                                    <td className="px-3 py-1 text-center text-[11px] font-black text-amber-700">
+                                                        {regPending > 0 ? (
+                                                            <span 
+                                                                className="cursor-pointer hover:underline decoration-amber-400"
+                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'regPending')}
+                                                            >
+                                                                {regPending}
                                                             </span>
                                                         ) : <span className="text-gray-300">-</span>}
                                                     </td>
@@ -363,7 +487,7 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                             );
                                         })}
                                         {paginatedData.length === 0 && (
-                                            <tr><td colSpan={4} className="py-8 text-center text-gray-400 italic text-[11px]">No semesters found for analysis.</td></tr>
+                                            <tr><td colSpan={9} className="py-8 text-center text-gray-400 italic text-[11px]">No semesters found for analysis.</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -373,41 +497,63 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                         <tr>
                                             <th className="px-2 py-1.5 text-[10px] font-bold text-white sticky left-0 z-30 bg-slate-700 min-w-[150px] w-auto whitespace-nowrap uppercase tracking-wider">Program</th>
                                             {sortedAdmittedSemesters.map(sem => (
-                                                <th key={sem} className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[110px]">
+                                                <th key={sem} className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[240px]">
                                                     <div className="flex items-center justify-center space-x-1 mb-1"><span>{sem}</span></div>
-                                                    <div className="grid grid-cols-3 gap-1 border-t border-slate-600 pt-1 uppercase text-white/70"><span>Adm</span><span>Reg</span><span>Unr</span></div>
+                                                    <div className="grid grid-cols-8 gap-1 border-t border-slate-600 pt-1 uppercase text-white/70">
+                                                        <span title="Admitted Student">Adm</span><span title="Registered Student">Reg</span><span title="Unregistered Student">Unr</span><span className="whitespace-nowrap" title="Permanent Dropout">PDr</span><span className="whitespace-nowrap" title="Temporary Dropout">TDr</span><span className="whitespace-nowrap" title="Credit Completed Students">CC</span><span className="whitespace-nowrap" title="Defense Registration">Def</span><span className="whitespace-nowrap" title="Reg. Pending">Pnd</span>
+                                                    </div>
                                                 </th>
                                             ))}
-                                            <th className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[110px] uppercase">
+                                            <th className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[240px] uppercase">
                                                 <div className="mb-1">Total</div>
-                                                <div className="grid grid-cols-3 gap-1 border-t border-slate-600 pt-1 text-white/70"><span>Adm</span><span>Reg</span><span>Unr</span></div>
+                                                <div className="grid grid-cols-8 gap-1 border-t border-slate-600 pt-1 text-white/70">
+                                                    <span title="Total Admitted">Adm</span><span title="Total Registered">Reg</span><span title="Total Unregistered">Unr</span><span title="Total Permanent Dropout">PDr</span><span title="Total Temporary Dropout">TDr</span><span title="Total Credit Completed Students">CC</span><span title="Total Defense Registration">Def</span><span title="Total Reg. Pending">Pnd</span>
+                                                </div>
                                             </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
                                         {paginatedData.map((prog: any) => (
                                             <tr key={prog.pid} className="group hover:bg-blue-50/40 transition-colors text-[10px] h-[28px]">
-                                                <td className="px-2 py-1 font-bold text-gray-600 border-r border-gray-100 sticky left-0 bg-white group-hover:bg-slate-50 group-hover:text-blue-900 transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-auto">
+                                                <td className="px-2 py-1 font-bold text-gray-600 border-r border-gray-100 sticky left-0 bg-white group-hover:bg-slate-50 transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-auto">
                                                     <span className="inline-block w-8 text-right mr-2 text-gray-400 group-hover:text-blue-50 font-mono transition-colors">{prog.pid}</span>
                                                     <span className="text-gray-700 group-hover:text-blue-900 transition-colors" title={prog.name}>{prog.name}</span>
                                                 </td>
                                                 {sortedAdmittedSemesters.map(sem => {
-                                                    const data = prog.data[sem]; const adm = data?.admitted || 0; const unreg = data?.unregistered || 0; const reg = adm - unreg;
+                                                    const data = prog.data[sem];
+                                                    const adm = data?.admitted || 0;
+                                                    const unreg = data?.unregistered || 0;
+                                                    const pDrop = data?.pDrop || 0;
+                                                    const tDrop = data?.tDrop || 0;
+                                                    const crCom = data?.crCom || 0;
+                                                    const defense = data?.defense || 0;
+                                                    const regPending = data?.regPending || 0;
+                                                    const reg = adm - unreg;
                                                     return (
                                                         <td key={sem} className="px-1 py-1 border-r border-gray-100 text-center">
-                                                            <div className="grid grid-cols-3 gap-1">
-                                                                <span className={`${adm > 0 ? 'text-gray-700 cursor-pointer hover:underline decoration-slate-400 decoration-dotted underline-offset-2' : 'text-gray-300'}`} onClick={() => adm > 0 && handleListClick(sem, prog.pid, prog.name, 'registered')}>{adm}</span>
-                                                                <span className={`${reg > 0 ? 'text-green-600 font-bold cursor-pointer hover:underline decoration-green-500 decoration-dotted underline-offset-2' : 'text-gray-300'}`} onClick={() => reg > 0 && handleListClick(sem, prog.pid, prog.name, 'registered')}>{reg}</span>
-                                                                <span className={`font-bold ${unreg > 0 ? 'text-red-500 cursor-pointer hover:underline decoration-red-500 decoration-dotted underline-offset-2' : 'text-gray-300'}`} onClick={() => unreg > 0 && handleListClick(sem, prog.pid, prog.name, 'unregistered')}>{unreg}</span>
+                                                            <div className="grid grid-cols-8 gap-1">
+                                                                <span className={`${adm > 0 ? 'text-gray-700 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => adm > 0 && handleListClick(sem, prog.pid, prog.name, 'registered')}>{adm}</span>
+                                                                <span className={`${reg > 0 ? 'text-green-600 font-bold cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => reg > 0 && handleListClick(sem, prog.pid, prog.name, 'registered')}>{reg}</span>
+                                                                <span className={`font-bold ${unreg > 0 ? 'text-red-500 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => unreg > 0 && handleListClick(sem, prog.pid, prog.name, 'unregistered')}>{unreg}</span>
+                                                                <span className={`font-black ${pDrop > 0 ? 'text-rose-700 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => pDrop > 0 && handleListClick(sem, prog.pid, prog.name, 'pdrop')}>{pDrop}</span>
+                                                                <span className={`font-bold ${tDrop > 0 ? 'text-orange-600 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => tDrop > 0 && handleListClick(sem, prog.pid, prog.name, 'tdrop')}>{tDrop}</span>
+                                                                <span className={`font-black ${crCom > 0 ? 'text-emerald-700 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => crCom > 0 && handleListClick(sem, prog.pid, prog.name, 'crcom')}>{crCom}</span>
+                                                                <span className={`font-black ${defense > 0 ? 'text-teal-700 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => defense > 0 && handleListClick(sem, prog.pid, prog.name, 'defense')}>{defense}</span>
+                                                                <span className={`font-black ${regPending > 0 ? 'text-amber-700 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => regPending > 0 && handleListClick(sem, prog.pid, prog.name, 'regPending')}>{regPending}</span>
                                                             </div>
                                                         </td>
                                                     );
                                                 })}
                                                 <td className="px-1 py-1 font-bold text-center bg-slate-50 border-l border-gray-200">
-                                                    <div className="grid grid-cols-3 gap-1">
-                                                        <span className="text-blue-800 cursor-pointer hover:underline decoration-blue-400 decoration-dotted underline-offset-2" onClick={() => prog.totalAdmitted > 0 && handleListClick('ALL', prog.pid, prog.name, 'registered')}>{prog.totalAdmitted}</span>
-                                                        <span className="text-green-700 cursor-pointer hover:underline decoration-green-700 decoration-dotted underline-offset-2" onClick={() => prog.totalRegistered > 0 && handleListClick('ALL', prog.pid, prog.name, 'registered')}>{prog.totalRegistered}</span>
-                                                        <span className="text-red-700 cursor-pointer hover:underline decoration-red-700 decoration-dotted underline-offset-2" onClick={() => prog.totalUnregistered > 0 && handleListClick('ALL', prog.pid, prog.name, 'unregistered')}>{prog.totalUnregistered}</span>
+                                                    <div className="grid grid-cols-8 gap-1">
+                                                        <span className="text-blue-800 cursor-pointer hover:underline" onClick={() => prog.totalAdmitted > 0 && handleListClick('ALL', prog.pid, prog.name, 'registered')}>{prog.totalAdmitted}</span>
+                                                        <span className="text-green-700 cursor-pointer hover:underline" onClick={() => prog.totalRegistered > 0 && handleListClick('ALL', prog.pid, prog.name, 'registered')}>{prog.totalRegistered}</span>
+                                                        <span className="text-red-700 cursor-pointer hover:underline" onClick={() => prog.totalUnregistered > 0 && handleListClick('ALL', prog.pid, prog.name, 'unregistered')}>{prog.totalUnregistered}</span>
+                                                        <span className="text-rose-800 cursor-pointer hover:underline" onClick={() => prog.totalPDrop > 0 && handleListClick('ALL', prog.pid, prog.name, 'pdrop')}>{prog.totalPDrop}</span>
+                                                        <span className="text-orange-700 cursor-pointer hover:underline" onClick={() => prog.totalTDrop > 0 && handleListClick('ALL', prog.pid, prog.name, 'tdrop')}>{prog.totalTDrop}</span>
+                                                        <span className="text-emerald-900 cursor-pointer hover:underline" onClick={() => prog.totalCrCom > 0 && handleListClick('ALL', prog.pid, prog.name, 'crcom')}>{prog.totalCrCom}</span>
+                                                        <span className="text-teal-900 cursor-pointer hover:underline" onClick={() => prog.totalDefense > 0 && handleListClick('ALL', prog.pid, prog.name, 'defense')}>{prog.totalDefense}</span>
+                                                        <span className="text-amber-900 cursor-pointer hover:underline" onClick={() => prog.totalRegPending > 0 && handleListClick('ALL', prog.pid, prog.name, 'regPending')}>{prog.totalRegPending}</span>
                                                     </div>
                                                 </td>
                                             </tr>

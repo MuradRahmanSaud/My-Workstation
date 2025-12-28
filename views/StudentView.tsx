@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { RefreshCw, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, List, CheckCircle, XCircle, ChevronDown, GraduationCap, ClipboardList, Users, Banknote, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, List, CheckCircle, XCircle, ChevronDown, GraduationCap, ClipboardList, Users, Banknote, AlertTriangle, PowerOff, Clock } from 'lucide-react';
 import { useSheetData } from '../hooks/useSheetData';
 import { useResponsivePagination } from '../hooks/useResponsivePagination';
 // Fix: Import isValEmpty from EmployeeView to resolve 'Cannot find name isValEmpty' error
@@ -91,7 +92,9 @@ export const StudentView: React.FC = () => {
           (row['Father Name'] || '').toLowerCase().includes(lower) ||
           (row['Mother Name'] || '').toLowerCase().includes(lower) ||
           (row['Mentor'] || '').toLowerCase().includes(lower) ||
-          (row['Disciplinary Action'] || '').toLowerCase().includes(lower)
+          (row['Disciplinary Action'] || '').toLowerCase().includes(lower) ||
+          (row['Dropout Classification'] || '').toLowerCase().includes(lower) ||
+          (row['Discussion Remark'] || '').toLowerCase().includes(lower)
       );
   }, [activeData, searchTerm, viewMode]);
 
@@ -118,10 +121,13 @@ export const StudentView: React.FC = () => {
     'Mother Name',
     'Mother Mob',
     'Def Reg', 
+    'Def Type',
     'Supervisor', 
     'Def Status', 
     'Deg Status', 
     'Disc. Action',
+    'Dropout Class',
+    'Discussion Remark',
     'Mobile', 
     'Status'
   ];
@@ -226,7 +232,7 @@ export const StudentView: React.FC = () => {
                         <thead className="bg-slate-100 sticky top-0 z-10 shadow-sm border-b border-gray-200">
                             <tr>
                                 {(viewMode === 'details' ? detailColumns : registeredColumns).map((col, idx) => (
-                                    <th key={idx} className={`px-2 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap ${col === 'SL' ? 'w-1' : ''} ${viewMode === 'registered' || ['Status', 'Program', 'Sex', 'Credit Req', 'Credit Com', 'Def Reg', 'Def Status', 'Deg Status', 'Dues', 'Disc. Action'].includes(col) ? 'text-center' : 'text-left'}`}>
+                                    <th key={idx} className={`px-2 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap ${col === 'SL' ? 'w-1' : ''} ${viewMode === 'registered' || ['Status', 'Program', 'Sex', 'Credit Req', 'Credit Com', 'Def Reg', 'Def Type', 'Def Status', 'Deg Status', 'Dues', 'Disc. Action', 'Dropout Class'].includes(col) ? 'text-center' : 'text-left'}`}>
                                         {col}
                                     </th>
                                 ))}
@@ -266,6 +272,7 @@ export const StudentView: React.FC = () => {
                                                 <td className="px-2 py-1 text-left text-[10px] font-mono text-gray-500">{row['Mother Mobile'] || '-'}</td>
 
                                                 <td className="px-2 py-1 text-center text-gray-500">{row['Defense Registration'] || '-'}</td>
+                                                <td className="px-2 py-1 text-center italic text-blue-500 font-bold">{row['Defense Type'] || '-'}</td>
                                                 <td className="px-2 py-1 text-left truncate max-w-[120px]" title={row['Defense Supervisor']}>{row['Defense Supervisor'] || '-'}</td>
                                                 <td className="px-2 py-1 text-center italic text-gray-500">{row['Defense Status'] || '-'}</td>
                                                 <td className="px-2 py-1 text-center font-bold text-purple-600">{row['Degree Status'] || '-'}</td>
@@ -277,6 +284,31 @@ export const StudentView: React.FC = () => {
                                                             Active
                                                         </span>
                                                     ) : <span className="text-gray-300">-</span>}
+                                                </td>
+
+                                                <td className="px-2 py-1 text-center whitespace-nowrap">
+                                                    {(() => {
+                                                        const dropClass = row['Dropout Classification'] || '';
+                                                        if (isValEmpty(dropClass)) return <span className="text-gray-300">-</span>;
+                                                        
+                                                        const isPerm = dropClass.includes('Permanent');
+                                                        const isTemp = dropClass.includes('Temporary');
+                                                        
+                                                        return (
+                                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black border uppercase tracking-tighter ${
+                                                                isPerm ? 'bg-red-50 text-red-700 border-red-200' : 
+                                                                isTemp ? 'bg-orange-50 text-orange-700 border-orange-200' : 
+                                                                'bg-slate-50 text-slate-600 border-slate-200'
+                                                            }`}>
+                                                                {isPerm ? <PowerOff className="w-2.5 h-2.5 mr-1" /> : isTemp ? <Clock className="w-2.5 h-2.5 mr-1" /> : null}
+                                                                {dropClass}
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </td>
+
+                                                <td className="px-2 py-1 text-left truncate max-w-[150px]" title={row['Discussion Remark']}>
+                                                    {row['Discussion Remark'] || '-'}
                                                 </td>
 
                                                 <td className="px-2 py-1 text-gray-600 font-mono">{row.Mobile || '-'}</td>
