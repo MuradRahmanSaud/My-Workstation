@@ -1,5 +1,4 @@
-
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef } from 'react';
 import { CourseSectionData, ProgramDataRow, TeacherDataRow, ClassRoomDataRow, LoadingState, SheetContextType, StudentDataRow, StudentLinkRow, MainSheetRow, DiuEmployeeRow, ReferenceDataRow, FacultyLeadershipRow, StudentFollowupRow } from '../types';
 import { fetchRegisteredStudentData, fetchStudentLinks, fetchMainSheet, fetchTeacherData, fetchProgramData, fetchClassRoomData, fetchMergedSectionData, fetchDiuEmployeeData, normalizeId, fetchReferenceData, getMobileNumber, fetchSubSheet, fetchFacultyLeadershipData, fetchStudentFollowupData } from '../services/sheetService';
 
@@ -13,7 +12,6 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [diuEmployeeData, setDiuEmployeeData] = useState<DiuEmployeeRow[]>([]);
   const [referenceData, setReferenceData] = useState<ReferenceDataRow[]>([]);
   const [facultyLeadershipData, setFacultyLeadershipData] = useState<FacultyLeadershipRow[]>([]);
-  // Fix: Implement studentFollowupData state
   const [studentFollowupData, setStudentFollowupData] = useState<StudentFollowupRow[]>([]);
   const [semesterLinks, setSemesterLinks] = useState<Map<string, string>>(new Map());
   const [admittedLinks, setAdmittedLinks] = useState<Map<string, string>>(new Map());
@@ -24,6 +22,9 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [studentCache, setStudentCache] = useState<Map<string, StudentDataRow[]>>(new Map());
   const [registeredData, setRegisteredData] = useState<any[]>([]);
   const [loading, setLoading] = useState<LoadingState>({ status: 'idle' });
+
+  // Use a ref to prevent multiple simultaneous loads
+  const isSyncing = useRef(false);
 
   const uniqueSemesters = useMemo(() => {
     const rawSemesters = Array.from(new Set(data.map(d => d.Semester?.trim()).filter(Boolean))) as string[];
@@ -81,7 +82,6 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } catch (e) {}
   };
 
-  // Fix: Implement loadStudentFollowupData function
   const loadStudentFollowupData = async (force?: boolean) => {
     if (!force && studentFollowupData.length > 0) return;
     try {
@@ -90,9 +90,11 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } catch (e) {}
   };
 
-  // Fix: Update loadData signature and implementation to include 'followup' mode
   const loadData = async (mode: 'all' | 'admitted' | 'sections' | 'followup' = 'all', force: boolean = false) => {
-    setLoading({ status: 'loading', message: 'Optimizing Workflow...' });
+    if (isSyncing.current) return;
+    isSyncing.current = true;
+    
+    setLoading({ status: 'loading', message: 'Syncing Data...' });
     
     if (force) {
         ['reference', 'teacher', 'program', 'faculty_leadership', 'employee'].forEach(key => {
@@ -104,48 +106,48 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
 
     try {
+      // Step 1: Parallel fetch all core databases and metadata links
+      const corePromises: Promise<any>[] = [];
+
       if (mode === 'all' || mode === 'followup') {
-          await loadStudentFollowupData(force);
-          if (mode === 'followup') { 
-              setLoading({ status: 'success' }); 
-              return; 
-          }
+          corePromises.push(fetchStudentFollowupData().then(setStudentFollowupData));
       }
 
       if (mode === 'all' || mode === 'admitted') {
-          const links = await fetchStudentLinks();
-          const map = new Map<string, string>();
-          links.forEach(row => { 
-              if (row.Semester && row['Student Data Link']) map.set(row.Semester, row['Student Data Link']); 
-          });
-          setStudentDataLinks(map);
-          await loadRegisteredData(force);
-          if (mode === 'admitted') { 
-              setLoading({ status: 'success' }); 
-              return; 
-          }
+          corePromises.push(fetchStudentLinks().then(links => {
+              const map = new Map<string, string>();
+              links.forEach(row => { if (row.Semester && row['Student Data Link']) map.set(row.Semester, row['Student Data Link']); });
+              setStudentDataLinks(map);
+          }));
+          corePromises.push(loadRegisteredData(force));
       }
 
       if (mode === 'all' || mode === 'sections') {
-          onStatusChange('Syncing Assets...');
-          const [mainRows, pRows, tRows, cRows, eRows, rRows, lRows] = await Promise.all([
+          corePromises.push(Promise.all([
             fetchMainSheet(), fetchProgramData(), fetchTeacherData(), fetchClassRoomData(), fetchDiuEmployeeData(), fetchReferenceData(), fetchFacultyLeadershipData()
-          ]);
-          if (mainRows.length === 0) throw new Error("Network Busy.");
+          ]).then(async ([mainRows, pRows, tRows, cRows, eRows, rRows, lRows]) => {
+              if (mainRows.length === 0) throw new Error("Sync Failed.");
+              
+              setProgramData(pRows); setTeacherData(tRows); setClassroomData(cRows); setReferenceData(rRows); setDiuEmployeeData(eRows); setFacultyLeadershipData(lRows);
+              
+              const semLinks = new Map<string, string>();
+              mainRows.forEach(row => { if (row.Semester && row['Sheet Link']) semLinks.set(row.Semester, row['Sheet Link']); });
+              setSemesterLinks(semLinks);
 
-          setProgramData(pRows); setTeacherData(tRows); setClassroomData(cRows); setReferenceData(rRows); setDiuEmployeeData(eRows); setFacultyLeadershipData(lRows);
-          const semLinks = new Map<string, string>();
-          mainRows.forEach(row => { if (row.Semester && row['Sheet Link']) semLinks.set(row.Semester, row['Sheet Link']); });
-          setSemesterLinks(semLinks);
-
-          setData([]);
-          await fetchMergedSectionData(mainRows, pRows, tRows, rRows, onStatusChange, (batch) => {
-              setData(prev => [...prev, ...batch]);
-          });
+              setData([]);
+              await fetchMergedSectionData(mainRows, pRows, tRows, rRows, onStatusChange, (batch) => {
+                  setData(prev => [...prev, ...batch]);
+              });
+          }));
       }
+
+      await Promise.all(corePromises);
       setLoading({ status: 'success' });
     } catch (e: any) {
+      console.error("Load failed", e);
       setLoading({ status: 'error', message: e.message || 'Busy...' });
+    } finally {
+      isSyncing.current = false;
     }
   };
 

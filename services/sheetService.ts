@@ -1,4 +1,3 @@
-
 import { MAIN_SHEET_ID, MAIN_SHEET_GID, REF_SHEET_ID, REF_SHEET_GID, TEACHER_SHEET_GID, PROGRAM_SHEET_GID, CLASSROOM_SHEET_GID, DIU_EMPLOYEE_SHEET_GID, FACULTY_LEADERSHIP_SHEET_GID, STUDENT_LINK_SHEET_ID, STUDENT_LINK_SHEET_GID, REGISTERED_STUDENT_SHEET_GID, CORS_PROXY, GOOGLE_SCRIPT_URL, FOLLOWUP_SHEET_GID } from '../constants';
 import { MainSheetRow, CourseSectionData, ReferenceDataRow, TeacherDataRow, ProgramDataRow, StudentLinkRow, StudentDataRow, ClassRoomDataRow, DiuEmployeeRow, FacultyLeadershipRow, StudentFollowupRow } from '../types';
 import { parseCSV, extractSheetIdAndGid } from '../utils/csvParser';
@@ -31,9 +30,10 @@ const setCachedData = (key: string, data: any) => {
     } catch (e) { /* ignore storage limits */ }
 };
 
-const fetchSheet = async <T>(url: string, retries = 3): Promise<T[]> => {
+const fetchSheet = async <T>(url: string, retries = 2): Promise<T[]> => {
   try {
-    const directResponse = await fetch(`${url}&direct=true`);
+    // Try cache-busting and direct fetch first
+    const directResponse = await fetch(`${url}&cachebust=${Date.now()}`, { cache: 'no-cache' });
     if (directResponse.ok) {
         const text = await directResponse.text();
         if (text && !text.trim().startsWith('<!doctype html') && !text.trim().startsWith('<html')) {
@@ -47,7 +47,6 @@ const fetchSheet = async <T>(url: string, retries = 3): Promise<T[]> => {
   let proxyIndex = 0;
   for (let i = 0; i < retries; i++) {
     try {
-      if (i > 0) await sleep(300 * i);
       const proxy = PROXY_LIST[proxyIndex % PROXY_LIST.length];
       const targetUrl = `${proxy}${encodeURIComponent(url)}`;
       const response = await fetch(targetUrl);
@@ -64,14 +63,14 @@ const fetchSheet = async <T>(url: string, retries = 3): Promise<T[]> => {
 };
 
 export const fetchMainSheet = async (): Promise<MainSheetRow[]> => {
-  const url = `https://docs.google.com/spreadsheets/d/${MAIN_SHEET_ID}/export?format=csv&gid=${MAIN_SHEET_GID}&t=${Date.now()}`;
+  const url = `https://docs.google.com/spreadsheets/d/${MAIN_SHEET_ID}/export?format=csv&gid=${MAIN_SHEET_GID}`;
   return fetchSheet<MainSheetRow>(url);
 };
 
 export const fetchReferenceData = async (): Promise<ReferenceDataRow[]> => {
   const cached = getCachedData<ReferenceDataRow>('reference');
   if (cached) return cached;
-  const url = `https://docs.google.com/spreadsheets/d/${REF_SHEET_ID}/export?format=csv&gid=${REF_SHEET_GID}&t=${Date.now()}`;
+  const url = `https://docs.google.com/spreadsheets/d/${REF_SHEET_ID}/export?format=csv&gid=${REF_SHEET_GID}`;
   const data = await fetchSheet<ReferenceDataRow>(url);
   if (data.length > 0) setCachedData('reference', data);
   return data;
@@ -80,7 +79,7 @@ export const fetchReferenceData = async (): Promise<ReferenceDataRow[]> => {
 export const fetchTeacherData = async (): Promise<TeacherDataRow[]> => {
   const cached = getCachedData<TeacherDataRow>('teacher');
   if (cached) return cached;
-  const url = `https://docs.google.com/spreadsheets/d/${REF_SHEET_ID}/export?format=csv&gid=${TEACHER_SHEET_GID}&t=${Date.now()}`;
+  const url = `https://docs.google.com/spreadsheets/d/${REF_SHEET_ID}/export?format=csv&gid=${TEACHER_SHEET_GID}`;
   const data = await fetchSheet<TeacherDataRow>(url);
   if (data.length > 0) setCachedData('teacher', data);
   return data;
@@ -89,7 +88,7 @@ export const fetchTeacherData = async (): Promise<TeacherDataRow[]> => {
 export const fetchProgramData = async (): Promise<ProgramDataRow[]> => {
   const cached = getCachedData<ProgramDataRow>('program');
   if (cached) return cached;
-  const url = `https://docs.google.com/spreadsheets/d/${REF_SHEET_ID}/export?format=csv&gid=${PROGRAM_SHEET_GID}&t=${Date.now()}`;
+  const url = `https://docs.google.com/spreadsheets/d/${REF_SHEET_ID}/export?format=csv&gid=${PROGRAM_SHEET_GID}`;
   const data = await fetchSheet<ProgramDataRow>(url);
   if (data.length > 0) setCachedData('program', data);
   return data;
@@ -98,46 +97,45 @@ export const fetchProgramData = async (): Promise<ProgramDataRow[]> => {
 export const fetchFacultyLeadershipData = async (): Promise<FacultyLeadershipRow[]> => {
   const cached = getCachedData<FacultyLeadershipRow>('faculty_leadership');
   if (cached) return cached;
-  const url = `https://docs.google.com/spreadsheets/d/${REF_SHEET_ID}/export?format=csv&gid=${FACULTY_LEADERSHIP_SHEET_GID}&t=${Date.now()}`;
+  const url = `https://docs.google.com/spreadsheets/d/${REF_SHEET_ID}/export?format=csv&gid=${FACULTY_LEADERSHIP_SHEET_GID}`;
   const data = await fetchSheet<FacultyLeadershipRow>(url);
   if (data.length > 0) setCachedData('faculty_leadership', data);
   return data;
 };
 
 export const fetchClassRoomData = async (): Promise<ClassRoomDataRow[]> => {
-  const url = `https://docs.google.com/spreadsheets/d/${REF_SHEET_ID}/export?format=csv&gid=${CLASSROOM_SHEET_GID}&t=${Date.now()}`;
+  const url = `https://docs.google.com/spreadsheets/d/${REF_SHEET_ID}/export?format=csv&gid=${CLASSROOM_SHEET_GID}`;
   return fetchSheet<ClassRoomDataRow>(url);
 };
 
 export const fetchDiuEmployeeData = async (): Promise<DiuEmployeeRow[]> => {
   const cached = getCachedData<DiuEmployeeRow>('employee');
   if (cached) return cached;
-  const url = `https://docs.google.com/spreadsheets/d/${REF_SHEET_ID}/export?format=csv&gid=${DIU_EMPLOYEE_SHEET_GID}&t=${Date.now()}`;
+  const url = `https://docs.google.com/spreadsheets/d/${REF_SHEET_ID}/export?format=csv&gid=${DIU_EMPLOYEE_SHEET_GID}`;
   const data = await fetchSheet<DiuEmployeeRow>(url);
   if (data.length > 0) setCachedData('employee', data);
   return data;
 };
 
 export const fetchStudentLinks = async (): Promise<StudentLinkRow[]> => {
-  const url = `https://docs.google.com/spreadsheets/d/${STUDENT_LINK_SHEET_ID}/export?format=csv&gid=${STUDENT_LINK_SHEET_GID}&t=${Date.now()}`;
+  const url = `https://docs.google.com/spreadsheets/d/${STUDENT_LINK_SHEET_ID}/export?format=csv&gid=${STUDENT_LINK_SHEET_GID}`;
   return fetchSheet<StudentLinkRow>(url);
 };
 
 export const fetchRegisteredStudentData = async (): Promise<any[]> => {
-  const url = `https://docs.google.com/spreadsheets/d/${STUDENT_LINK_SHEET_ID}/export?format=csv&gid=${REGISTERED_STUDENT_SHEET_GID}&t=${Date.now()}`;
+  const url = `https://docs.google.com/spreadsheets/d/${STUDENT_LINK_SHEET_ID}/export?format=csv&gid=${REGISTERED_STUDENT_SHEET_GID}`;
   return fetchSheet<any>(url);
 };
 
-// Fix: Add fetchStudentFollowupData function
 export const fetchStudentFollowupData = async (): Promise<StudentFollowupRow[]> => {
-  const url = `https://docs.google.com/spreadsheets/d/${STUDENT_LINK_SHEET_ID}/export?format=csv&gid=${FOLLOWUP_SHEET_GID}&t=${Date.now()}`;
+  const url = `https://docs.google.com/spreadsheets/d/${STUDENT_LINK_SHEET_ID}/export?format=csv&gid=${FOLLOWUP_SHEET_GID}`;
   return fetchSheet<StudentFollowupRow>(url);
 };
 
 export const fetchSubSheet = async (sheetLink: string): Promise<CourseSectionData[]> => {
   const { id, gid } = extractSheetIdAndGid(sheetLink);
   if (!id) return [];
-  const url = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}&t=${Date.now()}`;
+  const url = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
   return fetchSheet<CourseSectionData>(url);
 };
 
@@ -169,8 +167,6 @@ export const submitSheetData = async (
     options: any = { insertMethod: 'first_empty' }
 ): Promise<any> => {
     try {
-        console.log(`[SheetService] ${action.toUpperCase()} Action on ${sheetName}`);
-        
         const payload = { 
             action, 
             sheetName, 
@@ -195,10 +191,8 @@ export const submitSheetData = async (
         }
 
         const result = await response.json();
-        console.log("[SheetService] API Response:", result);
         return result;
     } catch (error: any) { 
-        console.error("[SheetService] Sync Error:", error);
         return { 
             result: 'error', 
             message: error.message || 'API connection failed' 
@@ -262,23 +256,13 @@ export const fetchMergedSectionData = async (
         };
     };
 
-    if (mainSheetRows.length > 0) {
-        const firstRow = mainSheetRows[0];
-        if (firstRow['Sheet Link']) {
-            try {
-                const raw = await fetchSubSheet(firstRow['Sheet Link']);
-                const processed = raw.map(i => processRow(i, firstRow));
-                if (onBatchData) onBatchData(processed);
-            } catch(e) {}
-        }
-    }
-
-    const remainingRows = mainSheetRows.slice(1);
-    const batchSize = 15; 
+    // Optimization: Process all sub-sheets in larger parallel batches
+    const batchSize = 30; // Increased batch size
     const allData: CourseSectionData[] = [];
     
-    for (let i = 0; i < remainingRows.length; i += batchSize) {
-        const batch = remainingRows.slice(i, i + batchSize);
+    for (let i = 0; i < mainSheetRows.length; i += batchSize) {
+        const batch = mainSheetRows.slice(i, i + batchSize);
+        onStatus(`Merging Data (${i + 1}/${mainSheetRows.length})...`);
         const batchPromises = batch.map(async (row) => {
             if (!row['Sheet Link']) return [];
             try {
