@@ -86,6 +86,13 @@ export const StudentRegistrationHistory: React.FC<RegistrationHistoryProps> = ({
                                 </React.Fragment>
                             );
                         })}
+                        {historyData.length === 0 && (
+                            <tr>
+                                <td colSpan={5} className="px-4 py-10 text-center text-[11px] text-gray-400 italic">
+                                    No registration history found in the system.
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>

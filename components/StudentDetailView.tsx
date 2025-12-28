@@ -209,15 +209,30 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
     }, [discRecords]);
 
     const historyData = useMemo(() => {
-        if (!registrationLookup || !studentSemester) return [];
+        if (!registrationLookup) return [];
         const cleanId = String(student['Student ID']).trim();
         const registeredSems = registrationLookup.get(cleanId) || new Set();
-        return Array.from(registeredSems).map(sem => ({
-            semester: sem,
-            isRegistered: true,
-            taken: 15, complete: 15, sgpa: '3.75', dues: 0
-        }));
-    }, [student, registrationLookup, studentSemester]);
+        
+        const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
+        const parseSem = (sem: string) => {
+            const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/);
+            if (!match) return { year: 0, season: -1 };
+            let year = parseInt(match[2], 10); if (year < 100) year += 2000;
+            return { year, season: seasonWeight[match[1].toLowerCase()] ?? -1 };
+        };
+
+        return Array.from(registeredSems)
+            .sort((a, b) => {
+                const pa = parseSem(a), pb = parseSem(b);
+                if (pa.year !== pb.year) return pb.year - pa.year;
+                return pb.season - pa.season;
+            })
+            .map(sem => ({
+                semester: sem,
+                isRegistered: true,
+                taken: 0, complete: 0, sgpa: '-', dues: 0
+            }));
+    }, [student, registrationLookup]);
 
     const resolveEmployeeFromValue = (val: string | undefined) => {
         if (!val) return null;
@@ -424,7 +439,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                 isCreditsMet={parseFloat(student['Credit Completed'] || '0') >= parseFloat(student['Credit Requirement'] || '0')}
                 isDefenseSuccess={student['Defense Status']?.toLowerCase() === 'complete'}
                 isDegreeDone={student['Degree Status']?.toLowerCase() === 'complete'}
-                lastRegSemester="Spring 2024"
+                lastRegSemester={historyData.length > 0 ? historyData[0].semester : 'None'}
                 mentorAssigned={!isValEmpty(student?.Mentor)}
                 onCardClick={(type) => { closeAll(); setActivePopup(type); }}
                 activePopup={activePopup}
@@ -448,7 +463,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 
                 {(activePopup === 'credits' || activePopup === 'defense' || activePopup === 'degree' || activePopup === 'dues' || activePopup === 'mentor') && (
                     <div className="absolute inset-0 z-[150] bg-black/5 backdrop-blur-[2px] flex items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-200">
-                        <div className="bg-slate-50 rounded-2xl shadow-2xl border border-slate-200 p-5 w-full max-sm space-y-4">
+                        <div className="bg-slate-50 rounded-2xl shadow-2xl border border-slate-200 p-5 w-full max-w-sm md:max-w-md space-y-4">
                             <div className="flex items-center justify-between border-b pb-2">
                                 <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest flex items-center">
                                     {activePopup === 'credits' && <><Calculator className="w-3.5 h-3.5 mr-2 text-blue-600" /> Credit Details</>}
@@ -462,19 +477,19 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                             
                             <div className="space-y-3">
                                 {activePopup === 'credits' && (
-                                    <>
+                                    <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
                                         <div><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Requirement</label><input type="number" value={editBuffer['Credit Requirement']} onChange={e => setEditBuffer({...editBuffer, 'Credit Requirement': e.target.value})} className="w-full px-3 py-2 text-sm border rounded-lg outline-none focus:ring-1 focus:ring-blue-500" /></div>
                                         <div><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Completed</label><input type="number" value={editBuffer['Credit Completed']} onChange={e => setEditBuffer({...editBuffer, 'Credit Completed': e.target.value})} className="w-full px-3 py-2 text-sm border rounded-lg outline-none focus:ring-1 focus:ring-blue-500" /></div>
-                                    </>
+                                    </div>
                                 )}
                                 {activePopup === 'defense' && (
-                                    <>
+                                    <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
                                         <div>
                                             <label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Supervisor</label>
                                             <SearchableSelect value={editBuffer['Defense Supervisor']} onChange={v => setEditBuffer({...editBuffer, 'Defense Supervisor': v})} options={employeeOptions} />
                                             {renderResolvedEmployeeCard(resolvedDefenseEmp)}
                                         </div>
-                                        <div className="grid grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                             <div>
                                                 <label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Registration Date</label>
                                                 <input type="date" value={parseToIsoDate(editBuffer['Defense Registration'])} onChange={e => setEditBuffer({...editBuffer, 'Defense Registration': formatDisplayDate(e.target.value)})} className="w-full px-3 py-2 text-sm border rounded-lg outline-none focus:ring-1 focus:ring-blue-500" />
@@ -503,22 +518,22 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                                                 })}
                                             </div>
                                         </div>
-                                    </>
+                                    </div>
                                 )}
                                 {activePopup === 'degree' && (
-                                    <div><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Final Status</label><SearchableSelect value={editBuffer['Degree Status']} onChange={v => setEditBuffer({...editBuffer, 'Degree Status': v})} options={['Incomplete', 'Complete', 'Hold', 'Processing']} /></div>
+                                    <div className="animate-in fade-in slide-in-from-top-1 duration-200"><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Final Status</label><SearchableSelect value={editBuffer['Degree Status']} onChange={v => setEditBuffer({...editBuffer, 'Degree Status': v})} options={['Incomplete', 'Complete', 'Hold', 'Processing']} /></div>
                                 )}
                                 {activePopup === 'dues' && (
-                                    <div><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Current Balance</label><input type="number" value={editBuffer['Dues']} onChange={e => setEditBuffer({...editBuffer, 'Dues': e.target.value})} className="w-full px-3 py-2 text-sm border rounded-lg outline-none focus:ring-1 focus:ring-amber-500" /></div>
+                                    <div className="animate-in fade-in slide-in-from-top-1 duration-200"><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Current Balance</label><input type="number" value={editBuffer['Dues']} onChange={e => setEditBuffer({...editBuffer, 'Dues': e.target.value})} className="w-full px-3 py-2 text-sm border rounded-lg outline-none focus:ring-1 focus:ring-amber-500" /></div>
                                 )}
                                 {activePopup === 'mentor' && (
-                                    <>
+                                    <div className="animate-in fade-in slide-in-from-top-1 duration-200">
                                         <div>
                                             <label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Assigned Mentor</label>
                                             <SearchableSelect value={editBuffer['Mentor']} onChange={v => setEditBuffer({...editBuffer, 'Mentor': v})} options={employeeOptions} />
                                             {renderResolvedEmployeeCard(resolvedMentorEmp)}
                                         </div>
-                                    </>
+                                    </div>
                                 )}
                             </div>
 
