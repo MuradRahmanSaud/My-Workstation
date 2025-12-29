@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { X, Save, AlertCircle, CheckCircle, ChevronDown, Plus, Search, Check, User, Loader2 } from 'lucide-react';
 import { submitSheetData } from '../services/sheetService';
@@ -136,12 +135,12 @@ export const MultiSearchableSelect = ({
                     ))
                 )}
                 <div className="ml-auto flex items-center shrink-0">
-                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                 </div>
             </div>
 
             {isOpen && !disabled && (
-                <div className="absolute z-[110] w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden left-0 right-0 flex flex-col animate-in fade-in zoom-in-95 duration-150 border-t-0 rounded-t-none">
+                <div className="absolute z-[150] w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden left-0 right-0 flex flex-col animate-in fade-in zoom-in-95 duration-150 border-t-0 rounded-t-none">
                     <div className="p-2 border-b border-gray-100 bg-gray-50/50">
                         <div className="relative">
                             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -157,7 +156,7 @@ export const MultiSearchableSelect = ({
                         </div>
                     </div>
 
-                    <div className="p-2 max-h-[320px] overflow-y-auto thin-scrollbar">
+                    <div className="p-2 max-h-[280px] overflow-y-auto thin-scrollbar">
                         <div className={isEmployeeList ? "flex flex-col gap-1" : "grid grid-cols-2 gap-1.5"}>
                             {filteredOptions.map((opt) => {
                                 const isSelected = selectedItems.includes(opt);
@@ -296,7 +295,7 @@ export const SearchableSelect = ({
         const lowerSearch = search.toLowerCase();
         return options
             .filter(opt => opt.toLowerCase().includes(lowerSearch))
-            .slice(0, 50);
+            .slice(0, 100); 
     }, [options, search]);
     
     const hasExactMatch = options.some(opt => opt.toLowerCase() === search.toLowerCase());
@@ -319,28 +318,30 @@ export const SearchableSelect = ({
                     disabled={disabled}
                     autoComplete="off"
                 />
-                <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-gray-400 pointer-events-none" />
+                <ChevronDown className={`absolute right-3 top-3 w-4 h-4 text-gray-400 pointer-events-none transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </div>
             {isOpen && !disabled && (
-                <div className="absolute z-[120] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto thin-scrollbar left-0 right-0">
-                    {filteredOptions.map((opt) => (
-                        <div
-                            key={opt}
-                            onClick={() => handleSelect(opt)}
-                            className="px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 cursor-pointer transition-colors"
-                        >
-                            {opt}
-                        </div>
-                    ))}
-                    {filteredOptions.length === 0 && !showAddOption && (
-                        <div className="px-3 py-2 text-sm text-gray-400 italic">No options found</div>
-                    )}
+                <div className="absolute z-[180] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-2xl max-h-[280px] overflow-y-auto thin-scrollbar left-0 right-0 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="py-1">
+                        {filteredOptions.map((opt) => (
+                            <div
+                                key={opt}
+                                onClick={() => handleSelect(opt)}
+                                className={`px-4 py-2.5 text-sm cursor-pointer transition-colors border-b border-gray-50 last:border-0 ${value === opt ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
+                            >
+                                {opt}
+                            </div>
+                        ))}
+                        {filteredOptions.length === 0 && !showAddOption && (
+                            <div className="px-4 py-3 text-sm text-gray-400 italic text-center">No options found</div>
+                        )}
+                    </div>
                     {showAddOption && (
                         <div
                             onClick={handleAddClick}
-                            className="px-3 py-2 text-sm text-blue-600 font-bold hover:bg-blue-50 cursor-pointer border-t border-gray-100 flex items-center bg-gray-50/50 sticky bottom-0"
+                            className="px-4 py-3 text-sm text-blue-600 font-bold hover:bg-blue-50 cursor-pointer border-t border-gray-100 flex items-center bg-white sticky bottom-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]"
                         >
-                            <span className="mr-2 bg-blue-100 text-blue-600 rounded w-4 h-4 flex items-center justify-center text-xs">+</span> 
+                            <span className="mr-2 bg-blue-100 text-blue-600 rounded w-4 h-4 flex items-center justify-center text-xs font-black">+</span> 
                             Add "{search}"
                         </div>
                     )}

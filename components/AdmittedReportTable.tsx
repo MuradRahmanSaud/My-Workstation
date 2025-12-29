@@ -250,7 +250,6 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
         if(!progs) return null;
         const totalAdm = progs.reduce((acc, p) => acc + p.totalAdmitted, 0);
         const totalReg = progs.reduce((acc, p) => acc + p.totalRegistered, 0);
-        const totalUnreg = progs.reduce((acc, p) => acc + p.totalUnregistered, 0);
         const totalP = progs.reduce((acc, p) => acc + p.totalPDrop, 0);
         const totalT = progs.reduce((acc, p) => acc + p.totalTDrop, 0);
         const totalCC = progs.reduce((acc, p) => acc + p.totalCrCom, 0);
@@ -262,12 +261,11 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
             <div className={`bg-white rounded border shadow-sm flex flex-col overflow-hidden ${mobile ? 'w-full h-auto mb-4' : 'min-w-[480px] max-w-[520px] shrink-0'}`}>
                 {!mobile && <div className="py-1.5 px-2 text-center border-b font-bold text-xs text-gray-700 bg-gray-50">{fac}</div>}
                 <div className={`flex justify-between px-2 py-1 ${headerColor} text-white text-[9px] font-bold`}>
-                    <span className="w-[18%]">Program</span>
-                    <span className="w-[10%] text-center" title="Enrolled Students">Enroll</span>
-                    <span className="w-[10%] text-center" title="Registered Students">Reg</span>
-                    <span className="w-[10%] text-center" title="Unregistered Students">Unreg</span>
-                    <span className="w-[8%] text-center" title="Permanent Dropout">P-Dr</span>
-                    <span className="w-[8%] text-center" title="Temporary Dropout">T-Dr</span>
+                    <span className="w-[20%]">Program</span>
+                    <span className="w-[12%] text-center" title="Enrolled Students">Enroll</span>
+                    <span className="w-[12%] text-center" title="Registered Students">Reg</span>
+                    <span className="w-[10%] text-center" title="Permanent Dropout">P-Dr</span>
+                    <span className="w-[10%] text-center" title="Temporary Dropout">T-Dr</span>
                     <span className="w-[12%] text-center whitespace-nowrap" title="Credit Completed Students">Cr. Com</span>
                     <span className="w-[12%] text-center whitespace-nowrap" title="Defense Registration">Def. Reg</span>
                     <span className="w-[12%] text-right whitespace-nowrap" title="Reg. Pending (Unreg - PDrop - CrCom)">Pnd. Reg</span>
@@ -275,12 +273,11 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                 <div className={`divide-y divide-gray-100 overflow-y-auto thin-scrollbar ${mobile ? 'max-h-[400px]' : 'max-h-[300px]'}`}>
                     {progs.map((p: any) => (
                         <div key={p.pid} className="flex justify-between px-2 py-1 text-[10px] hover:bg-gray-50 items-center">
-                            <span className="w-[18%] text-gray-700 truncate font-medium" title={`${p.pid} ${p.name}`}><span className="font-mono font-bold mr-1 text-gray-500">{p.pid}</span>{p.name}</span>
-                            <span className="w-[10%] text-center font-bold text-gray-900 cursor-pointer hover:underline" onClick={() => p.totalAdmitted > 0 && handleListClick('ALL', p.pid, p.name, 'registered')}>{p.totalAdmitted}</span>
-                            <span className="w-[10%] text-center text-green-600 font-bold cursor-pointer hover:underline" onClick={() => p.totalRegistered > 0 && handleListClick('ALL', p.pid, p.name, 'registered')}>{p.totalRegistered}</span>
-                            <span className="w-[10%] text-center text-red-500 font-bold cursor-pointer hover:underline" onClick={() => p.totalUnregistered > 0 && handleListClick('ALL', p.pid, p.name, 'unregistered')}>{p.totalUnregistered}</span>
-                            <span className="w-[8%] text-center text-rose-700 font-black cursor-pointer hover:underline" onClick={() => p.totalPDrop > 0 && handleListClick('ALL', p.pid, p.name, 'pdrop')}>{p.totalPDrop}</span>
-                            <span className="w-[8%] text-center text-orange-600 font-bold cursor-pointer hover:underline" onClick={() => p.totalTDrop > 0 && handleListClick('ALL', p.pid, p.name, 'tdrop')}>{p.totalTDrop}</span>
+                            <span className="w-[20%] text-gray-700 truncate font-medium" title={`${p.pid} ${p.name}`}><span className="font-mono font-bold mr-1 text-gray-500">{p.pid}</span>{p.name}</span>
+                            <span className="w-[12%] text-center font-bold text-gray-900 cursor-pointer hover:underline" onClick={() => p.totalAdmitted > 0 && handleListClick('ALL', p.pid, p.name, 'registered')}>{p.totalAdmitted}</span>
+                            <span className="w-[12%] text-center text-green-600 font-bold cursor-pointer hover:underline" onClick={() => p.totalRegistered > 0 && handleListClick('ALL', p.pid, p.name, 'registered')}>{p.totalRegistered}</span>
+                            <span className="w-[10%] text-center text-rose-700 font-black cursor-pointer hover:underline" onClick={() => p.totalPDrop > 0 && handleListClick('ALL', p.pid, p.name, 'pdrop')}>{p.totalPDrop}</span>
+                            <span className="w-[10%] text-center text-orange-600 font-bold cursor-pointer hover:underline" onClick={() => p.totalTDrop > 0 && handleListClick('ALL', p.pid, p.name, 'tdrop')}>{p.totalTDrop}</span>
                             <span className="w-[12%] text-center text-emerald-700 font-black cursor-pointer hover:underline" onClick={() => p.totalCrCom > 0 && handleListClick('ALL', p.pid, p.name, 'crcom')}>{p.totalCrCom}</span>
                             <span className="w-[12%] text-center text-teal-700 font-black cursor-pointer hover:underline" onClick={() => p.totalDefense > 0 && handleListClick('ALL', p.pid, p.name, 'defense')}>{p.totalDefense}</span>
                             <span className="w-[12%] text-right text-amber-700 font-black cursor-pointer hover:underline" onClick={() => p.totalRegPending > 0 && handleListClick('ALL', p.pid, p.name, 'regPending')}>{p.totalRegPending}</span>
@@ -288,12 +285,11 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                     ))}
                 </div>
                 <div className="bg-slate-50 border-t border-slate-200 px-2 py-1 flex justify-between text-[10px] font-bold text-gray-800">
-                    <span className="w-[18%]">Total</span>
-                    <span className="w-[10%] text-center">{totalAdm}</span>
-                    <span className="w-[10%] text-center text-green-700">{totalReg}</span>
-                    <span className="w-[10%] text-center text-red-600">{totalUnreg}</span>
-                    <span className="w-[8%] text-center text-rose-800">{totalP}</span>
-                    <span className="w-[8%] text-center text-orange-700">{totalT}</span>
+                    <span className="w-[20%]">Total</span>
+                    <span className="w-[12%] text-center">{totalAdm}</span>
+                    <span className="w-[12%] text-center text-green-700">{totalReg}</span>
+                    <span className="w-[10%] text-center text-rose-800">{totalP}</span>
+                    <span className="w-[10%] text-center text-orange-700">{totalT}</span>
                     <span className="w-[12%] text-center text-emerald-900">{totalCC}</span>
                     <span className="w-[12%] text-center text-teal-900">{totalDef}</span>
                     <span className="w-[12%] text-right text-amber-900">{totalPnd}</span>
@@ -377,7 +373,6 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                             <th className="px-3 py-1.5 text-[10px] font-bold text-white sticky left-0 z-30 bg-slate-700 w-48 uppercase tracking-wider">Semester</th>
                                             <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider" title="Enrolled Students">Enroll</th>
                                             <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider" title="Registered Students">Reg</th>
-                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider" title="Unregistered Students">Unreg</th>
                                             <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Permanent Dropout">P-Drop</th>
                                             <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Temporary Dropout">T-Drop</th>
                                             <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Credit Completed Students (Met Requirements)">Cr. Com</th>
@@ -420,16 +415,6 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                                                 onClick={() => handleListClick(sem, prog.pid, prog.name, 'registered')}
                                                             >
                                                                 {reg}
-                                                            </span>
-                                                        ) : <span className="text-gray-300">-</span>}
-                                                    </td>
-                                                    <td className="px-3 py-1 text-center text-[11px] font-black text-red-500 border-r border-gray-50">
-                                                        {unreg > 0 ? (
-                                                            <span 
-                                                                className="cursor-pointer hover:underline decoration-red-500"
-                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'unregistered')}
-                                                            >
-                                                                {unreg}
                                                             </span>
                                                         ) : <span className="text-gray-300">-</span>}
                                                     </td>
@@ -487,7 +472,7 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                             );
                                         })}
                                         {paginatedData.length === 0 && (
-                                            <tr><td colSpan={9} className="py-8 text-center text-gray-400 italic text-[11px]">No semesters found for analysis.</td></tr>
+                                            <tr><td colSpan={8} className="py-8 text-center text-gray-400 italic text-[11px]">No semesters found for analysis.</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -497,17 +482,17 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                         <tr>
                                             <th className="px-2 py-1.5 text-[10px] font-bold text-white sticky left-0 z-30 bg-slate-700 min-w-[150px] w-auto whitespace-nowrap uppercase tracking-wider">Program</th>
                                             {sortedAdmittedSemesters.map(sem => (
-                                                <th key={sem} className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[240px]">
+                                                <th key={sem} className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[210px]">
                                                     <div className="flex items-center justify-center space-x-1 mb-1"><span>{sem}</span></div>
-                                                    <div className="grid grid-cols-8 gap-1 border-t border-slate-600 pt-1 uppercase text-white/70">
-                                                        <span title="Admitted Student">Adm</span><span title="Registered Student">Reg</span><span title="Unregistered Student">Unr</span><span className="whitespace-nowrap" title="Permanent Dropout">PDr</span><span className="whitespace-nowrap" title="Temporary Dropout">TDr</span><span className="whitespace-nowrap" title="Credit Completed Students">CC</span><span className="whitespace-nowrap" title="Defense Registration">Def</span><span className="whitespace-nowrap" title="Reg. Pending">Pnd</span>
+                                                    <div className="grid grid-cols-7 gap-1 border-t border-slate-600 pt-1 uppercase text-white/70">
+                                                        <span title="Admitted Student">Adm</span><span title="Registered Student">Reg</span><span className="whitespace-nowrap" title="Permanent Dropout">PDr</span><span className="whitespace-nowrap" title="Temporary Dropout">TDr</span><span className="whitespace-nowrap" title="Credit Completed Students">CC</span><span className="whitespace-nowrap" title="Defense Registration">Def</span><span className="whitespace-nowrap" title="Reg. Pending">Pnd</span>
                                                     </div>
                                                 </th>
                                             ))}
-                                            <th className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[240px] uppercase">
+                                            <th className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[210px] uppercase">
                                                 <div className="mb-1">Total</div>
-                                                <div className="grid grid-cols-8 gap-1 border-t border-slate-600 pt-1 text-white/70">
-                                                    <span title="Total Admitted">Adm</span><span title="Total Registered">Reg</span><span title="Total Unregistered">Unr</span><span title="Total Permanent Dropout">PDr</span><span title="Total Temporary Dropout">TDr</span><span title="Total Credit Completed Students">CC</span><span title="Total Defense Registration">Def</span><span title="Total Reg. Pending">Pnd</span>
+                                                <div className="grid grid-cols-7 gap-1 border-t border-slate-600 pt-1 text-white/70">
+                                                    <span title="Total Admitted">Adm</span><span title="Total Registered">Reg</span><span title="Total Permanent Dropout">PDr</span><span title="Total Temporary Dropout">TDr</span><span title="Total Credit Completed Students">CC</span><span title="Total Defense Registration">Def</span><span title="Total Reg. Pending">Pnd</span>
                                                 </div>
                                             </th>
                                         </tr>
@@ -531,10 +516,9 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                                     const reg = adm - unreg;
                                                     return (
                                                         <td key={sem} className="px-1 py-1 border-r border-gray-100 text-center">
-                                                            <div className="grid grid-cols-8 gap-1">
+                                                            <div className="grid grid-cols-7 gap-1">
                                                                 <span className={`${adm > 0 ? 'text-gray-700 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => adm > 0 && handleListClick(sem, prog.pid, prog.name, 'registered')}>{adm}</span>
                                                                 <span className={`${reg > 0 ? 'text-green-600 font-bold cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => reg > 0 && handleListClick(sem, prog.pid, prog.name, 'registered')}>{reg}</span>
-                                                                <span className={`font-bold ${unreg > 0 ? 'text-red-500 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => unreg > 0 && handleListClick(sem, prog.pid, prog.name, 'unregistered')}>{unreg}</span>
                                                                 <span className={`font-black ${pDrop > 0 ? 'text-rose-700 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => pDrop > 0 && handleListClick(sem, prog.pid, prog.name, 'pdrop')}>{pDrop}</span>
                                                                 <span className={`font-bold ${tDrop > 0 ? 'text-orange-600 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => tDrop > 0 && handleListClick(sem, prog.pid, prog.name, 'tdrop')}>{tDrop}</span>
                                                                 <span className={`font-black ${crCom > 0 ? 'text-emerald-700 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => crCom > 0 && handleListClick(sem, prog.pid, prog.name, 'crcom')}>{crCom}</span>
@@ -545,10 +529,9 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                                     );
                                                 })}
                                                 <td className="px-1 py-1 font-bold text-center bg-slate-50 border-l border-gray-200">
-                                                    <div className="grid grid-cols-8 gap-1">
+                                                    <div className="grid grid-cols-7 gap-1">
                                                         <span className="text-blue-800 cursor-pointer hover:underline" onClick={() => prog.totalAdmitted > 0 && handleListClick('ALL', prog.pid, prog.name, 'registered')}>{prog.totalAdmitted}</span>
                                                         <span className="text-green-700 cursor-pointer hover:underline" onClick={() => prog.totalRegistered > 0 && handleListClick('ALL', prog.pid, prog.name, 'registered')}>{prog.totalRegistered}</span>
-                                                        <span className="text-red-700 cursor-pointer hover:underline" onClick={() => prog.totalUnregistered > 0 && handleListClick('ALL', prog.pid, prog.name, 'unregistered')}>{prog.totalUnregistered}</span>
                                                         <span className="text-rose-800 cursor-pointer hover:underline" onClick={() => prog.totalPDrop > 0 && handleListClick('ALL', prog.pid, prog.name, 'pdrop')}>{prog.totalPDrop}</span>
                                                         <span className="text-orange-700 cursor-pointer hover:underline" onClick={() => prog.totalTDrop > 0 && handleListClick('ALL', prog.pid, prog.name, 'tdrop')}>{prog.totalTDrop}</span>
                                                         <span className="text-emerald-900 cursor-pointer hover:underline" onClick={() => prog.totalCrCom > 0 && handleListClick('ALL', prog.pid, prog.name, 'crcom')}>{prog.totalCrCom}</span>

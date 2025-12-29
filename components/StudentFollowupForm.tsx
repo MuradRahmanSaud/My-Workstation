@@ -8,13 +8,14 @@ interface FollowupFormProps {
     formData: any;
     setFormData: (val: any) => void;
     employeeOptions: string[];
+    statusOptions: string[];
     isSaving: boolean;
     onSave: (finalData?: any) => void; 
     onClose: () => void;
 }
 
 export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
-    student, formData, setFormData, employeeOptions, isSaving, onSave, onClose
+    student, formData, setFormData, employeeOptions, statusOptions, isSaving, onSave, onClose
 }) => {
     const handleInternalSave = () => {
         // We ensure a default status if none is selected
@@ -53,7 +54,12 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-[9px] font-black text-rose-600 uppercase mb-1">Contact Date *</label>
-                        <input type="date" value={formData.Date} onChange={e => setFormData({...formData, Date: e.target.value})} className="w-full px-2 py-2 text-xs border rounded shadow-sm font-bold focus:ring-1 focus:ring-rose-200 outline-none" />
+                        <input 
+                            type="date" 
+                            value={formData.Date} 
+                            onChange={e => setFormData({...formData, Date: e.target.value})} 
+                            className="w-full px-2 py-2 text-xs border rounded shadow-sm font-bold focus:ring-1 focus:ring-rose-200 outline-none" 
+                        />
                     </div>
                     <div>
                         <label className="block text-[9px] font-black text-rose-600 uppercase mb-1">Contacted By</label>
@@ -64,7 +70,7 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-[9px] font-black text-rose-600 uppercase mb-1">Response Status *</label>
-                        <SearchableSelect value={formData.Status} onChange={v => setFormData({...formData, Status: v})} options={['Call Busy', 'Switched Off', 'Not Reachable', 'Department Change', 'University Change']} placeholder="Select status" />
+                        <SearchableSelect value={formData.Status} onChange={v => setFormData({...formData, Status: v})} options={statusOptions} placeholder="Select status" />
                     </div>
                     <div>
                         <label className="block text-[9px] font-black text-rose-600 uppercase mb-1">Re-follow up Date</label>

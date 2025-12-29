@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, ShieldCheck, GraduationCap, Plus, Edit2, X, Eye } from 'lucide-react';
 import { ProgramDataRow, DiuEmployeeRow, TeacherDataRow, FacultyLeadershipRow, StudentDataRow } from '../types';
@@ -26,6 +25,7 @@ interface ProgramRightPanelProps {
     studentSemester?: string;
     onCloseStudent?: () => void;
     registrationLookup?: Map<string, Set<string>>;
+    autoOpenRemarks?: boolean;
 }
 
 type PanelView = 'details' | 'edit-faculty' | 'edit-program' | 'edit-employee' | 'edit-program-leadership';
@@ -51,7 +51,7 @@ const parseMetric = (str: string | undefined) => {
 };
 
 export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({ 
-    program, facultyLeadership, diuEmployeeData, teacherData, employeeOptions, employeeFieldOptions, onSaveFacultyLeadership, onSaveProgramLeadership, onSaveProgramData, onSaveEmployee, onSaveStudent, forceEditTrigger = 0, selectedStudent, studentSemester, onCloseStudent, registrationLookup
+    program, facultyLeadership, diuEmployeeData, teacherData, employeeOptions, employeeFieldOptions, onSaveFacultyLeadership, onSaveProgramLeadership, onSaveProgramData, onSaveEmployee, onSaveStudent, forceEditTrigger = 0, selectedStudent, studentSemester, onCloseStudent, registrationLookup, autoOpenRemarks = false
 }) => {
     const [view, setView] = useState<PanelView>('details');
     const [isSaving, setIsSaving] = useState(false);
@@ -172,6 +172,7 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
                             onClose={onCloseStudent || (() => {})} 
                             registrationLookup={registrationLookup} 
                             studentSemester={studentSemester} 
+                            initialRemarksOpen={autoOpenRemarks}
                         />
                     </div>
                 )}

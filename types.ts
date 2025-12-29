@@ -173,7 +173,7 @@ export interface StudentFollowupRow {
     'Contacted By': string;
 }
 
-export type ViewState = 'dashboard' | 'section' | 'program' | 'dropout' | 'employee' | 'settings' | 'student' | 'classroom' | 'pdf_to_excel';
+export type ViewState = 'launcher' | 'dashboard' | 'section' | 'program' | 'dropout' | 'employee' | 'settings' | 'student' | 'classroom' | 'pdf_to_excel';
 
 export interface LoadingState {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -207,6 +207,10 @@ export interface SheetContextType {
   semesterFilter: string;
   setSemesterFilter: (semester: string) => void;
   uniqueSemesters: string[];
+
+  // Navigation state (if needed globally, but managed in App.tsx for now)
+  currentView?: ViewState;
+  setView?: (view: ViewState) => void;
 
   // Fix: Extend reloadData mode type to include 'followup'
   reloadData: (mode?: 'all' | 'admitted' | 'sections' | 'followup', force?: boolean) => Promise<void>;

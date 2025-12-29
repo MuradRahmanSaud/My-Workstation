@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ProgramDataRow, CourseSectionData, StudentDataRow } from '../types';
@@ -46,7 +45,6 @@ export const ProgramView: React.FC = () => {
   const [selectedProgram, setSelectedProgram] = useState<ProgramDataRow | null>(null);
   const [activeReport, setActiveReport] = useState<string | null>('courses');
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
-  // Fix: Update activeUnregList state type to include 'regPending' in listType
   const [activeUnregList, setActiveUnregList] = useState<{ semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string; listType: 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' } | null>(null);
   const [selectedAdmittedSemesters, setSelectedAdmittedSemesters] = useState<Set<string>>(new Set());
   const [registrationFilters, setRegistrationFilters] = useState<Map<string, 'registered' | 'unregistered'>>(new Map());
@@ -166,8 +164,8 @@ export const ProgramView: React.FC = () => {
 
   useEffect(() => { if (programData.length > 0 && !selectedProgram) setSelectedProgram(programData[0]); }, [programData, selectedProgram]);
   useEffect(() => { setReportSearch(''); clearAllFilters(); setActiveUnregList(null); setSelectedStudent(null); }, [selectedProgram?.PID]);
-  useEffect(() => { setActiveUnregList(null); }, [activeReport]);
-
+  
+  // Auto-init dashboard only if activeReport is set and no list exists
   useEffect(() => {
     if (activeReport === 'admitted' && selectedProgram && !activeUnregList && admittedSemestersOptions.length > 0 && registeredSemesters.length > 0) {
       const targetRegSem = registeredSemesters[0];
@@ -196,7 +194,7 @@ export const ProgramView: React.FC = () => {
           listType: 'unregistered'
       });
     }
-  }, [activeReport, selectedProgram, activeUnregList, admittedSemestersOptions, registeredSemesters, studentCache, registrationLookup]);
+  }, [activeReport, selectedProgram?.PID]);
 
   const faculties = useMemo(() => {
     const set = new Set<string>();
@@ -260,7 +258,6 @@ export const ProgramView: React.FC = () => {
     const { id: sheetId } = extractSheetIdAndGid(link);
     if (!sheetId) return;
 
-    // OPTIMISTIC UPDATE: Update local state immediately before waiting for network
     setSelectedStudent(prev => prev ? { ...prev, ...student } : null);
     updateStudentData(semester, student['Student ID'], student);
     

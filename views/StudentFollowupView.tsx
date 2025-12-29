@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { MessageSquareQuote, Search, RefreshCw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Plus, Pencil, Trash2, CheckCircle2, Calendar, Loader2, Fingerprint, AlertCircle } from 'lucide-react';
@@ -7,10 +6,10 @@ import { useResponsivePagination } from '../hooks/useResponsivePagination';
 import { EditEntryModal } from '../components/EditEntryModal';
 import { SHEET_NAMES, STUDENT_LINK_SHEET_ID } from '../constants';
 import { StudentFollowupRow } from '../types';
-import { submitSheetData } from '../services/sheetService';
+import { submitSheetData, normalizeId } from '../services/sheetService';
 
 export const StudentFollowupView: React.FC = () => {
-    const { studentFollowupData: contextData, loading, reloadData, loadStudentFollowupData } = useSheetData();
+    const { studentFollowupData: contextData, diuEmployeeData, teacherData, loading, reloadData, loadStudentFollowupData } = useSheetData();
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editMode, setEditMode] = useState<'add' | 'edit'>('add');
@@ -23,6 +22,33 @@ export const StudentFollowupView: React.FC = () => {
     const [localData, setLocalData] = useState<StudentFollowupRow[]>([]);
     // Ref to track if we should temporarily ignore incoming context data (to prevent stale overwrite)
     const ignoreContextSyncUntil = useRef<number>(0);
+
+    // Compute employee options for the dropdown
+    const employeeOptions = useMemo(() => {
+        const map = new Map<string, string>();
+        diuEmployeeData.forEach(e => { 
+            const id = e['Employee ID']?.trim();
+            if (!id) return;
+            map.set(normalizeId(id), `${e['Employee Name']} - ${[e['Administrative Designation'], e['Academic Designation']].filter(Boolean).join('/')} (${id})`); 
+        });
+        teacherData.forEach(t => {
+            const id = t['Employee ID']?.trim();
+            if (!id) return;
+            const normId = normalizeId(id);
+            if (!map.has(normId)) map.set(normId, `${t['Employee Name']} - ${t.Designation} (${id})`);
+        });
+        return Array.from(map.values()).sort();
+    }, [diuEmployeeData, teacherData]);
+
+    // Compute dynamic Response Status options from history
+    const statusOptions = useMemo(() => {
+        const defaults = ['Call Busy', 'Switched Off', 'Not Reachable', 'Department Change', 'University Change'];
+        const used = new Set<string>();
+        contextData.forEach(f => {
+            if (f.Status && f.Status.trim()) used.add(f.Status.trim());
+        });
+        return Array.from(new Set([...defaults, ...used])).sort();
+    }, [contextData]);
 
     // Robust field discovery (case-insensitive)
     const getRowUidValue = useCallback((row: any) => {
@@ -76,10 +102,14 @@ export const StudentFollowupView: React.FC = () => {
     const handleAddClick = () => {
         setEditMode('add');
         setErrorMessage(null);
-        const today = new Date().toISOString().split('T')[0];
+        
+        // Get local date in YYYY-MM-DD format for date input
+        const now = new Date();
+        const datePart = now.toISOString().split('T')[0];
+
         setEditingRow({
             'uniqueid': '', 
-            'Date': today,
+            'Date': datePart,
             'Student ID': '',
             'Student Name': '',
             'Remark': '',
@@ -93,7 +123,17 @@ export const StudentFollowupView: React.FC = () => {
     const handleEditClick = (row: StudentFollowupRow) => {
         setEditMode('edit');
         setErrorMessage(null);
-        setEditingRow(row);
+        
+        // Sanitize Contact Date for the date input
+        const cleanDate = (row.Date || '').split(' ')[0].split('T')[0];
+        // Sanitize Re-follow up for the date input
+        const cleanReFollowup = (row['Re-follow up'] || '').split(' ')[0].split('T')[0];
+
+        setEditingRow({ 
+            ...row, 
+            Date: cleanDate, 
+            'Re-follow up': cleanReFollowup 
+        });
         setIsModalOpen(true);
     };
 
@@ -341,19 +381,34 @@ export const StudentFollowupView: React.FC = () => {
                 initialData={editingRow}
                 keyColumn="uniqueid"
                 hiddenFields={['uniqueid', 'Timestamp']} 
-                fieldOptions={{ 'Status': ['Call Busy', 'Switched Off', 'Not Reachable', 'Department Change', 'University Change'] }}
+                fieldOptions={{ 
+                    'Status': statusOptions,
+                    'Contacted By': employeeOptions 
+                }}
                 spreadsheetId={STUDENT_LINK_SHEET_ID}
                 onSuccess={handleModalSuccess}
                 closeOnSubmit={true} 
                 transformData={(data) => {
                     const now = new Date();
                     const datePart = now.toISOString().split('T')[0];
-                    const timePart = now.toTimeString().split(' ')[0];
+                    const timePart = now.toTimeString().split(' ')[0]; // HH:mm:ss
+                    
+                    // Extract only the Employee ID from the selection if applicable
+                    const contactedByText = data['Contacted By'] || '';
+                    const idMatch = contactedByText.match(/\(([^)]+)\)$/);
+                    const contactedById = idMatch ? idMatch[1] : contactedByText;
+
+                    // Ensure Re-follow up is strictly a date string (YYYY-MM-DD)
+                    const reFollowupClean = (data['Re-follow up'] || '').split(' ')[0].split('T')[0];
+
                     return {
                         ...data,
                         'uniqueid': data['uniqueid'] || `SF-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
                         Timestamp: data.Timestamp || `${datePart} ${timePart}`,
-                        Date: data.Date || datePart
+                        // Append current time ONLY to the Contact Date
+                        Date: `${data.Date} ${timePart}`,
+                        'Re-follow up': reFollowupClean,
+                        'Contacted By': contactedById
                     };
                 }}
             />
