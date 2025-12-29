@@ -133,7 +133,7 @@ export const DropOutView: React.FC = () => {
         
         const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
         const parseSem = (sem: string) => {
-            const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/;
+            const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/);
             if (!match) return { year: 0, season: -1 };
             let year = parseInt(match[2], 10); if (year < 100) year += 2000;
             return { year, season: seasonWeight[match[1].toLowerCase()] ?? -1 };
@@ -179,7 +179,7 @@ export const DropOutView: React.FC = () => {
             const allUnreg: StudentDataRow[] = [];
             const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
             const parseSem = (sem: string) => {
-                const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/;
+                const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/);
                 if (!match) return { year: 0, season: -1 };
                 let year = parseInt(match[2], 10); if (year < 100) year += 2000;
                 return { year, season: seasonWeight[match[1].toLowerCase()] ?? -1 };

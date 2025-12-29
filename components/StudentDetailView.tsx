@@ -236,9 +236,10 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 
     const resolveEmployeeFromValue = (val: string | undefined) => {
         if (!val) return null;
-        const match = val.match(/\(([^)]+)\)$/);
-        // Fix: Ensure match[1] is a string before calling trim() to avoid 'unknown' type errors
-        const id = (match && typeof match[1] === 'string') ? match[1].trim() : (typeof val === 'string' ? val.trim() : '');
+        // Fix: Ensure match[1] is a string and cast result to string to avoid 'unknown' type errors
+        const sVal = String(val);
+        const match = sVal.match(/\(([^)]+)\)$/);
+        const id = (match && match[1]) ? String(match[1]).trim() : sVal.trim();
         if (!id) return null;
         const normId = normalizeId(id);
         const emp = diuEmployeeData.find(e => normalizeId(e['Employee ID']) === normId);
@@ -261,14 +262,15 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 
     const handleSaveQuickEdit = async () => {
         if (!studentSemester) return;
-        // Fix: Explicitly return string and ensure type safety for match[1] and val.trim()
+        // Fix: Ensure type safety for match[1] and val.trim() by explicitly casting to string
         const sanitizeValue = (val: string | undefined): string => {
             if (!val) return '';
-            const match = val.match(/\(([^)]+)\)$/);
-            if (match && typeof match[1] === 'string') {
-                return match[1].trim();
+            const sVal = String(val);
+            const match = sVal.match(/\(([^)]+)\)$/);
+            if (match && match[1]) {
+                return String(match[1]).trim();
             }
-            return typeof val === 'string' ? val.trim() : '';
+            return sVal.trim();
         };
         const sanitizedBuffer = { ...editBuffer };
         if (sanitizedBuffer['Defense Supervisor']) sanitizedBuffer['Defense Supervisor'] = sanitizeValue(sanitizedBuffer['Defense Supervisor']);
