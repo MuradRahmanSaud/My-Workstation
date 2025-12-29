@@ -237,7 +237,9 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
     const resolveEmployeeFromValue = (val: string | undefined) => {
         if (!val) return null;
         const match = val.match(/\(([^)]+)\)$/);
-        const id = match ? match[1].trim() : val.trim();
+        // Fix: Ensure match[1] is a string before calling trim() to avoid 'unknown' type errors
+        const id = (match && typeof match[1] === 'string') ? match[1].trim() : (typeof val === 'string' ? val.trim() : '');
+        if (!id) return null;
         const normId = normalizeId(id);
         const emp = diuEmployeeData.find(e => normalizeId(e['Employee ID']) === normId);
         if (emp) return emp;
@@ -259,10 +261,14 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 
     const handleSaveQuickEdit = async () => {
         if (!studentSemester) return;
-        const sanitizeValue = (val: string | undefined) => {
+        // Fix: Explicitly return string and ensure type safety for match[1] and val.trim()
+        const sanitizeValue = (val: string | undefined): string => {
             if (!val) return '';
             const match = val.match(/\(([^)]+)\)$/);
-            return match ? match[1].trim() : val.trim();
+            if (match && typeof match[1] === 'string') {
+                return match[1].trim();
+            }
+            return typeof val === 'string' ? val.trim() : '';
         };
         const sanitizedBuffer = { ...editBuffer };
         if (sanitizedBuffer['Defense Supervisor']) sanitizedBuffer['Defense Supervisor'] = sanitizeValue(sanitizedBuffer['Defense Supervisor']);
@@ -463,7 +469,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 
                 {(activePopup === 'credits' || activePopup === 'defense' || activePopup === 'degree' || activePopup === 'dues' || activePopup === 'mentor') && (
                     <div className="absolute inset-0 z-[150] bg-black/5 backdrop-blur-[2px] flex items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-200">
-                        <div className="bg-slate-50 rounded-2xl shadow-2xl border border-slate-200 p-5 w-full max-w-sm md:max-w-md space-y-4">
+                        <div className="bg-slate-50 rounded-2xl shadow-2xl border border-slate-200 p-5 w-full max-sm md:max-w-md space-y-4">
                             <div className="flex items-center justify-between border-b pb-2">
                                 <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest flex items-center">
                                     {activePopup === 'credits' && <><Calculator className="w-3.5 h-3.5 mr-2 text-blue-600" /> Credit Details</>}

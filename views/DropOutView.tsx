@@ -265,9 +265,17 @@ export const DropOutView: React.FC = () => {
         <div className="flex flex-col h-full bg-gray-50 relative overflow-hidden">
             {headerTitleTarget && createPortal(
                 <div className="flex items-center space-x-3 animate-in fade-in slide-in-from-left-2 duration-300">
-                    <h2 className="text-[13px] md:text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center">
-                        <UserX className="w-4 h-4 mr-2 text-red-600" />
+                    <h2 className="text-[13px] md:text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center truncate">
+                        <UserX className="w-4 h-4 mr-2 text-red-600 shrink-0" />
                         Dropout Analysis
+                        {selectedProgram && (
+                            <>
+                                <span className="mx-2 text-gray-300 font-normal shrink-0">|</span>
+                                <span className="text-blue-600 normal-case truncate max-w-[150px] md:max-w-none" title={selectedProgram['Program Full Name']}>
+                                    {selectedProgram['Program Full Name']}
+                                </span>
+                            </>
+                        )}
                     </h2>
                 </div>, 
                 headerTitleTarget
