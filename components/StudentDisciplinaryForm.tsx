@@ -1,8 +1,10 @@
+
 import React from 'react';
-import { CalendarRange, X, Save, Loader2 } from 'lucide-react';
+import { CalendarRange, X, Save, Loader2, RefreshCcw } from 'lucide-react';
 import { SearchableSelect } from './EditEntryModal';
 
 interface DisciplinaryFormProps {
+    mode?: 'add' | 'edit';
     discReason: string;
     setDiscReason: (val: string) => void;
     discFromDate: string;
@@ -16,17 +18,18 @@ interface DisciplinaryFormProps {
 }
 
 export const StudentDisciplinaryForm: React.FC<DisciplinaryFormProps> = ({
-    discReason, setDiscReason, discFromDate, setDiscFromDate, discToDate, setDiscToDate,
+    mode = 'add', discReason, setDiscReason, discFromDate, setDiscFromDate, discToDate, setDiscToDate,
     isExpired, isSaving, onSave, onClose
 }) => {
     const themeColor = isExpired ? 'yellow' : 'red';
+    const isEdit = mode === 'edit';
 
     return (
         <div className={`rounded-xl shadow-lg border overflow-visible flex flex-col p-5 space-y-4 animate-in slide-in-from-top-2 ${isExpired ? 'bg-yellow-50 border-yellow-300 shadow-yellow-100/50' : 'bg-red-50 border-red-200'}`}>
             <div className={`flex items-center justify-between border-b pb-2 ${isExpired ? 'border-yellow-200' : 'border-red-200'}`}>
                 <h4 className={`text-xs font-black uppercase tracking-widest flex items-center ${isExpired ? 'text-yellow-700' : 'text-red-700'}`}>
                     <CalendarRange className="w-4 h-4 mr-2" /> 
-                    {isExpired ? 'Update Disciplinary Record' : 'Disciplinary Action Setting'}
+                    {isEdit ? 'Update Disciplinary Record' : 'Disciplinary Action Setting'}
                 </h4>
                 <button onClick={onClose} className={`${isExpired ? 'text-yellow-400 hover:text-yellow-600' : 'text-red-400 hover:text-red-600'}`}>
                     <X className="w-5 h-5" />
@@ -76,10 +79,16 @@ export const StudentDisciplinaryForm: React.FC<DisciplinaryFormProps> = ({
                 <button 
                     onClick={onSave} 
                     disabled={isSaving}
-                    className={`flex-1 py-2.5 text-xs font-bold text-white rounded-lg shadow-md flex items-center justify-center ${isExpired ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-red-600 hover:bg-red-700'}`}
+                    className={`flex-1 py-2.5 text-xs font-bold text-white rounded-lg shadow-md flex items-center justify-center transition-all active:scale-95 ${isExpired ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-red-600 hover:bg-red-700'}`}
                 >
-                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                    Apply Record
+                    {isSaving ? (
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : isEdit ? (
+                        <RefreshCcw className="w-4 h-4 mr-2" />
+                    ) : (
+                        <Save className="w-4 h-4 mr-2" />
+                    )}
+                    {isEdit ? 'Update Record' : 'Apply Record'}
                 </button>
             </div>
         </div>

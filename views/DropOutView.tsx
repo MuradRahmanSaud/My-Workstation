@@ -374,6 +374,8 @@ export const DropOutView: React.FC = () => {
                                             <FollowupTimelineDashboard 
                                                 students={getFilteredStudentList('followup')} 
                                                 onRowClick={handleFollowupStudentClick}
+                                                diuEmployeeData={diuEmployeeData}
+                                                teacherData={teacherData}
                                             />
                                         </div>
                                     ) : (

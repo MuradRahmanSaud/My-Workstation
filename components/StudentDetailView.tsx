@@ -1,5 +1,6 @@
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { X, MessageSquareQuote, Save, ArrowLeft, Loader2, Plus, User, Mail, Phone, Hash, Briefcase, Trash2 } from 'lucide-react';
+import { X, MessageSquareQuote, Save, ArrowLeft, Loader2, Plus, User, Mail, Phone, Hash, Briefcase } from 'lucide-react';
 import { StudentDataRow, ProgramDataRow, DiuEmployeeRow, TeacherDataRow } from '../types';
 import { isValEmpty, getImageUrl } from '../views/EmployeeView';
 import { useSheetData } from '../hooks/useSheetData';
@@ -133,8 +134,9 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
     const historyRemarks = useMemo(() => {
         const raw = student['Discussion Remark'];
         if (isValEmpty(raw)) return [];
-        return raw!.split(RECORD_SEP).filter(Boolean).map((entry, idx) => {
-            const fields = entry.split(FIELD_SEP);
+        // Use exact same filtering as delete logic for index mapping
+        return raw!.split(RECORD_SEP).map(s => s.trim()).filter(Boolean).map((entry, idx) => {
+            const fields = entry.split(FIELD_SEP).map(f => f.trim());
             return {
                 Date: fields[0] || '', Status: fields[1] || '', 'Contacted By': fields[2] || '', 'Re-follow up': fields[3] || '', Remark: fields[4] || '',
                 'Student ID': student['Student ID'], 'Student Name': student['Student Name'],
@@ -238,7 +240,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
             // Formatting dates back to display format if needed
             const payload = { ...newData };
             if (activePopup === 'defense' && payload['Defense Registration']) {
-                payload['Defense Registration'] = formatDisplayDate(payload['Defense Registration'], false).split(',')[0];
+                payload['Defense Registration'] = formatDisplayDate(payload['Defense Registration'], false);
             }
             await onSaveStudent(studentSemester, { ...student, ...payload } as StudentDataRow);
         } finally {
@@ -252,11 +254,18 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 
     const handleSaveDisc = async () => {
         if (!studentSemester || !discReason || !discFromDate) return;
-        const notice = discToDate 
-            ? `${discReason} from ${formatDisplayDate(discFromDate, false).split(',')[0]} to ${formatDisplayDate(discToDate, false).split(',')[0]}` 
-            : `${formatDisplayDate(discFromDate, false).split(',')[0]} (Permanent ${discReason})`;
+        
+        // Consistent formatting: "Reason from MMM DD, YYYY to MMM DD, YYYY"
+        const fromStr = formatDisplayDate(discFromDate, false);
+        const toStr = discToDate ? formatDisplayDate(discToDate, false) : null;
+        
+        const notice = toStr 
+            ? `${discReason} from ${fromStr} to ${toStr}` 
+            : `${discReason} from ${fromStr} (Permanent)`;
+            
         const updated = editingDiscIndex !== null ? [...discRecords] : [...discRecords, notice];
         if (editingDiscIndex !== null) updated[editingDiscIndex] = notice;
+        
         setIsDiscFormOpen(false);
         onSaveStudent(studentSemester!, { ...student, 'Disciplinary Action': updated.join(' || ') } as StudentDataRow);
     };
@@ -287,7 +296,8 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         const contactedById = idMatch ? idMatch[1] : contactedByText;
 
         const entryStr = [combinedDate, d.Status, contactedById, reFollowupDate, d.Remark.replace(/\n/g, ' ')].join(FIELD_SEP);
-        const entries = (student['Discussion Remark'] || '').split(RECORD_SEP).filter(Boolean);
+        // Robust splitting for replacement
+        const entries = (student['Discussion Remark'] || '').split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
         if (editingFollowupIndex !== null) entries[editingFollowupIndex] = entryStr;
         else entries.push(entryStr);
         
@@ -322,10 +332,22 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
     };
 
     const handleDeleteFollowup = async (index: number) => {
-        if (!window.confirm("Delete this entry?")) return;
-        const entries = (student['Discussion Remark'] || '').split(RECORD_SEP).filter(Boolean);
-        entries.splice(index, 1);
-        onSaveStudent(studentSemester!, { ...student, 'Discussion Remark': entries.join(RECORD_SEP) } as StudentDataRow);
+        if (!studentSemester) return;
+        if (!window.confirm("Are you sure you want to delete this follow-up record?")) return;
+
+        setIsSaving(true);
+        // Use exact same split logic as historyRemarks to ensure index alignment
+        const entries = (student['Discussion Remark'] || '').split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
+        if (index >= 0 && index < entries.length) {
+            entries.splice(index, 1);
+            const newRemarks = entries.join(RECORD_SEP);
+            try {
+                await onSaveStudent(studentSemester, { ...student, 'Discussion Remark': newRemarks } as StudentDataRow);
+            } catch (e) {
+                console.error("Failed to delete followup", e);
+            }
+        }
+        setIsSaving(false);
     };
 
     const isEditViewActive = activePopup && ['credits', 'defense', 'degree', 'dues', 'mentor', 'history'].includes(activePopup);
@@ -531,9 +553,21 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative bg-white font-sans">
             <div className="bg-white border-b border-slate-100 p-5 shadow-sm shrink-0">
-                <StudentIdentity student={student} program={program} dropInfo={null} onDropClick={() => setActivePopup('dropout')} />
+                <StudentIdentity 
+                    student={student} 
+                    program={program} 
+                    dropInfo={null} 
+                    onDropClick={() => {
+                        setActivePopup('dropout');
+                        setIsRemarksOpen(false); // Close remarks when card is clicked
+                    }} 
+                />
                 <StudentStatsGrid 
-                    student={student} activePopup={activePopup} onCardClick={setActivePopup}
+                    student={student} activePopup={activePopup} 
+                    onCardClick={(type) => {
+                        setActivePopup(type);
+                        setIsRemarksOpen(false); // Close remarks when card is clicked
+                    }}
                     isCreditsMet={parseFloat(student['Credit Completed'] || '0') >= parseFloat(student['Credit Requirement'] || '0')}
                     isDefenseSuccess={student['Defense Status']?.toLowerCase() === 'complete'}
                     isDegreeDone={student['Degree Status']?.toLowerCase() === 'complete'}
@@ -584,16 +618,46 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                     onDeleteFollowup={handleDeleteFollowup}
                     discStatus={discStatus} discRecords={discRecords} isDiscHistoryOpen={isDiscHistoryOpen} toggleDiscHistory={() => setIsDiscHistoryOpen(!isDiscHistoryOpen)}
                     onAddDisc={() => { setDiscReason(''); setDiscFromDate(new Date().toISOString().split('T')[0]); setDiscToDate(''); setEditingDiscIndex(null); setIsDiscFormOpen(true); }}
-                    onEditDisc={(idx) => { const r = discRecords[idx]; const m = r.match(/(.+) from ([A-Z][a-z]{2} \d{1,2}, \d (?:[0-9]{2,4})) to ([A-Z][a-z]{2} \d{1,2}, \d (?:[0-9]{2,4}))/); if(m){ setDiscReason(m[1].trim()); setDiscFromDate(parseToIsoDate(m[2])); setDiscToDate(parseToIsoDate(m[3])); } else { setDiscReason(r); } setEditingDiscIndex(idx); setIsDiscFormOpen(true); }}
-                    onRemoveAllDisc={() => window.confirm("Clear all?") && onSaveStudent(studentSemester!, { ...student, 'Disciplinary Action': '' } as StudentDataRow)}
+                    onEditDisc={(idx) => { 
+                        const r = discRecords[idx]; 
+                        // Enhanced regex to handle "from Date to Date" or "from Date (Permanent)"
+                        // Flexible regex to match Month Day, Year with optional comma
+                        const match = r.match(/^(.+?)\s+from\s+([A-Z][a-z]{2}\s+\d{1,2},?\s+\d{4})(?:\s+to\s+([A-Z][a-z]{2}\s+\d{1,2},?\s+\d{4})|\s+\(Permanent\))?$/);
+                        
+                        if(match){ 
+                            setDiscReason(match[1].trim()); 
+                            setDiscFromDate(parseToIsoDate(match[2])); 
+                            setDiscToDate(match[3] ? parseToIsoDate(match[3]) : ''); 
+                        } else { 
+                            // Try simpler parsing if complex regex fails
+                            const parts = r.split(/\s+from\s+/);
+                            if (parts.length > 1) {
+                                setDiscReason(parts[0].trim());
+                                // Attempt to parse the rest for dates if possible, or just default
+                                const datePart = parts[1].split(/\s+to\s+|\s+\(Permanent\)/)[0];
+                                setDiscFromDate(parseToIsoDate(datePart) || new Date().toISOString().split('T')[0]);
+                                setDiscToDate('');
+                            } else {
+                                setDiscReason(r);
+                                setDiscFromDate(new Date().toISOString().split('T')[0]);
+                                setDiscToDate('');
+                            }
+                        } 
+                        setEditingDiscIndex(idx); 
+                        setIsDiscFormOpen(true); 
+                    }}
+                    onRemoveAllDisc={() => window.confirm("Clear all disciplinary records for this student?") && onSaveStudent(studentSemester!, { ...student, 'Disciplinary Action': '' } as StudentDataRow)}
                     checkRecordExpiry={checkRecordExpiry}
+                    diuEmployeeData={diuEmployeeData}
+                    teacherData={teacherData}
+                    isSaving={isSaving}
                 />
 
                 {activePopup === 'dropout' && <StudentDropoutControl onClose={() => setActivePopup(null)} onUpdate={(type) => handleQuickUpdate({ 'Dropout Classification': type })} />}
                 
                 {isDiscFormOpen && (
                     <div className="absolute inset-0 z-[150] p-3 bg-white/95 backdrop-blur-sm">
-                        <StudentDisciplinaryForm discReason={discReason} setDiscReason={setDiscReason} discFromDate={discFromDate} setDiscFromDate={setDiscFromDate} discToDate={discToDate} setDiscToDate={setDiscToDate} isExpired={discStatus.isExpired} isSaving={isSaving} onSave={handleSaveDisc} onClose={() => setIsDiscFormOpen(false)} />
+                        <StudentDisciplinaryForm mode={editingDiscIndex !== null ? 'edit' : 'add'} discReason={discReason} setDiscReason={setDiscReason} discFromDate={discFromDate} setDiscFromDate={setDiscFromDate} discToDate={discToDate} setDiscToDate={setDiscToDate} isExpired={discStatus.isExpired} isSaving={isSaving} onSave={handleSaveDisc} onClose={() => setIsDiscFormOpen(false)} />
                     </div>
                 )}
                 
