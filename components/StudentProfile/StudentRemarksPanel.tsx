@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { X, MessageSquareQuote, Plus, CalendarDays, CalendarX, Pencil, Trash2, Info, ChevronDown, ChevronUp, ShieldAlert, CalendarX as CalendarXIcon, User, Loader2 } from 'lucide-react';
+import { X, MessageSquareQuote, Plus, CalendarDays, CalendarX, Pencil, Trash2, Info, ChevronDown, ChevronUp, ShieldAlert, CalendarX as CalendarXIcon, User, Loader2, Target } from 'lucide-react';
 import { StudentFollowupRow, DiuEmployeeRow, TeacherDataRow } from '../../types';
 import { normalizeId } from '../../services/sheetService';
 
@@ -67,12 +67,12 @@ export const StudentRemarksPanel: React.FC<StudentRemarksPanelProps> = React.mem
                 </div>
                 <div className="flex items-center space-x-1.5">
                     {discRecords.length === 0 && (
-                        <button onClick={onAddDisc} disabled={isSaving} className="flex items-center space-x-1 px-2 py-1 rounded-md border bg-red-600 text-white border-red-700 shadow-sm hover:bg-red-700 transition-colors disabled:opacity-50">
+                        <button onClick={onAddDisc} className="flex items-center space-x-1 px-2 py-1 rounded-md border bg-red-600 text-white border-red-700 shadow-sm hover:bg-red-700 transition-colors">
                             <Plus className="w-3 h-3" />
                             <span className="text-[9px] font-bold uppercase">Add Disciplinary</span>
                         </button>
                     )}
-                    <button onClick={onAddFollowup} disabled={isSaving} className="flex items-center space-x-1 px-2 py-1 rounded-md border bg-blue-600 text-white border-blue-700 shadow-sm hover:bg-blue-700 transition-colors disabled:opacity-50">
+                    <button onClick={onAddFollowup} className="flex items-center space-x-1 px-2 py-1 rounded-md border bg-blue-600 text-white border-blue-700 shadow-sm hover:bg-blue-700 transition-colors">
                         <Plus className="w-3 h-3" />
                         <span className="text-[9px] font-bold uppercase">Add Follow-up</span>
                     </button>
@@ -88,7 +88,7 @@ export const StudentRemarksPanel: React.FC<StudentRemarksPanelProps> = React.mem
                         <div className={`border rounded-lg p-3 shadow-sm cursor-pointer transition-all hover:shadow-md ${isDiscHistoryOpen ? 'bg-red-100 border-red-300 ring-2 ring-red-500/10' : (discStatus.isExpired ? 'bg-yellow-100 border-yellow-200' : 'bg-red-50 border-red-200')}`} onClick={toggleDiscHistory}>
                             <div className={`flex items-center justify-between mb-1.5 ${discStatus.isExpired ? 'text-yellow-700' : 'text-red-700'}`}>
                                 <div className="flex items-center space-x-2"><ShieldAlert className="w-4 h-4" /><h4 className="text-[11px] font-black uppercase tracking-wider">Disciplinary Status</h4></div>
-                                <div className="flex items-center space-x-2"><button onClick={(e) => { e.stopPropagation(); onAddDisc(); }} disabled={isSaving} className="p-1 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors mr-1 shadow-sm disabled:opacity-50"><Plus className="w-3 h-3" /></button><span className="text-[8px] font-bold bg-white/60 px-1 py-0.5 rounded border border-current opacity-60">{discRecords.length} LOGS</span>{isDiscHistoryOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}</div>
+                                <div className="flex items-center space-x-2"><button onClick={(e) => { e.stopPropagation(); onAddDisc(); }} className="p-1 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors mr-1 shadow-sm"><Plus className="w-3 h-3" /></button><span className="text-[8px] font-bold bg-white/60 px-1 py-0.5 rounded border border-current opacity-60">{discRecords.length} LOGS</span>{isDiscHistoryOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}</div>
                             </div>
                             <p className={`text-[11px] leading-relaxed font-bold italic ${discStatus.isExpired ? 'text-yellow-800' : 'text-red-600'}`}>{discStatus.message}</p>
                         </div>
@@ -106,11 +106,11 @@ export const StudentRemarksPanel: React.FC<StudentRemarksPanelProps> = React.mem
                                                 </div>
                                                 <p className={`text-[10px] md:text-[11px] font-bold italic leading-relaxed ${isExpired ? 'text-yellow-900' : 'text-red-900'}`}>{record}</p>
                                             </div>
-                                            <button onClick={(e) => { e.stopPropagation(); onEditDisc(actualIdx); }} disabled={isSaving} className={`p-1.5 rounded-md transition-colors disabled:opacity-30 ${isExpired ? 'text-yellow-600 hover:bg-yellow-100' : 'text-red-500 hover:bg-red-50'}`}><Pencil className="w-3 h-3" /></button>
+                                            <button onClick={(e) => { e.stopPropagation(); onEditDisc(actualIdx); }} className={`p-1.5 rounded-md transition-colors ${isExpired ? 'text-yellow-600 hover:bg-yellow-100' : 'text-red-500 hover:bg-red-50'}`}><Pencil className="w-3 h-3" /></button>
                                         </div>
                                     );
                                 })}
-                                <button onClick={onRemoveAllDisc} disabled={isSaving} className="w-full py-1 text-[8px] font-black text-red-400 hover:text-red-600 transition-colors uppercase border border-dashed border-red-200 rounded mt-1 disabled:opacity-50">Clear All Records</button>
+                                <button onClick={onRemoveAllDisc} className="w-full py-1 text-[8px] font-black text-red-400 hover:text-red-600 transition-colors uppercase border border-dashed border-red-200 rounded mt-1">Clear All Records</button>
                             </div>
                         )}
                     </div>
@@ -127,14 +127,19 @@ export const StudentRemarksPanel: React.FC<StudentRemarksPanelProps> = React.mem
                             const responseStatus = match ? match[1] : (statusStr || 'Contacted'); 
                             const dropType = match ? match[2] : null; 
                             const isExpanded = expandedRemarks.has(uid);
+                            const targetSemester = (item as any)['Target Semester'];
 
                             return (
                                 <div key={uid} className="bg-white rounded-lg border border-slate-100 p-2.5 shadow-sm transition-all group relative hover:shadow-md hover:border-blue-100">
+                                    {/* Header Section: Top Align */}
                                     <div className="flex justify-between items-start mb-2">
                                         <div className="flex flex-col min-h-[34px]">
-                                            <div className="flex items-center space-x-2">
-                                                <div className="p-1 rounded bg-slate-50 text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors"><CalendarDays className="w-3 h-3" /></div>
-                                                <span className="text-[10px] font-black text-slate-800 tracking-tight">{formatDate(item.Date, true, false)}</span>
+                                            <div className="flex items-center flex-wrap gap-2">
+                                                <div className="flex items-center space-x-2">
+                                                    <div className="p-1 rounded bg-slate-50 text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors"><CalendarDays className="w-3 h-3" /></div>
+                                                    <span className="text-[10px] font-black text-slate-800 tracking-tight">{formatDate(item.Date, true, false)}</span>
+                                                </div>
+                                                
                                                 {item['Re-follow up'] && (
                                                     <div className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-100 text-[8px] font-bold text-emerald-700 uppercase tracking-tighter shadow-sm">
                                                         <CalendarX className="w-2.5 h-2.5 mr-1 text-emerald-500" />
@@ -157,28 +162,43 @@ export const StudentRemarksPanel: React.FC<StudentRemarksPanelProps> = React.mem
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center space-x-1.5 opacity-0 group-hover:opacity-100 transition-all">
-                                            <button onClick={() => onEditFollowup(item)} disabled={isSaving} className="p-1 hover:bg-blue-50 text-blue-400 hover:text-blue-600 rounded disabled:opacity-30" title="Edit Remark"><Pencil className="w-3 h-3" /></button>
-                                            <button 
-                                                onClick={() => onDeleteFollowup(item._index)} 
-                                                disabled={isSaving}
-                                                className="p-1 hover:bg-red-50 text-red-400 hover:text-red-600 rounded disabled:opacity-30" 
-                                                title="Delete Remark"
-                                            >
-                                                {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                                            </button>
-                                        </div>
+
+                                        {/* Target Semester Badge - Fixed at Top Right */}
+                                        {targetSemester && (
+                                            <div className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-600 text-white text-[8px] font-black uppercase tracking-wider shadow-sm shrink-0">
+                                                <Target className="w-2.5 h-2.5 mr-1" />
+                                                {targetSemester}
+                                            </div>
+                                        )}
                                     </div>
+
+                                    {/* Body Section: Remark Content */}
                                     <div className="relative pl-3 mb-1 cursor-pointer select-none mt-1" onClick={() => toggleRemarkExpansion(uid)}>
                                         <div className={`absolute left-0 top-0 bottom-0 w-0.5 rounded-full ${dropType ? 'bg-orange-400' : 'bg-blue-400'}`}></div>
                                         <p className={`text-[11px] text-slate-700 font-medium leading-relaxed italic transition-all ${isExpanded ? '' : 'line-clamp-3'}`}>{item.Remark}</p>
-                                        <div className="mt-2 flex">
+                                    </div>
+
+                                    {/* Footer Section: Bottom Right Align for Action Buttons */}
+                                    <div className="mt-2 flex items-center justify-between">
+                                        <div className="flex items-center">
                                             {responseStatus && (
                                                 <div className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 border border-blue-100 text-[9px] font-black text-blue-700 uppercase tracking-tighter shadow-sm">
                                                     <Info className="w-2.5 h-2.5 mr-1 text-blue-500" />
                                                     {responseStatus}
                                                 </div>
                                             )}
+                                        </div>
+
+                                        {/* Edit / Delete Buttons - Positioned at Bottom Right corner */}
+                                        <div className="flex items-center space-x-1.5 opacity-0 group-hover:opacity-100 transition-all">
+                                            <button onClick={() => onEditFollowup(item)} className="p-1 hover:bg-blue-50 text-blue-400 hover:text-blue-600 rounded" title="Edit Remark"><Pencil className="w-3 h-3" /></button>
+                                            <button 
+                                                onClick={() => onDeleteFollowup(item._index)} 
+                                                className="p-1 hover:bg-red-50 text-red-400 hover:text-red-600 rounded" 
+                                                title="Delete Remark"
+                                            >
+                                                {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                                            </button>
                                         </div>
                                     </div>
                                 </div>

@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { UserX, RefreshCw, ArrowLeft, School, Search, Filter, MessageSquare } from 'lucide-react';
@@ -44,7 +43,7 @@ export const DropOutView: React.FC = () => {
     const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
     
     const [activeUnregList, setActiveUnregList] = useState<{ semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string; listType: DropoutKpiType | any } | null>(null);
-    const [currentListType, setCurrentListType] = useState<DropoutKpiType>('regPending');
+    const [currentListType, setCurrentListType] = useState<DropoutKpiType>('all');
     
     const [selectedAdmittedSemesters, setSelectedAdmittedSemesters] = useState<Set<string>>(new Set());
     const [registrationFilters, setRegistrationFilters] = useState<Map<string, 'registered' | 'unregistered'>>(new Map());
@@ -236,9 +235,9 @@ export const DropOutView: React.FC = () => {
         return results;
     }, [selectedProgram, targetRegSem, selectedAdmittedSemesters, studentCache, registrationLookup]);
 
-    const handleCardClick = (type: DropoutKpiType) => {
+    const handleCardClick = useCallback((type: DropoutKpiType) => {
         setCurrentListType(type);
-        setShouldAutoOpenRemarks(false); // Default: don't auto-open remarks for KPI card clicks
+        setShouldAutoOpenRemarks(false);
         if (selectedProgram) {
             const students = getFilteredStudentList(type);
             setActiveUnregList({
@@ -250,23 +249,29 @@ export const DropOutView: React.FC = () => {
                 listType: type
             });
         }
-    };
+    }, [selectedProgram, getFilteredStudentList, targetRegSem]);
 
     const handleFollowupStudentClick = (studentId: string) => {
         const followupStudents = getFilteredStudentList('followup');
         const student = followupStudents.find(s => s['Student ID'] === studentId);
         if (student) {
-            setShouldAutoOpenRemarks(true); // Flag to open Remarks & History panel
+            setShouldAutoOpenRemarks(true);
             setSelectedStudent(student);
         }
     };
 
-    // Initialize list only if nothing is selected or program changes
+    // Robust Initial Population: Runs when program changes OR when data cache updates
     useEffect(() => {
-        if (selectedProgram && targetRegSem && !activeUnregList) {
-            handleCardClick(currentListType);
+        if (selectedProgram && targetRegSem) {
+            // Check if we already have some data for the selected semesters
+            const hasData = Array.from(selectedAdmittedSemesters).some(sem => studentCache.has(sem));
+            
+            // Only update active list if it's currently null OR if we are in 'all' mode and data has arrived
+            if (!activeUnregList || (activeUnregList.students.length === 0 && hasData)) {
+                handleCardClick(currentListType);
+            }
         }
-    }, [selectedProgram?.PID, targetRegSem]);
+    }, [selectedProgram?.PID, targetRegSem, studentCache, selectedAdmittedSemesters, currentListType, handleCardClick, activeUnregList]);
 
     const employeeOptions = useMemo(() => {
         const map = new Map<string, string>();
@@ -396,10 +401,11 @@ export const DropOutView: React.FC = () => {
                                                     onUnregClick={(data) => {
                                                         setCurrentListType(data.listType as DropoutKpiType);
                                                         setActiveUnregList(data);
-                                                        setShouldAutoOpenRemarks(false); // Reset when switching categories
+                                                        setShouldAutoOpenRemarks(false);
                                                     }}
                                                     externalTargetRegSemester={targetRegSem}
                                                     onTargetRegSemesterChange={setTargetRegSem}
+                                                    hideSummaryToggle={true}
                                                 />
                                             </div>
                                             <div className="flex-1 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col">
@@ -415,15 +421,24 @@ export const DropOutView: React.FC = () => {
                                                         programMap={programMap}
                                                         registrationLookup={registrationLookup}
                                                         onRowClick={(student) => {
-                                                            setShouldAutoOpenRemarks(false); // Default behavior for list clicks
+                                                            setShouldAutoOpenRemarks(false);
                                                             setSelectedStudent(student);
                                                         }}
                                                         listType={activeUnregList.listType}
                                                     />
                                                 ) : (
                                                     <div className="h-full flex flex-col items-center justify-center text-slate-300 p-8 text-center bg-slate-50/20">
-                                                        <UserX className="w-12 h-12 mb-3 opacity-10" />
-                                                        <p className="text-[10px] font-bold uppercase tracking-widest opacity-40">Select a category to view analysis</p>
+                                                        {loading.status === 'loading' ? (
+                                                            <div className="flex flex-col items-center">
+                                                                <RefreshCw className="w-10 h-10 mb-3 text-blue-500 animate-spin opacity-40" />
+                                                                <p className="text-[10px] font-bold uppercase tracking-widest opacity-40">Syncing Student Data...</p>
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                <UserX className="w-12 h-12 mb-3 opacity-10" />
+                                                                <p className="text-[10px] font-bold uppercase tracking-widest opacity-40">Select a category to view analysis</p>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>

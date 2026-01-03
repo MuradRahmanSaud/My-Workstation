@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { MessageSquarePlus, Save, Loader2, X, Trash2, PowerOff, Clock } from 'lucide-react';
+
+import React, { useState, useEffect } from 'react';
+import { MessageSquarePlus, Save, Loader2, X, Calendar } from 'lucide-react';
 import { SearchableSelect } from './EditEntryModal';
 import { StudentDataRow } from '../types';
 
@@ -17,17 +18,30 @@ interface FollowupFormProps {
 export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
     student, formData, setFormData, employeeOptions, statusOptions, isSaving, onSave, onClose
 }) => {
+    const [targetSem, setTargetSem] = useState('Spring');
+    const [targetYear, setTargetYear] = useState(new Date().getFullYear().toString());
+
+    useEffect(() => {
+        if (formData['Target Semester']) {
+            const parts = formData['Target Semester'].split(' ');
+            if (parts.length >= 2) {
+                setTargetSem(parts[0]);
+                setTargetYear(parts[1]);
+            }
+        }
+    }, [formData]);
+
     const handleInternalSave = () => {
-        // We ensure a default status if none is selected
         const finalData = { 
             ...formData, 
-            Status: formData.Status || 'Call Busy'
+            Status: formData.Status || 'Call Busy',
+            'Target Semester': `${targetSem} ${targetYear}`
         };
-        
         onSave(finalData);
     };
 
     const isEdit = !!formData.uniqueid;
+    const semesters = ['Spring', 'Summer', 'Fall'];
 
     return (
         <div className="absolute inset-x-3 top-12 bottom-3 z-[150] bg-white border border-rose-100 rounded-xl flex flex-col shadow-2xl ring-1 ring-black/5 animate-in slide-in-from-top-2">
@@ -51,6 +65,34 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 space-y-4 thin-scrollbar">
+                {/* Target Semester Tabs & Year */}
+                <div className="bg-rose-50/50 p-3 rounded-xl border border-rose-100">
+                    <label className="block text-[9px] font-black text-rose-600 uppercase mb-2">Target Registration Semester *</label>
+                    <div className="flex items-center space-x-3">
+                        <div className="flex bg-white p-1 rounded-lg border border-rose-100 shadow-sm flex-1">
+                            {semesters.map(sem => (
+                                <button
+                                    key={sem}
+                                    type="button"
+                                    onClick={() => setTargetSem(sem)}
+                                    className={`flex-1 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${targetSem === sem ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    {sem}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="w-24">
+                            <input 
+                                type="text" 
+                                placeholder="Year"
+                                value={targetYear}
+                                onChange={(e) => setTargetYear(e.target.value)}
+                                className="w-full px-3 py-2 text-xs border border-rose-100 rounded-lg shadow-sm font-bold focus:ring-1 focus:ring-rose-200 outline-none text-center"
+                            />
+                        </div>
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-[9px] font-black text-rose-600 uppercase mb-1">Contact Date *</label>

@@ -169,6 +169,7 @@ export interface StudentFollowupRow {
     'Student Name': string;
     Remark: string;
     'Re-follow up': string;
+    'Target Semester'?: string;
     Status: string;
     'Contacted By': string;
 }

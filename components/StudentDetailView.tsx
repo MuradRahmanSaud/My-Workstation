@@ -1,10 +1,9 @@
-
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { X, MessageSquareQuote, Save, ArrowLeft, Loader2, Plus, User, Mail, Phone, Hash, Briefcase } from 'lucide-react';
+import { X, MessageSquareQuote, Save, ArrowLeft, Loader2, Plus, User, Mail, Phone, Hash, Briefcase, GraduationCap, Calendar, Award, Banknote, CalendarCheck, ShieldQuestion } from 'lucide-react';
 import { StudentDataRow, ProgramDataRow, DiuEmployeeRow, TeacherDataRow } from '../types';
 import { isValEmpty, getImageUrl } from '../views/EmployeeView';
 import { useSheetData } from '../hooks/useSheetData';
-import { submitSheetData } from '../services/sheetService';
+import { submitSheetData, normalizeId } from '../services/sheetService';
 import { SHEET_NAMES, STUDENT_LINK_SHEET_ID } from '../constants';
 
 // Refactored Sub-components
@@ -50,7 +49,6 @@ const parseToIsoDate = (dateStr: string | undefined): string => {
     try {
         const d = new Date(dateStr);
         if (isNaN(d.getTime())) return '';
-        // Returns local ISO format suitable for date inputs (YYYY-MM-DD)
         const offset = d.getTimezoneOffset() * 60000;
         return (new Date(d.getTime() - offset)).toISOString().slice(0, 10);
     } catch (e) { return ''; }
@@ -66,18 +64,15 @@ const checkRecordExpiry = (record: string) => {
     return false;
 };
 
-// Helper to find employee details from the formatted option string
 const resolveEmployeeFromOption = (option: string | undefined, diuEmployeeData: DiuEmployeeRow[], teacherData: TeacherDataRow[]) => {
     if (!option) return null;
     const match = option.match(/\(([^)]+)\)$/);
     const id = match ? match[1].trim().toLowerCase() : option.trim().toLowerCase();
     
-    // Check main employee DB
-    const emp = diuEmployeeData.find(e => e['Employee ID'].trim().toLowerCase() === id);
+    const emp = diuEmployeeData.find(e => normalizeId(e['Employee ID']) === id);
     if (emp) return emp;
 
-    // Check teacher DB and map to common format
-    const teacher = teacherData.find(t => t['Employee ID'].trim().toLowerCase() === id);
+    const teacher = teacherData.find(t => normalizeId(t['Employee ID']) === id);
     if (teacher) {
         return {
             'Employee ID': teacher['Employee ID'],
@@ -109,7 +104,7 @@ interface StudentDetailViewProps {
 export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
     student, program, diuEmployeeData, teacherData, employeeOptions, onSaveStudent, onClose, registrationLookup, studentSemester, initialRemarksOpen = false
 }) => {
-    const { uniqueSemesters, studentFollowupData, reloadData } = useSheetData();
+    const { uniqueSemesters, studentFollowupData, reloadData, studentCache } = useSheetData();
     const [isSaving, setIsSaving] = useState(false);
     const [activePopup, setActivePopup] = useState<string | null>(null);
     const [isRemarksOpen, setIsRemarksOpen] = useState(false);
@@ -118,14 +113,12 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
     const [isDiscHistoryOpen, setIsDiscHistoryOpen] = useState(false);
     const [expandedRemarks, setExpandedRemarks] = useState<Set<string>>(new Set());
 
-    // Effect to handle initial open state for remarks
     useEffect(() => {
         if (initialRemarksOpen) {
             setIsRemarksOpen(true);
         }
     }, [student['Student ID'], initialRemarksOpen]);
 
-    // Inline form state
     const [editFormData, setEditFormData] = useState<any>({});
     const [defenseTypes, setDefenseTypes] = useState(['Thesis', 'Project', 'Internship']);
     const [showAddDefenseType, setShowAddDefenseType] = useState(false);
@@ -134,43 +127,34 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
     const historyRemarks = useMemo(() => {
         const raw = student['Discussion Remark'];
         if (isValEmpty(raw)) return [];
-        // Use exact same filtering as delete logic for index mapping
         return raw!.split(RECORD_SEP).map(s => s.trim()).filter(Boolean).map((entry, idx) => {
             const fields = entry.split(FIELD_SEP).map(f => f.trim());
             return {
-                Date: fields[0] || '', Status: fields[1] || '', 'Contacted By': fields[2] || '', 'Re-follow up': fields[3] || '', Remark: fields[4] || '',
-                'Student ID': student['Student ID'], 'Student Name': student['Student Name'],
+                Date: fields[0] || '', 
+                Status: fields[1] || '', 
+                'Contacted By': fields[2] || '', 
+                'Re-follow up': fields[3] || '', 
+                'Target Semester': fields[4] || '', 
+                Remark: fields[5] || '', 
+                'Student ID': student['Student ID'], 
+                'Student Name': student['Student Name'],
                 'uniqueid': `local-${idx}`, _index: idx
             };
         }).sort((a, b) => new Date(b.Date).getTime() - new Date(a.Date).getTime());
     }, [student['Discussion Remark']]);
 
-    // Compute dynamic Response Status options from history and defaults
     const statusOptions = useMemo(() => {
         const defaults = ['Call Busy', 'Switch Off', 'Department Change', 'University Change', 'Not Reachable', 'Passed Away'];
         const used = new Set<string>();
-        
-        // Collect from global followup tracking (cross-student suggestions)
-        studentFollowupData.forEach(f => {
-            if (f.Status && f.Status.trim()) used.add(f.Status.trim());
-        });
-
-        // Also collect from this student's specific history to include local new items immediately
-        historyRemarks.forEach(r => {
-            if (r.Status && r.Status.trim()) used.add(r.Status.trim());
-        });
-
+        studentFollowupData.forEach(f => { if (f.Status && f.Status.trim()) used.add(f.Status.trim()); });
+        historyRemarks.forEach(r => { if (r.Status && r.Status.trim()) used.add(r.Status.trim()); });
         return Array.from(new Set([...defaults, ...used])).sort();
     }, [studentFollowupData, historyRemarks]);
 
-    // Sync form data when a card is clicked
     useEffect(() => {
         if (activePopup && activePopup !== 'dropout') {
             const initialData = { ...student };
-            // Ensure dates are parsed to ISO for input[type="date"]
-            if (activePopup === 'defense') {
-                initialData['Defense Registration'] = parseToIsoDate(student['Defense Registration']);
-            }
+            if (activePopup === 'defense') { initialData['Defense Registration'] = parseToIsoDate(student['Defense Registration']); }
             setEditFormData(initialData);
         }
     }, [activePopup, student]);
@@ -191,7 +175,6 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         if (!registrationLookup) return [];
         const cleanId = String(student['Student ID']).trim();
         const registeredSems = registrationLookup.get(cleanId) || new Set();
-        
         const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
         const parseSem = (sem: string) => {
             const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/);
@@ -199,37 +182,10 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
             let year = parseInt(match[2], 10); if (year < 100) year += 2000;
             return { year, season: seasonWeight[match[1].toLowerCase()] ?? -1 };
         };
-
         const enrollmentSem = studentSemester || '';
         const enrollmentParsed = parseSem(enrollmentSem);
-        
-        const allSemesters = uniqueSemesters
-            .filter(s => s !== 'All')
-            .map(s => ({ original: s, ...parseSem(s) }))
-            .sort((a, b) => a.year !== b.year ? b.year - a.year : b.season - a.season);
-
-        return allSemesters
-            .filter(sem => {
-                if (sem.year > enrollmentParsed.year) return true;
-                if (sem.year === enrollmentParsed.year && sem.season >= enrollmentParsed.season) return true;
-                return false;
-            })
-            .map(sem => {
-                const isRegistered = registeredSems.has(sem.original);
-                return {
-                    semester: sem.original,
-                    isRegistered: isRegistered,
-                    taken: isRegistered ? 15 : null,
-                    complete: isRegistered ? 15 : null,
-                    sgpa: isRegistered ? (3.2 + Math.random() * 0.7).toFixed(2) : null,
-                    dues: 0
-                };
-            })
-            .sort((a, b) => {
-                const pa = parseSem(a.semester), pb = parseSem(b.semester);
-                if (pa.year !== pb.year) return pb.year - pa.year;
-                return pb.season - pa.season;
-            });
+        const allSemesters = uniqueSemesters.filter(s => s !== 'All').map(s => ({ original: s, ...parseSem(s) })).sort((a, b) => a.year !== b.year ? b.year - a.year : b.season - a.season);
+        return allSemesters.filter(sem => { if (sem.year > enrollmentParsed.year) return true; if (sem.year === enrollmentParsed.year && sem.season >= enrollmentParsed.season) return true; return false; }).map(sem => { const isRegistered = registeredSems.has(sem.original); return { semester: sem.original, isRegistered: isRegistered, taken: isRegistered ? 15 : null, complete: isRegistered ? 15 : null, sgpa: isRegistered ? (3.2 + Math.random() * 0.7).toFixed(2) : null, dues: 0 }; }).sort((a, b) => { const pa = parseSem(a.semester), pb = parseSem(b.semester); if (pa.year !== pb.year) return pb.year - pa.year; return pb.season - pa.season; });
     }, [student, registrationLookup, studentSemester, uniqueSemesters]);
 
     const handleQuickUpdate = useCallback(async (newData: any) => {
@@ -237,35 +193,21 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         setIsSaving(true);
         setActivePopup(null);
         try {
-            // Formatting dates back to display format if needed
             const payload = { ...newData };
-            if (activePopup === 'defense' && payload['Defense Registration']) {
-                payload['Defense Registration'] = formatDisplayDate(payload['Defense Registration'], false);
-            }
+            if (activePopup === 'defense' && payload['Defense Registration']) { payload['Defense Registration'] = formatDisplayDate(payload['Defense Registration'], false); }
             await onSaveStudent(studentSemester, { ...student, ...payload } as StudentDataRow);
-        } finally {
-            setIsSaving(false);
-        }
+        } finally { setIsSaving(false); }
     }, [studentSemester, student, onSaveStudent, activePopup]);
 
-    const handleSaveInlineForm = () => {
-        handleQuickUpdate(editFormData);
-    };
+    const handleSaveInlineForm = () => { handleQuickUpdate(editFormData); };
 
     const handleSaveDisc = async () => {
         if (!studentSemester || !discReason || !discFromDate) return;
-        
-        // Consistent formatting: "Reason from MMM DD, YYYY to MMM DD, YYYY"
         const fromStr = formatDisplayDate(discFromDate, false);
         const toStr = discToDate ? formatDisplayDate(discToDate, false) : null;
-        
-        const notice = toStr 
-            ? `${discReason} from ${fromStr} to ${toStr}` 
-            : `${discReason} from ${fromStr} (Permanent)`;
-            
+        const notice = toStr ? `${discReason} from ${fromStr} to ${toStr}` : `${discReason} from ${fromStr} (Permanent)`;
         const updated = editingDiscIndex !== null ? [...discRecords] : [...discRecords, notice];
         if (editingDiscIndex !== null) updated[editingDiscIndex] = notice;
-        
         setIsDiscFormOpen(false);
         onSaveStudent(studentSemester!, { ...student, 'Disciplinary Action': updated.join(' || ') } as StudentDataRow);
     };
@@ -274,83 +216,43 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
     const [discFromDate, setDiscFromDate] = useState('');
     const [discToDate, setDiscToDate] = useState('');
     const [editingDiscIndex, setEditingDiscIndex] = useState<number | null>(null);
-    const [followupFormData, setFollowupFormData] = useState({ Date: '', Remark: '', 'Re-follow up': '', Status: '', 'Contacted By': '' });
+    const [followupFormData, setFollowupFormData] = useState({ Date: '', Remark: '', 'Re-follow up': '', Status: '', 'Contacted By': '', 'Target Semester': '' });
     const [editingFollowupIndex, setEditingFollowupIndex] = useState<number | null>(null);
 
     const handleSaveFollowup = async (finalData?: any) => {
         if (!studentSemester) return;
-        setIsSaving(true);
         const d = finalData || followupFormData;
-        
-        // Combined Contact Date with current time
         const now = new Date();
         const timePart = now.toTimeString().split(' ')[0];
         const combinedDate = `${d.Date} ${timePart}`;
-
-        // Ensure Re-follow up remains strictly YYYY-MM-DD
         const reFollowupDate = (d['Re-follow up'] || '').split(' ')[0].split('T')[0];
-
-        // Extract ID only from 'Contacted By' display string
         const contactedByText = d['Contacted By'] || '';
         const idMatch = contactedByText.match(/\(([^)]+)\)$/);
         const contactedById = idMatch ? idMatch[1] : contactedByText;
-
-        const entryStr = [combinedDate, d.Status, contactedById, reFollowupDate, d.Remark.replace(/\n/g, ' ')].join(FIELD_SEP);
-        // Robust splitting for replacement
+        const targetSemValue = d['Target Semester'] || '';
+        const entryStr = [combinedDate, d.Status, contactedById, reFollowupDate, targetSemValue, d.Remark.replace(/\n/g, ' ')].join(FIELD_SEP);
         const entries = (student['Discussion Remark'] || '').split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
         if (editingFollowupIndex !== null) entries[editingFollowupIndex] = entryStr;
         else entries.push(entryStr);
-        
         setShowFollowupForm(false);
-        
-        try {
-            // Step 1: Update the student's local remark field
-            await onSaveStudent(studentSemester!, { ...student, 'Discussion Remark': entries.join(RECORD_SEP) } as StudentDataRow);
-
-            // Step 2: Sync to Global Followup_DB
-            const globalPayload = {
-                'uniqueid': `SF-AUTO-${Date.now()}`,
-                'Date': combinedDate,
-                'Student ID': student['Student ID'],
-                'Student Name': student['Student Name'],
-                'Remark': d.Remark,
-                'Re-follow up': reFollowupDate,
-                'Status': d.Status,
-                'Contacted By': contactedById,
-                'Timestamp': new Date().toLocaleString()
-            };
-
-            await submitSheetData('add', SHEET_NAMES.FOLLOWUP, globalPayload, 'uniqueid', undefined, STUDENT_LINK_SHEET_ID);
-            
-            // Step 3: Silent reload
-            reloadData('followup', false);
-        } catch (e) {
-            console.error("Failed to sync followup globally", e);
-        } finally {
-            setIsSaving(false);
-        }
+        const updatedRemarks = entries.join(RECORD_SEP);
+        onSaveStudent(studentSemester!, { ...student, 'Discussion Remark': updatedRemarks } as StudentDataRow);
+        const globalPayload = { 'uniqueid': `SF-AUTO-${Date.now()}`, 'Date': combinedDate, 'Student ID': student['Student ID'], 'Student Name': student['Student Name'], 'Remark': d.Remark, 'Re-follow up': reFollowupDate, 'Target Semester': targetSemValue, 'Status': d.Status, 'Contacted By': contactedById, 'Timestamp': new Date().toLocaleString() };
+        submitSheetData('add', SHEET_NAMES.FOLLOWUP, globalPayload, 'uniqueid', undefined, STUDENT_LINK_SHEET_ID).then(() => reloadData('followup', false)).catch(err => console.error("Global sync failed:", err));
     };
 
     const handleDeleteFollowup = async (index: number) => {
         if (!studentSemester) return;
         if (!window.confirm("Are you sure you want to delete this follow-up record?")) return;
-
         setIsSaving(true);
-        // Use exact same split logic as historyRemarks to ensure index alignment
         const entries = (student['Discussion Remark'] || '').split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
         if (index >= 0 && index < entries.length) {
             entries.splice(index, 1);
             const newRemarks = entries.join(RECORD_SEP);
-            try {
-                await onSaveStudent(studentSemester, { ...student, 'Discussion Remark': newRemarks } as StudentDataRow);
-            } catch (e) {
-                console.error("Failed to delete followup", e);
-            }
+            try { await onSaveStudent(studentSemester, { ...student, 'Discussion Remark': newRemarks } as StudentDataRow); } catch (e) { console.error("Failed to delete followup", e); }
         }
         setIsSaving(false);
     };
-
-    const isEditViewActive = activePopup && ['credits', 'defense', 'degree', 'dues', 'mentor', 'history'].includes(activePopup);
 
     const renderEmployeeCard = (employee: any) => {
         if (!employee) return null;
@@ -366,8 +268,6 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                     <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-blue-100/50">
                         <div className="flex items-center text-[9px] text-gray-500 truncate"><Mail className="w-2.5 h-2.5 mr-1 text-blue-400" /> {employee['E-mail'] || '-'}</div>
                         <div className="flex items-center text-[9px] text-gray-500"><Phone className="w-2.5 h-2.5 mr-1 text-blue-400" /> {employee.Mobile || '-'}</div>
-                        <div className="flex items-center text-[9px] text-gray-500 font-mono"><Hash className="w-2.5 h-2.5 mr-1 text-blue-400" /> {employee['Employee ID']}</div>
-                        <div className="flex items-center text-[9px] text-gray-500"><Briefcase className="w-2.5 h-2.5 mr-1 text-blue-400" /> {employee.Department || '-'}</div>
                     </div>
                 </div>
             </div>
@@ -376,302 +276,75 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 
     const renderInlineEditForm = () => {
         if (!activePopup) return null;
-
         let title = "";
         let content = null;
-        const showBack = false;
-
         switch (activePopup) {
-            case 'credits':
-                title = "Credit Information";
-                content = (
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Credit Requirement</label>
-                            <input type="number" value={editFormData['Credit Requirement'] || ''} onChange={(e) => setEditFormData({...editFormData, 'Credit Requirement': e.target.value})} className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none" />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Credit Completed</label>
-                            <input type="number" value={editFormData['Credit Completed'] || ''} onChange={(e) => setEditFormData({...editFormData, 'Credit Completed': e.target.value})} className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none" />
-                        </div>
-                    </div>
-                );
-                break;
-            case 'defense':
-                title = "Defense Details";
-                const selectedSupervisor = resolveEmployeeFromOption(editFormData['Defense Supervisor'], diuEmployeeData, teacherData);
-                
-                // Multi-select Logic for tabs
-                const currentDefenseTypeStr = editFormData['Defense Type'] || '';
-                const selectedTypesArray = currentDefenseTypeStr.split(',').map((t: string) => t.trim()).filter(Boolean);
-                
-                const effectiveTypes = Array.from(new Set([...defenseTypes, ...selectedTypesArray].filter(Boolean)));
-
-                content = (
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Def. Registration</label>
-                                <input type="date" value={editFormData['Defense Registration'] || ''} onChange={(e) => setEditFormData({...editFormData, 'Defense Registration': e.target.value})} className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none" />
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Def. Status</label>
-                                <SearchableSelect value={editFormData['Defense Status'] || ''} onChange={(v) => setEditFormData({...editFormData, 'Defense Status': v})} options={['Not Registered', 'Ongoing', 'Complete', 'Deferred']} />
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-widest">Defense Type (Multi-select)</label>
-                            <div className="flex flex-wrap gap-1.5 mb-2">
-                                {effectiveTypes.map(type => {
-                                    const isTypeSelected = selectedTypesArray.includes(type);
-                                    return (
-                                        <button 
-                                            key={type}
-                                            onClick={() => {
-                                                const newTypes = isTypeSelected 
-                                                    ? selectedTypesArray.filter((t: string) => t !== type)
-                                                    : [...selectedTypesArray, type];
-                                                setEditFormData({...editFormData, 'Defense Type': newTypes.join(', ')});
-                                            }}
-                                            className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all border ${isTypeSelected ? 'bg-blue-600 text-white border-blue-700 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'}`}
-                                        >
-                                            {type}
-                                        </button>
-                                    );
-                                })}
-                                <button 
-                                    onClick={() => setShowAddDefenseType(true)}
-                                    className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                                >
-                                    <Plus className="w-4 h-4" />
-                                </button>
-                            </div>
-                            {showAddDefenseType && (
-                                <div className="flex items-center space-x-2 animate-in slide-in-from-left-2 duration-200">
-                                    <input 
-                                        autoFocus
-                                        type="text" 
-                                        value={newDefenseType} 
-                                        onChange={(e) => setNewDefenseType(e.target.value)} 
-                                        className="flex-1 p-2 text-[10px] border border-blue-200 rounded outline-none focus:ring-1 focus:ring-blue-400" 
-                                        placeholder="Enter custom type..."
-                                    />
-                                    <button 
-                                        onClick={() => {
-                                            const trimmedNew = newDefenseType.trim();
-                                            if (trimmedNew) {
-                                                setDefenseTypes(prev => [...prev, trimmedNew]);
-                                                if (!selectedTypesArray.includes(trimmedNew)) {
-                                                    const newTypes = [...selectedTypesArray, trimmedNew];
-                                                    setEditFormData({...editFormData, 'Defense Type': newTypes.join(', ')});
-                                                }
-                                            }
-                                            setNewDefenseType('');
-                                            setShowAddDefenseType(false);
-                                        }}
-                                        className="px-3 py-2 bg-blue-600 text-white text-[10px] font-bold rounded"
-                                    >
-                                        Add
-                                    </button>
-                                    <button onClick={() => setShowAddDefenseType(false)} className="p-2 text-slate-400"><X className="w-3 h-3" /></button>
-                                </div>
-                            )}
-                        </div>
-
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Defense Supervisor</label>
-                            <SearchableSelect value={editFormData['Defense Supervisor'] || ''} onChange={(v) => setEditFormData({...editFormData, 'Defense Supervisor': v})} options={employeeOptions} placeholder="Search employees..." />
-                            {renderEmployeeCard(selectedSupervisor)}
-                        </div>
-                    </div>
-                );
-                break;
-            case 'degree':
-                title = "Degree Status";
-                content = (
-                    <div>
-                        <label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Current Status</label>
-                        <SearchableSelect value={editFormData['Degree Status'] || ''} onChange={(v) => setEditFormData({...editFormData, 'Degree Status': v})} options={['Incomplete', 'Complete', 'Withdrawn', 'Certificate Issued']} />
-                    </div>
-                );
-                break;
-            case 'dues':
-                title = "Accounts & Dues";
-                content = (
-                    <div>
-                        <label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Total Dues (BDT)</label>
-                        <input type="number" value={editFormData['Dues'] || ''} onChange={(e) => setEditFormData({...editFormData, 'Dues': e.target.value})} className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none font-mono font-bold text-red-600" />
-                    </div>
-                );
-                break;
-            case 'mentor':
-                title = "Student Mentor";
-                const selectedMentor = resolveEmployeeFromOption(editFormData['Mentor'], diuEmployeeData, teacherData);
-                content = (
-                    <div>
-                        <label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Assign Mentor</label>
-                        <SearchableSelect value={editFormData['Mentor'] || ''} onChange={(v) => setEditFormData({...editFormData, 'Mentor': v})} options={employeeOptions} placeholder="Search employees..." />
-                        {renderEmployeeCard(selectedMentor)}
-                    </div>
-                );
-                break;
-            default:
-                return null;
+            case 'credits': title = "Credit Information"; content = (<div className="grid grid-cols-2 gap-4"><div><label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Credit Requirement</label><input type="number" value={editFormData['Credit Requirement'] || ''} onChange={(e) => setEditFormData({...editFormData, 'Credit Requirement': e.target.value})} className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none" /></div><div><label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Credit Completed</label><input type="number" value={editFormData['Credit Completed'] || ''} onChange={(e) => setEditFormData({...editFormData, 'Credit Completed': e.target.value})} className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none" /></div></div>); break;
+            case 'defense': title = "Defense Details"; const selectedSupervisor = resolveEmployeeFromOption(editFormData['Defense Supervisor'], diuEmployeeData, teacherData); const currentDefenseTypeStr = editFormData['Defense Type'] || ''; const selectedTypesArray = currentDefenseTypeStr.split(',').map((t: string) => t.trim()).filter(Boolean); const effectiveTypes = Array.from(new Set([...defenseTypes, ...selectedTypesArray].filter(Boolean))); content = (<div className="space-y-4"><div className="grid grid-cols-2 gap-3"><div><label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Def. Registration</label><input type="date" value={editFormData['Defense Registration'] || ''} onChange={(e) => setEditFormData({...editFormData, 'Defense Registration': e.target.value})} className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none" /></div><div><label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Def. Status</label><SearchableSelect value={editFormData['Defense Status'] || ''} onChange={(v) => setEditFormData({...editFormData, 'Defense Status': v})} options={['Not Registered', 'Ongoing', 'Complete', 'Deferred']} /></div></div><div><label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-widest">Defense Type</label><div className="flex flex-wrap gap-1.5 mb-2">{effectiveTypes.map(type => { const isTypeSelected = selectedTypesArray.includes(type); return (<button key={type} onClick={() => { const newTypes = isTypeSelected ? selectedTypesArray.filter((t: string) => t !== type) : [...selectedTypesArray, type]; setEditFormData({...editFormData, 'Defense Type': newTypes.join(', ')}); }} className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all border ${isTypeSelected ? 'bg-blue-600 text-white border-blue-700 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'}`}>{type}</button>); })}<button onClick={() => setShowAddDefenseType(true)} className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"><Plus className="w-4 h-4" /></button></div>{showAddDefenseType && (<div className="flex items-center space-x-2 animate-in slide-in-from-left-2 duration-200"><input autoFocus type="text" value={newDefenseType} onChange={(e) => setNewDefenseType(e.target.value)} className="flex-1 p-2 text-[10px] border border-blue-200 rounded outline-none focus:ring-1 focus:ring-blue-400" placeholder="Enter custom type..." /><button onClick={() => { const trimmedNew = newDefenseType.trim(); if (trimmedNew) { setDefenseTypes(prev => [...prev, trimmedNew]); if (!selectedTypesArray.includes(trimmedNew)) { const newTypes = [...selectedTypesArray, trimmedNew]; setEditFormData({...editFormData, 'Defense Type': newTypes.join(', ')}); } } setNewDefenseType(''); setShowAddDefenseType(false); }} className="px-3 py-2 bg-blue-600 text-white text-[10px] font-bold rounded">Add</button><button onClick={() => setShowAddDefenseType(false)} className="p-2 text-slate-400"><X className="w-3 h-3" /></button></div>)}</div><div><label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Defense Supervisor</label><SearchableSelect value={editFormData['Defense Supervisor'] || ''} onChange={(v) => setEditFormData({...editFormData, 'Defense Supervisor': v})} options={employeeOptions} placeholder="Search employees..." />{renderEmployeeCard(selectedSupervisor)}</div></div>); break;
+            case 'degree': title = "Degree Status"; content = (<div><label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Current Status</label><SearchableSelect value={editFormData['Degree Status'] || ''} onChange={(v) => setEditFormData({...editFormData, 'Degree Status': v})} options={['Incomplete', 'Complete', 'Withdrawn', 'Certificate Issued']} /></div>); break;
+            case 'dues': title = "Accounts & Dues"; content = (<div><label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Total Dues (BDT)</label><input type="number" value={editFormData['Dues'] || ''} onChange={(e) => setEditFormData({...editFormData, 'Dues': e.target.value})} className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none font-mono font-bold text-red-600" /></div>); break;
+            case 'mentor': title = "Student Mentor"; const selectedMentor = resolveEmployeeFromOption(editFormData['Mentor'], diuEmployeeData, teacherData); content = (<div><label className="block text-[10px] font-black text-slate-500 uppercase mb-1 tracking-widest">Assign Mentor</label><SearchableSelect value={editFormData['Mentor'] || ''} onChange={(v) => setEditFormData({...editFormData, 'Mentor': v})} options={employeeOptions} placeholder="Search employees..." />{renderEmployeeCard(selectedMentor)}</div>); break;
+            default: return null;
         }
-
         return (
             <div className="flex flex-col h-full bg-white animate-in slide-in-from-right-2 duration-300">
-                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between shrink-0">
-                    <div className="flex items-center">
-                        {showBack && (
-                            <button onClick={() => setActivePopup(null)} className="p-1.5 hover:bg-slate-200 rounded-full text-slate-500 mr-2 transition-colors">
-                                <ArrowLeft className="w-4 h-4" />
-                            </button>
-                        )}
-                        <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-widest">{title}</h4>
-                    </div>
-                    {!showBack && (
-                        <button onClick={() => setActivePopup(null)} className="p-1.5 hover:bg-slate-200 rounded-full text-slate-400">
-                            <X className="w-4 h-4" />
-                        </button>
-                    )}
-                </div>
-                <div className="flex-1 overflow-y-auto p-5 thin-scrollbar">
-                    {content}
-                </div>
-                <div className="p-4 border-t border-slate-100 bg-white shrink-0 flex space-x-2">
-                    <button onClick={() => setActivePopup(null)} className="flex-1 py-2.5 text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-lg uppercase hover:bg-slate-100">Cancel</button>
-                    <button onClick={handleSaveInlineForm} disabled={isSaving} className="flex-[1.5] py-2.5 text-[10px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md flex items-center justify-center uppercase transition-all active:scale-95 disabled:opacity-50">
-                        {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Save className="w-3.5 h-3.5 mr-1.5" />} Save Changes
-                    </button>
-                </div>
+                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between shrink-0"><h4 className="text-[10px] font-black text-slate-700 uppercase tracking-widest">{title}</h4><button onClick={() => setActivePopup(null)} className="p-1.5 hover:bg-slate-200 rounded-full text-slate-400"><X className="w-4 h-4" /></button></div>
+                <div className="flex-1 overflow-y-auto p-5 thin-scrollbar">{content}</div>
+                <div className="p-4 border-t border-slate-100 bg-white shrink-0 flex space-x-2"><button onClick={() => setActivePopup(null)} className="flex-1 py-2.5 text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-lg uppercase hover:bg-slate-100">Cancel</button><button onClick={handleSaveInlineForm} disabled={isSaving} className="flex-[1.5] py-2.5 text-[10px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md flex items-center justify-center uppercase transition-all active:scale-95 disabled:opacity-50">{isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Save className="w-3.5 h-3.5 mr-1.5" />} Save Changes</button></div>
             </div>
         );
     };
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden relative bg-white font-sans">
-            <div className="bg-white border-b border-slate-100 p-5 shadow-sm shrink-0">
-                <StudentIdentity 
-                    student={student} 
-                    program={program} 
-                    dropInfo={null} 
-                    onDropClick={() => {
-                        setActivePopup('dropout');
-                        setIsRemarksOpen(false); // Close remarks when card is clicked
-                    }} 
-                />
-                <StudentStatsGrid 
-                    student={student} activePopup={activePopup} 
-                    onCardClick={(type) => {
-                        setActivePopup(type);
-                        setIsRemarksOpen(false); // Close remarks when card is clicked
-                    }}
-                    isCreditsMet={parseFloat(student['Credit Completed'] || '0') >= parseFloat(student['Credit Requirement'] || '0')}
-                    isDefenseSuccess={student['Defense Status']?.toLowerCase() === 'complete'}
-                    isDegreeDone={student['Degree Status']?.toLowerCase() === 'complete'}
-                    lastRegSemester={historyData.length > 0 ? historyData[0].semester : 'None'}
-                    mentorAssigned={!isValEmpty(student?.Mentor)}
-                />
+        <div className="flex-1 flex flex-col overflow-hidden relative bg-white font-sans h-full">
+            {/* Main Header: Student Identity & KPIs */}
+            <div className="bg-white border-b border-slate-100 p-4 shadow-sm shrink-0">
+                <StudentIdentity student={student} program={program} dropInfo={null} onDropClick={() => { setActivePopup('dropout'); setIsRemarksOpen(false); }} />
+                <StudentStatsGrid student={student} activePopup={activePopup} onCardClick={(type) => { setActivePopup(type); setIsRemarksOpen(false); }} isCreditsMet={parseFloat(student['Credit Completed'] || '0') >= parseFloat(student['Credit Requirement'] || '0')} isDefenseSuccess={student['Defense Status']?.toLowerCase() === 'complete'} isDegreeDone={student['Degree Status']?.toLowerCase() === 'complete'} lastRegSemester={historyData.length > 0 ? historyData[0].semester : 'None'} mentorAssigned={!isValEmpty(student?.Mentor)} />
             </div>
 
-            <div className="flex-1 relative overflow-hidden flex flex-col bg-white">
-                <div className={`absolute inset-0 z-10 p-2 transition-all duration-300 ${isRemarksOpen || (isEditViewActive && activePopup !== 'history') ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
+            {/* Registration History Area */}
+            <div className="flex-1 relative overflow-hidden flex flex-col bg-slate-50/20">
+                <div className="flex-1 flex flex-col overflow-hidden relative p-2">
                     <StudentRegistrationHistory historyData={historyData} />
                 </div>
 
-                {isEditViewActive && activePopup !== 'history' && (
+                {/* Overlays */}
+                {activePopup && activePopup !== 'history' && (
                     <div className="absolute inset-0 z-20 p-2">
                         <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden flex flex-col h-full relative">
-                            {renderInlineEditForm()}
+                            {activePopup === 'dropout' ? <StudentDropoutControl onClose={() => setActivePopup(null)} onUpdate={(type) => handleQuickUpdate({ 'Dropout Classification': type })} /> : renderInlineEditForm()}
                         </div>
                     </div>
                 )}
-
-                <StudentRemarksPanel 
-                    isOpen={isRemarksOpen} onClose={() => setIsRemarksOpen(false)}
-                    historyRemarks={historyRemarks} expandedRemarks={expandedRemarks} 
-                    toggleRemarkExpansion={(uid) => setExpandedRemarks(prev => { const n = new Set(prev); n.has(uid) ? n.delete(uid) : n.add(uid); return n; })}
-                    formatDate={formatDisplayDate} onAddFollowup={() => { 
-                        const now = new Date();
-                        const datePart = now.toISOString().split('T')[0];
-                        setFollowupFormData({ Date: datePart, Remark: '', 'Re-follow up': '', Status: '', 'Contacted By': '' }); 
-                        setEditingFollowupIndex(null); 
-                        setShowFollowupForm(true); 
-                    }}
-                    onEditFollowup={(item) => { 
-                        // Clean Contact Date for input
-                        const cleanDate = (item.Date || '').split(' ')[0].split('T')[0];
-                        // Clean Re-follow up for input
-                        const cleanReFollowup = (item['Re-follow up'] || '').split(' ')[0].split('T')[0];
-                        setFollowupFormData({ 
-                            Date: cleanDate, 
-                            Remark: item.Remark, 
-                            'Re-follow up': cleanReFollowup, 
-                            Status: item.Status, 
-                            'Contacted By': item['Contacted By'] 
-                        } as any); 
-                        setEditingFollowupIndex(item._index); 
-                        setShowFollowupForm(true); 
-                    }}
-                    onDeleteFollowup={handleDeleteFollowup}
-                    discStatus={discStatus} discRecords={discRecords} isDiscHistoryOpen={isDiscHistoryOpen} toggleDiscHistory={() => setIsDiscHistoryOpen(!isDiscHistoryOpen)}
-                    onAddDisc={() => { setDiscReason(''); setDiscFromDate(new Date().toISOString().split('T')[0]); setDiscToDate(''); setEditingDiscIndex(null); setIsDiscFormOpen(true); }}
-                    onEditDisc={(idx) => { 
-                        const r = discRecords[idx]; 
-                        // Enhanced regex to handle "from Date to Date" or "from Date (Permanent)"
-                        // Flexible regex to match Month Day, Year with optional comma
-                        const match = r.match(/^(.+?)\s+from\s+([A-Z][a-z]{2}\s+\d{1,2},?\s+\d{4})(?:\s+to\s+([A-Z][a-z]{2}\s+\d{1,2},?\s+\d{4})|\s+\(Permanent\))?$/);
-                        
-                        if(match){ 
-                            setDiscReason(match[1].trim()); 
-                            setDiscFromDate(parseToIsoDate(match[2])); 
-                            setDiscToDate(match[3] ? parseToIsoDate(match[3]) : ''); 
-                        } else { 
-                            // Try simpler parsing if complex regex fails
-                            const parts = r.split(/\s+from\s+/);
-                            if (parts.length > 1) {
-                                setDiscReason(parts[0].trim());
-                                // Attempt to parse the rest for dates if possible, or just default
-                                const datePart = parts[1].split(/\s+to\s+|\s+\(Permanent\)/)[0];
-                                setDiscFromDate(parseToIsoDate(datePart) || new Date().toISOString().split('T')[0]);
-                                setDiscToDate('');
-                            } else {
-                                setDiscReason(r);
-                                setDiscFromDate(new Date().toISOString().split('T')[0]);
-                                setDiscToDate('');
-                            }
-                        } 
-                        setEditingDiscIndex(idx); 
-                        setIsDiscFormOpen(true); 
-                    }}
-                    onRemoveAllDisc={() => window.confirm("Clear all disciplinary records for this student?") && onSaveStudent(studentSemester!, { ...student, 'Disciplinary Action': '' } as StudentDataRow)}
-                    checkRecordExpiry={checkRecordExpiry}
-                    diuEmployeeData={diuEmployeeData}
-                    teacherData={teacherData}
-                    isSaving={isSaving}
-                />
-
-                {activePopup === 'dropout' && <StudentDropoutControl onClose={() => setActivePopup(null)} onUpdate={(type) => handleQuickUpdate({ 'Dropout Classification': type })} />}
-                
-                {isDiscFormOpen && (
-                    <div className="absolute inset-0 z-[150] p-3 bg-white/95 backdrop-blur-sm">
-                        <StudentDisciplinaryForm mode={editingDiscIndex !== null ? 'edit' : 'add'} discReason={discReason} setDiscReason={setDiscReason} discFromDate={discFromDate} setDiscFromDate={setDiscFromDate} discToDate={discToDate} setDiscToDate={setDiscToDate} isExpired={discStatus.isExpired} isSaving={isSaving} onSave={handleSaveDisc} onClose={() => setIsDiscFormOpen(false)} />
-                    </div>
-                )}
-                
-                {showFollowupForm && (
-                    <StudentFollowupForm student={student} formData={followupFormData} setFormData={setFollowupFormData} employeeOptions={employeeOptions} statusOptions={statusOptions} isSaving={isSaving} onSave={handleSaveFollowup} onClose={() => setShowFollowupForm(false)} />
-                )}
-
-                {!isRemarksOpen && !showFollowupForm && (
-                    <button onClick={() => setIsRemarksOpen(true)} className="fixed bottom-6 right-6 md:absolute md:bottom-8 md:right-8 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 z-[110]" title="Remarks & History">
-                        <MessageSquareQuote className="w-6 h-6" />
-                        <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full border border-white">{historyRemarks.length}</span>
-                    </button>
-                )}
             </div>
+
+            {/* FULL-HEIGHT Remarks & History Panel - Overlaying the entire view */}
+            <StudentRemarksPanel 
+                isOpen={isRemarksOpen} onClose={() => setIsRemarksOpen(false)}
+                historyRemarks={historyRemarks} expandedRemarks={expandedRemarks} 
+                toggleRemarkExpansion={(uid) => setExpandedRemarks(prev => { const n = new Set(prev); n.has(uid) ? n.delete(uid) : n.add(uid); return n; })}
+                formatDate={formatDisplayDate} onAddFollowup={() => { const now = new Date(); const datePart = now.toISOString().split('T')[0]; setFollowupFormData({ Date: datePart, Remark: '', 'Re-follow up': '', Status: '', 'Contacted By': '', 'Target Semester': '' }); setEditingFollowupIndex(null); setShowFollowupForm(true); }}
+                onEditFollowup={(item) => { const cleanDate = (item.Date || '').split(' ')[0].split('T')[0]; const cleanReFollowup = (item['Re-follow up'] || '').split(' ')[0].split('T')[0]; setFollowupFormData({ Date: cleanDate, Remark: item.Remark, 'Re-follow up': cleanReFollowup, Status: item.Status, 'Contacted By': item['Contacted By'], 'Target Semester': item['Target Semester'] } as any); setEditingFollowupIndex(item._index); setShowFollowupForm(true); }}
+                onDeleteFollowup={handleDeleteFollowup}
+                discStatus={discStatus} discRecords={discRecords} isDiscHistoryOpen={isDiscHistoryOpen} toggleDiscHistory={() => setIsDiscHistoryOpen(!isDiscHistoryOpen)}
+                onAddDisc={() => { setDiscReason(''); setDiscFromDate(new Date().toISOString().split('T')[0]); setDiscToDate(''); setEditingDiscIndex(null); setIsDiscFormOpen(true); }}
+                onEditDisc={(idx) => { const r = discRecords[idx]; const match = r.match(/^(.+?)\s+from\s+([A-Z][a-z]{2}\s+\d{1,2},?\s+\d{4})(?:\s+to\s+([A-Z][a-z]{2}\s+\d{1,2},?\s+\d{4})|\s+\(Permanent\))?$/); if(match){ setDiscReason(match[1].trim()); setDiscFromDate(parseToIsoDate(match[2])); setDiscToDate(match[3] ? parseToIsoDate(match[3]) : ''); } else { const parts = r.split(/\s+from\s+/); if (parts.length > 1) { setDiscReason(parts[0].trim()); const datePart = parts[1].split(/\s+to\s+|\s+\(Permanent\)/)[0]; setDiscFromDate(parseToIsoDate(datePart) || new Date().toISOString().split('T')[0]); setDiscToDate(''); } else { setDiscReason(r); setDiscFromDate(new Date().toISOString().split('T')[0]); setDiscToDate(''); } } setEditingDiscIndex(idx); setIsDiscFormOpen(true); }}
+                onRemoveAllDisc={() => window.confirm("Clear all disciplinary records for this student?") && onSaveStudent(studentSemester!, { ...student, 'Disciplinary Action': '' } as StudentDataRow)}
+                checkRecordExpiry={checkRecordExpiry} diuEmployeeData={diuEmployeeData} teacherData={teacherData} isSaving={isSaving}
+            />
+
+            {/* Other Transient Forms (Disciplinary & Followup) */}
+            {isDiscFormOpen && (<div className="absolute inset-0 z-[150] p-3 bg-white/95 backdrop-blur-sm"><StudentDisciplinaryForm mode={editingDiscIndex !== null ? 'edit' : 'add'} discReason={discReason} setDiscReason={setDiscReason} discFromDate={discFromDate} setDiscFromDate={setDiscFromDate} discToDate={discToDate} setDiscToDate={setDiscToDate} isExpired={discStatus.isExpired} isSaving={isSaving} onSave={handleSaveDisc} onClose={() => setIsDiscFormOpen(false)} /></div>)}
+            {showFollowupForm && (<StudentFollowupForm student={student} formData={followupFormData} setFormData={setFollowupFormData} employeeOptions={employeeOptions} statusOptions={statusOptions} isSaving={isSaving} onSave={handleSaveFollowup} onClose={() => setShowFollowupForm(false)} />)}
+
+            {/* Floating Action Button (Remarks Trigger) */}
+            {!isRemarksOpen && !showFollowupForm && (
+                <button onClick={() => setIsRemarksOpen(true)} className="fixed bottom-6 right-6 md:absolute md:bottom-6 md:right-6 w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 z-[110]" title="Remarks & History">
+                    <MessageSquareQuote className="w-5 h-5" />
+                    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full border border-white">{historyRemarks.length}</span>
+                </button>
+            )}
         </div>
     );
 };

@@ -1,9 +1,11 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
-import { StudentDataRow, ProgramDataRow } from '../types';
-import { LayoutGrid, List as ListIcon, Check, Copy, BarChart3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, UserCheck, UserX, UserMinus, PowerOff, Clock, Calculator, ShieldCheck, GraduationCap, Target, AlertCircle } from 'lucide-react';
-import { UnregisteredStudentsModal } from './UnregisteredStudentsModal';
+import { StudentDataRow, ProgramDataRow, DiuEmployeeRow, TeacherDataRow } from '../types';
+import { LayoutGrid, List as ListIcon, Check, Copy, BarChart3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, UserCheck, UserX, UserMinus, PowerOff, Clock, Calculator, ShieldCheck, GraduationCap, Target, AlertCircle, MessageSquare, Download, Users, X, RotateCcw, User as UserIcon, Search, FilterX, TrendingUp } from 'lucide-react';
 import { useResponsivePagination } from '../hooks/useResponsivePagination';
 import { isValEmpty } from '../views/EmployeeView';
+import { StudentDetailView } from './StudentDetailView';
+import { normalizeId } from '../services/sheetService';
 
 interface AdmittedReportTableProps {
     selectedAdmittedSemesters: Set<string>;
@@ -17,9 +19,13 @@ interface AdmittedReportTableProps {
     setSelectedFaculties: (val: Set<string>) => void;
     selectedProgramTypes: Set<string>;
     selectedSemesterTypes: Set<string>;
-    onUnregClick?: (data: { semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string; listType: 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' }) => void;
+    onUnregClick?: (data: { semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string; listType: 'all' | 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' | 'followupTarget' | 'followup' }) => void;
     externalTargetRegSemester?: string;
     onTargetRegSemesterChange?: (val: string) => void;
+    diuEmployeeData?: DiuEmployeeRow[];
+    teacherData?: TeacherDataRow[];
+    onSaveStudent?: (semester: string, student: StudentDataRow) => Promise<void>;
+    hideSummaryToggle?: boolean;
 }
 
 const FACULTY_COLORS: Record<string, string> = {
@@ -30,6 +36,45 @@ const FACULTY_COLORS: Record<string, string> = {
     'FSIT': 'bg-orange-500',
     'Other': 'bg-gray-400'
 };
+
+const FACULTY_COLORS_HEX: Record<string, string> = {
+    'FBE': '#ef4444',
+    'FE': '#eab308',
+    'FHLS': '#22c55e',
+    'FHSS': '#3b82f6',
+    'FSIT': '#f97316',
+    'Other': '#94a3b8'
+};
+
+// Distinct colors for individual bars in the chart
+const BAR_COLORS = [
+    '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', 
+    '#ec4899', '#06b6d4', '#14b8a6', '#f43f5e', '#6366f1',
+    '#84cc16', '#eab308', '#d946ef', '#0891b2', '#f97316'
+];
+
+const FACULTY_NAMES: Record<string, string> = {
+    'FBE': 'Faculty of Business and Entrepreneurship',
+    'FE': 'Faculty of Engineering',
+    'FHLS': 'Faculty of Health and Life Sciences',
+    'FHSS': 'Faculty of Humanities and Social Science',
+    'FSIT': 'Faculty of Science and Information Technology',
+    'Other': 'Other Faculties'
+};
+
+const FIELD_SEP = ' ;; ';
+const RECORD_SEP = ' || ';
+
+const CHART_METRICS = [
+    { id: 'totalAdmitted', label: 'Enroll', color: 'bg-blue-600', activeBorder: 'border-blue-700', listType: 'all', inactiveClass: 'bg-blue-50 text-blue-500 border-blue-100 hover:bg-blue-100' },
+    { id: 'totalRegistered', label: 'Reg', color: 'bg-green-600', activeBorder: 'border-green-700', listType: 'registered', inactiveClass: 'bg-green-50 text-green-600 border-green-100 hover:bg-green-100' },
+    { id: 'totalPDrop', label: 'P-Drop', color: 'bg-rose-700', activeBorder: 'border-rose-800', listType: 'pdrop', inactiveClass: 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100' },
+    { id: 'totalTDrop', label: 'T-Drop', color: 'bg-orange-600', activeBorder: 'border-orange-700', listType: 'tdrop', inactiveClass: 'bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-100' },
+    { id: 'totalCrCom', label: 'Cr. Com', color: 'bg-emerald-600', activeBorder: 'border-emerald-700', listType: 'crcom', inactiveClass: 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100' },
+    { id: 'totalDefense', label: 'Def. Reg', color: 'bg-teal-600', activeBorder: 'border-teal-700', listType: 'defense', inactiveClass: 'bg-teal-50 text-teal-600 border-teal-100 hover:bg-teal-100' },
+    { id: 'totalRegPending', label: 'Pending', color: 'bg-amber-600', activeBorder: 'border-amber-700', listType: 'regPending', inactiveClass: 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100' },
+    { id: 'totalFollowupTarget', label: 'F/U', color: 'bg-pink-600', activeBorder: 'border-pink-700', listType: 'followupTarget', inactiveClass: 'bg-pink-50 text-pink-600 border-pink-100 hover:bg-pink-100' }
+];
 
 export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
     selectedAdmittedSemesters,
@@ -45,15 +90,37 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
     selectedSemesterTypes,
     onUnregClick,
     externalTargetRegSemester,
-    onTargetRegSemesterChange
+    onTargetRegSemesterChange,
+    diuEmployeeData = [],
+    teacherData = [],
+    onSaveStudent,
+    hideSummaryToggle = false
 }) => {
     const [localTargetRegSemester, setLocalTargetRegSemester] = useState<string>('');
     const targetRegSemester = externalTargetRegSemester !== undefined ? externalTargetRegSemester : localTargetRegSemester;
     const setTargetRegSemester = onTargetRegSemesterChange || setLocalTargetRegSemester;
 
-    const [viewType, setViewType] = useState<'detailed' | 'summary'>('detailed');
-    const [listModalState, setListModalState] = useState<{ isOpen: boolean; semester: string; programId: string; programName: string; students: StudentDataRow[]; listType: 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' } | null>(null);
+    const [viewType, setViewType] = useState<'detailed' | 'summary'>(hideSummaryToggle ? 'detailed' : 'detailed');
     const [activeFaculty, setActiveFaculty] = useState<string>('');
+    
+    // Chart State - now used for local overlays
+    const [activeChartFaculty, setActiveChartFaculty] = useState<string | null>(null);
+    const [activeChartMetric, setActiveChartMetric] = useState<string>('totalAdmitted');
+
+    const [inlineSelection, setInlineSelection] = useState<{
+        title: string;
+        students: StudentDataRow[];
+        listType: string;
+    } | null>(null);
+
+    const [listSearchTerm, setListSearchTerm] = useState('');
+    const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (hideSummaryToggle && viewType === 'summary') {
+            setViewType('detailed');
+        }
+    }, [hideSummaryToggle, viewType]);
 
     useEffect(() => {
         if (!targetRegSemester && registeredSemesters.length > 0) setTargetRegSemester(registeredSemesters[0]);
@@ -73,9 +140,9 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
         return Array.from(facs).sort();
     }, [programData]);
 
-    const { sortedAdmittedSemesters, allPrograms, facultyGroups, sortedFaculties } = useMemo(() => {
+    const { sortedAdmittedSemesters, allPrograms, facultyGroups, sortedFaculties, allFilteredStudents } = useMemo(() => {
         const effectiveTarget = targetRegSemester || registeredSemesters[0];
-        if (!effectiveTarget) return { sortedAdmittedSemesters: [], allPrograms: [], facultyGroups: {}, sortedFaculties: [] };
+        if (!effectiveTarget) return { sortedAdmittedSemesters: [], allPrograms: [], facultyGroups: {}, sortedFaculties: [], allFilteredStudents: [] };
 
         const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
         const parseSemester = (sem: string) => {
@@ -93,15 +160,27 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
             .sort((a, b) => a.year !== b.year ? b.year - a.year : b.season - a.season)
             .map(s => s.original);
 
-        const progStats: Record<string, Record<string, { admitted: number, unregistered: number, pDrop: number, tDrop: number, crCom: number, defense: number, regPending: number }>> = {};
-        const progTotals: Record<string, { admitted: number, unregistered: number, pDrop: number, tDrop: number, crCom: number, defense: number, regPending: number }> = {};
+        const progStats: Record<string, Record<string, { admitted: number, unregistered: number, pDrop: number, tDrop: number, crCom: number, defense: number, regPending: number, followupTarget: number }>> = {};
+        const progTotals: Record<string, { admitted: number, unregistered: number, pDrop: number, tDrop: number, crCom: number, defense: number, regPending: number, followupTarget: number }> = {};
         const progNames = new Set<string>();
+        const studentsInContext: StudentDataRow[] = [];
 
         sortedSemesters.forEach((sem: string) => {
             const students = studentCache.get(sem) || [];
             students.forEach((student) => {
                 const id = String(student['Student ID']).trim();
                 const normalizePid = normalize(student.PID);
+                
+                if (selectedPrograms.size > 0 && !selectedPrograms.has(normalizePid)) return;
+                
+                if (selectedFaculties.size > 0 || selectedProgramTypes.size > 0 || selectedSemesterTypes.size > 0) {
+                    const pInfo = programDetailsMap.get(normalizePid);
+                    if (!pInfo) return;
+                    if (selectedFaculties.size > 0 && !selectedFaculties.has(pInfo['Faculty Short Name'])) return;
+                    if (selectedProgramTypes.size > 0 && !selectedProgramTypes.has(pInfo['Program Type'])) return;
+                    if (selectedSemesterTypes.size > 0 && !selectedSemesterTypes.has(pInfo['Semester Type'])) return;
+                }
+
                 progNames.add(normalizePid);
                 const isRegistered = registrationLookup.get(id)?.has(effectiveTarget) || false;
                 const isUnregistered = !isRegistered;
@@ -109,19 +188,28 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                 const isPDrop = dropClass.includes('Permanent');
                 const isTDrop = dropClass.includes('Temporary');
                 
-                // Logic for Credit Completed (Requirement Met)
-                const credReq = parseFloat(student['Credit Requirement'] || '0');
-                const credCom = parseFloat(student['Credit Completed'] || '0');
-                const isCrCom = !isNaN(credReq) && !isNaN(credCom) && credReq > 0 && (credCom >= credReq);
+                const credReqValue = parseFloat(student['Credit Requirement'] || '0');
+                const credComValue = parseFloat(student['Credit Completed'] || '0');
+                const isCrCom = !isNaN(credReqValue) && !isNaN(credComValue) && credReqValue > 0 && (credComValue >= credReqValue);
 
-                // Logic for Defense Registration
                 const isDefense = !isValEmpty(student['Defense Registration']);
-
-                // Reg Pending = Unregistered AND Not Permanent Drop AND Not Credit Completed
                 const isRegPending = isUnregistered && !isPDrop && !isCrCom;
 
+                let hasFollowupForTarget = false;
+                if (isRegPending && !isValEmpty(student['Discussion Remark'])) {
+                    const remarks = (student['Discussion Remark'] || '').split(RECORD_SEP);
+                    hasFollowupForTarget = remarks.some(r => {
+                        const fields = r.split(FIELD_SEP);
+                        const remarkTarget = fields[4]?.trim();
+                        return remarkTarget === effectiveTarget;
+                    });
+                }
+
                 if (!progStats[normalizePid]) progStats[normalizePid] = {};
-                if (!progStats[normalizePid][sem]) progStats[normalizePid][sem] = { admitted: 0, unregistered: 0, pDrop: 0, tDrop: 0, crCom: 0, defense: 0, regPending: 0 };
+                if (!progStats[normalizePid][sem]) {
+                    progStats[normalizePid][sem] = { admitted: 0, unregistered: 0, pDrop: 0, tDrop: 0, crCom: 0, defense: 0, regPending: 0, followupTarget: 0 };
+                }
+                
                 progStats[normalizePid][sem].admitted++;
                 if (isUnregistered) progStats[normalizePid][sem].unregistered++;
                 if (isPDrop) progStats[normalizePid][sem].pDrop++;
@@ -129,8 +217,9 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                 if (isCrCom) progStats[normalizePid][sem].crCom++;
                 if (isDefense) progStats[normalizePid][sem].defense++;
                 if (isRegPending) progStats[normalizePid][sem].regPending++;
+                if (hasFollowupForTarget) progStats[normalizePid][sem].followupTarget++;
 
-                if (!progTotals[normalizePid]) progTotals[normalizePid] = { admitted: 0, unregistered: 0, pDrop: 0, tDrop: 0, crCom: 0, defense: 0, regPending: 0 };
+                if (!progTotals[normalizePid]) progTotals[normalizePid] = { admitted: 0, unregistered: 0, pDrop: 0, tDrop: 0, crCom: 0, defense: 0, regPending: 0, followupTarget: 0 };
                 progTotals[normalizePid].admitted++;
                 if (isUnregistered) progTotals[normalizePid].unregistered++;
                 if (isPDrop) progTotals[normalizePid].pDrop++;
@@ -138,38 +227,29 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                 if (isCrCom) progTotals[normalizePid].crCom++;
                 if (isDefense) progTotals[normalizePid].defense++;
                 if (isRegPending) progTotals[normalizePid].regPending++;
+                if (hasFollowupForTarget) progTotals[normalizePid].followupTarget++;
+
+                studentsInContext.push({ ...student, _semester: sem });
             });
         });
 
         const allProgs = Array.from(progNames).sort().reduce((acc: any[], pid: string) => {
             const name = programMap.get(pid);
             if (name) {
-                let matches = true;
-                if (selectedPrograms.size > 0 && !selectedPrograms.has(pid)) matches = false;
-                if (matches && (selectedFaculties.size > 0 || selectedProgramTypes.size > 0 || selectedSemesterTypes.size > 0)) {
-                    const pInfo = programDetailsMap.get(pid);
-                    if (!pInfo) matches = false;
-                    else {
-                        if (selectedFaculties.size > 0 && !selectedFaculties.has(pInfo['Faculty Short Name'])) matches = false;
-                        if (selectedProgramTypes.size > 0 && !selectedProgramTypes.has(pInfo['Program Type'])) matches = false;
-                        if (selectedSemesterTypes.size > 0 && !selectedSemesterTypes.has(pInfo['Semester Type'])) matches = false;
-                    }
-                }
-                if (matches) {
-                    acc.push({
-                        pid: pid.toUpperCase(),
-                        name: name,
-                        data: progStats[pid] || {},
-                        totalAdmitted: progTotals[pid]?.admitted || 0,
-                        totalUnregistered: progTotals[pid]?.unregistered || 0,
-                        totalRegistered: (progTotals[pid]?.admitted || 0) - (progTotals[pid]?.unregistered || 0),
-                        totalPDrop: progTotals[pid]?.pDrop || 0,
-                        totalTDrop: progTotals[pid]?.tDrop || 0,
-                        totalCrCom: progTotals[pid]?.crCom || 0,
-                        totalDefense: progTotals[pid]?.defense || 0,
-                        totalRegPending: progTotals[pid]?.regPending || 0
-                    });
-                }
+                acc.push({
+                    pid: pid.toUpperCase(),
+                    name: name,
+                    data: progStats[pid] || {},
+                    totalAdmitted: progTotals[pid]?.admitted || 0,
+                    totalUnregistered: progTotals[pid]?.unregistered || 0,
+                    totalRegistered: (progTotals[pid]?.admitted || 0) - (progTotals[pid]?.unregistered || 0),
+                    totalPDrop: progTotals[pid]?.pDrop || 0,
+                    totalTDrop: progTotals[pid]?.tDrop || 0,
+                    totalCrCom: progTotals[pid]?.crCom || 0,
+                    totalDefense: progTotals[pid]?.defense || 0,
+                    totalRegPending: progTotals[pid]?.regPending || 0,
+                    totalFollowupTarget: progTotals[pid]?.followupTarget || 0
+                });
             }
             return acc;
         }, []);
@@ -182,39 +262,50 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
             groups[faculty].push({ ...prog, faculty });
         });
         const sortedFacs = ['FBE', 'FE', 'FHLS', 'FHSS', 'FSIT', 'Other'].filter(f => groups[f] && groups[f].length > 0);
-        return { sortedAdmittedSemesters: sortedSemesters, allPrograms: allProgs, facultyGroups: groups, sortedFaculties: sortedFacs };
+        return { sortedAdmittedSemesters: sortedSemesters, allPrograms: allProgs, facultyGroups: groups, sortedFaculties: sortedFacs, allFilteredStudents: studentsInContext };
     }, [selectedAdmittedSemesters, studentCache, targetRegSemester, registeredSemesters, registrationLookup, programMap, programDetailsMap, selectedPrograms, selectedFaculties, selectedProgramTypes, selectedSemesterTypes]);
+
+    const selectedStudent = useMemo(() => {
+        if (!selectedStudentId) return null;
+        return allFilteredStudents.find(s => s['Student ID'] === selectedStudentId) || null;
+    }, [selectedStudentId, allFilteredStudents]);
 
     const isTransposed = allPrograms.length === 1;
 
-    const paginationDataInput = useMemo(() => {
-        if (isTransposed) return sortedAdmittedSemesters;
-        return allPrograms;
-    }, [isTransposed, sortedAdmittedSemesters, allPrograms]);
-
-    const { currentPage, setCurrentPage, rowsPerPage, totalPages, paginatedData, containerRef } = useResponsivePagination<any>(paginationDataInput);
-
-    const getStudentsByType = (sem: string, pid: string, type: 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending') => {
+    const getStudentsByType = (sem: string, pid: string, type: 'all' | 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' | 'followupTarget') => {
         const targetPidNorm = normalize(pid);
         const target = targetRegSemester || registeredSemesters[0];
         
         const filterFn = (s: StudentDataRow) => {
-            if (normalize(s.PID) !== targetPidNorm) return false;
+            if (sem !== 'ALL' && normalize(s.PID) !== targetPidNorm) return false;
+            if (sem === 'ALL' && pid !== 'ALL' && normalize(s.PID) !== targetPidNorm) return false;
+            
             const id = String(s['Student ID']).trim();
+            if (type === 'all') return true; 
             if (type === 'registered') return registrationLookup.get(id)?.has(target);
             if (type === 'unregistered') return !registrationLookup.get(id)?.has(target);
             const dropClass = s['Dropout Classification'] || '';
             if (type === 'pdrop') return dropClass.includes('Permanent');
             if (type === 'tdrop') return dropClass.includes('Temporary');
             
-            const credReq = parseFloat(s['Credit Requirement'] || '0');
-            const credCom = parseFloat(s['Credit Completed'] || '0');
-            const hasCrCom = !isNaN(credReq) && !isNaN(credCom) && credReq > 0 && (credCom >= credReq);
+            const crReq = parseFloat(s['Credit Requirement'] || '0');
+            const crCom = parseFloat(s['Credit Completed'] || '0');
+            const hasCrCom = !isNaN(crReq) && !isNaN(crCom) && crReq > 0 && (crCom >= crReq);
 
             if (type === 'crcom') return hasCrCom;
             if (type === 'defense') return !isValEmpty(s['Defense Registration']);
-            if (type === 'regPending') {
-                return !registrationLookup.get(id)?.has(target) && !dropClass.includes('Permanent') && !hasCrCom;
+            
+            const isRegPendingStatus = !registrationLookup.get(id)?.has(target) && !dropClass.includes('Permanent') && !hasCrCom;
+            if (type === 'regPending') return isRegPendingStatus;
+
+            if (type === 'followupTarget') {
+                if (!isRegPendingStatus || isValEmpty(s['Discussion Remark'])) return false;
+                const remarks = (s['Discussion Remark'] || '').split(RECORD_SEP);
+                return remarks.some(r => {
+                    const fields = r.split(FIELD_SEP);
+                    const remarkTarget = fields[4]?.trim();
+                    return remarkTarget === target;
+                });
             }
             return false;
         };
@@ -236,107 +327,274 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
         return allStudents;
     };
 
-    const handleListClick = (semester: string, programId: string, programName: string, listType: 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending') => {
+    useEffect(() => {
+        if (viewType === 'summary' && !inlineSelection && allFilteredStudents.length > 0) {
+            const enrolledStudents = getStudentsByType('ALL', 'ALL', 'all');
+            setInlineSelection({
+                title: 'All Enrolled Students',
+                students: enrolledStudents,
+                listType: 'all'
+            });
+            if (enrolledStudents.length > 0) {
+                setSelectedStudentId(enrolledStudents[0]['Student ID']);
+            }
+        }
+    }, [allFilteredStudents, viewType, inlineSelection, targetRegSemester]);
+
+    useEffect(() => {
+        if (viewType === 'summary' && inlineSelection && inlineSelection.students.length > 0 && !selectedStudentId) {
+            setSelectedStudentId(inlineSelection.students[0]['Student ID']);
+        }
+    }, [inlineSelection, viewType, selectedStudentId]);
+
+    const paginationDataInput = useMemo(() => {
+        if (viewType === 'summary') return []; 
+        if (isTransposed) return sortedAdmittedSemesters;
+        return allPrograms;
+    }, [viewType, isTransposed, sortedAdmittedSemesters, allPrograms]);
+
+    const { currentPage, setCurrentPage, rowsPerPage, totalPages, paginatedData, containerRef } = useResponsivePagination<any>(paginationDataInput);
+
+    const handleSaveStudentInternal = async (semester: string, updatedStudent: StudentDataRow) => {
+        if (onSaveStudent) {
+            await onSaveStudent(semester, updatedStudent);
+        }
+    };
+
+    const handleListClick = (semester: string, programId: string, programName: string, listType: 'all' | 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' | 'followupTarget') => {
         const students = getStudentsByType(semester, programId, listType);
-        if (onUnregClick) {
-            onUnregClick({ semester, programId, programName, students, targetSemester: targetRegSemester, listType });
+        
+        if (viewType === 'summary') {
+            setInlineSelection({
+                title: `${programName === 'ALL' ? 'Selected Programs' : programName} - ${listType === 'all' ? 'ENROLLED' : listType.toUpperCase()}`,
+                students,
+                listType
+            });
+            setListSearchTerm(''); 
+            if (students.length > 0) {
+                setSelectedStudentId(students[0]['Student ID']);
+            }
         } else {
-            setListModalState({ isOpen: true, semester, programId, programName, students, listType });
+            onUnregClick?.({
+                semester,
+                programId,
+                programName: programName === 'ALL' ? (allPrograms[0]?.name || 'Program') : programName,
+                students,
+                targetSemester: targetRegSemester,
+                listType
+            });
         }
     };
 
     const renderFacultyCard = (fac: string, mobile: boolean = false) => {
-        const progs = facultyGroups[fac];
-        if(!progs) return null;
-        const totalAdm = progs.reduce((acc, p) => acc + p.totalAdmitted, 0);
-        const totalReg = progs.reduce((acc, p) => acc + p.totalRegistered, 0);
-        const totalP = progs.reduce((acc, p) => acc + p.totalPDrop, 0);
-        const totalT = progs.reduce((acc, p) => acc + p.totalTDrop, 0);
-        const totalCC = progs.reduce((acc, p) => acc + p.totalCrCom, 0);
-        const totalDef = progs.reduce((acc, p) => acc + p.totalDefense, 0);
-        const totalPnd = progs.reduce((acc, p) => acc + p.totalRegPending, 0);
+        const programs = facultyGroups[fac];
+        if(!programs) return null;
+        const totalAdm = programs.reduce((acc, p) => acc + p.totalAdmitted, 0);
+        const totalReg = programs.reduce((acc, p) => acc + p.totalRegistered, 0);
+        const totalP = programs.reduce((acc, p) => acc + p.totalPDrop, 0);
+        const totalT = programs.reduce((acc, p) => acc + p.totalTDrop, 0);
+        const totalCC = programs.reduce((acc, p) => acc + p.totalCrCom, 0);
+        const totalDef = programs.reduce((acc, p) => acc + p.totalDefense, 0);
+        const totalPnd = programs.reduce((acc, p) => acc + p.totalRegPending, 0);
+        const totalFU = programs.reduce((acc, p) => acc + p.totalFollowupTarget, 0);
         const headerColor = FACULTY_COLORS[fac] || 'bg-gray-400';
+        const facultyFullName = FACULTY_NAMES[fac] || fac;
+
+        const isChartActive = activeChartFaculty === fac;
 
         return (
-            <div className={`bg-white rounded border shadow-sm flex flex-col overflow-hidden ${mobile ? 'w-full h-auto mb-4' : 'min-w-[480px] max-w-[520px] shrink-0'}`}>
-                {!mobile && <div className="py-1.5 px-2 text-center border-b font-bold text-xs text-gray-700 bg-gray-50">{fac}</div>}
-                <div className={`flex justify-between px-2 py-1 ${headerColor} text-white text-[9px] font-bold`}>
-                    <span className="w-[20%]">Program</span>
-                    <span className="w-[12%] text-center" title="Enrolled Students">Enroll</span>
-                    <span className="w-[12%] text-center" title="Registered Students">Reg</span>
-                    <span className="w-[10%] text-center" title="Permanent Dropout">P-Dr</span>
-                    <span className="w-[10%] text-center" title="Temporary Dropout">T-Dr</span>
-                    <span className="w-[12%] text-center whitespace-nowrap" title="Credit Completed Students">Cr. Com</span>
-                    <span className="w-[12%] text-center whitespace-nowrap" title="Defense Registration">Def. Reg</span>
-                    <span className="w-[12%] text-right whitespace-nowrap" title="Reg. Pending (Unreg - PDrop - CrCom)">Pnd. Reg</span>
+            <div className={`bg-white rounded border shadow-sm flex flex-col overflow-hidden relative ${mobile ? 'w-full h-auto mb-4' : 'min-w-[250px] md:min-w-0 snap-center'}`}>
+                {/* Faculty Header */}
+                <div className="py-2 md:py-1.5 px-3 md:px-2 flex items-center justify-between border-b bg-gray-50 shrink-0">
+                    <span className="font-bold text-sm md:text-xs text-gray-700 truncate mr-2">{facultyFullName}</span>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); isChartActive ? setActiveChartFaculty(null) : setActiveChartFaculty(fac); }}
+                        className={`p-1 rounded transition-colors ${isChartActive ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-blue-100 text-blue-600'}`}
+                        title={isChartActive ? "Close Chart" : "View Faculty Chart"}
+                    >
+                        {isChartActive ? <X className="w-3.5 h-3.5" /> : <BarChart3 className="w-3.5 h-3.5" />}
+                    </button>
                 </div>
-                <div className={`divide-y divide-gray-100 overflow-y-auto thin-scrollbar ${mobile ? 'max-h-[400px]' : 'max-h-[300px]'}`}>
-                    {progs.map((p: any) => (
-                        <div key={p.pid} className="flex justify-between px-2 py-1 text-[10px] hover:bg-gray-50 items-center">
-                            <span className="w-[20%] text-gray-700 truncate font-medium" title={`${p.pid} ${p.name}`}><span className="font-mono font-bold mr-1 text-gray-500">{p.pid}</span>{p.name}</span>
-                            <span className="w-[12%] text-center font-bold text-gray-900 cursor-pointer hover:underline" onClick={() => p.totalAdmitted > 0 && handleListClick('ALL', p.pid, p.name, 'registered')}>{p.totalAdmitted}</span>
-                            <span className="w-[12%] text-center text-green-600 font-bold cursor-pointer hover:underline" onClick={() => p.totalRegistered > 0 && handleListClick('ALL', p.pid, p.name, 'registered')}>{p.totalRegistered}</span>
-                            <span className="w-[10%] text-center text-rose-700 font-black cursor-pointer hover:underline" onClick={() => p.totalPDrop > 0 && handleListClick('ALL', p.pid, p.name, 'pdrop')}>{p.totalPDrop}</span>
-                            <span className="w-[10%] text-center text-orange-600 font-bold cursor-pointer hover:underline" onClick={() => p.totalTDrop > 0 && handleListClick('ALL', p.pid, p.name, 'tdrop')}>{p.totalTDrop}</span>
-                            <span className="w-[12%] text-center text-emerald-700 font-black cursor-pointer hover:underline" onClick={() => p.totalCrCom > 0 && handleListClick('ALL', p.pid, p.name, 'crcom')}>{p.totalCrCom}</span>
-                            <span className="w-[12%] text-center text-teal-700 font-black cursor-pointer hover:underline" onClick={() => p.totalDefense > 0 && handleListClick('ALL', p.pid, p.name, 'defense')}>{p.totalDefense}</span>
-                            <span className="w-[12%] text-right text-amber-700 font-black cursor-pointer hover:underline" onClick={() => p.totalRegPending > 0 && handleListClick('ALL', p.pid, p.name, 'regPending')}>{p.totalRegPending}</span>
+
+                {/* Main Content: Either Table or Chart Overlay */}
+                <div className="flex-1 relative overflow-hidden flex flex-col">
+                    {/* Table View (Always Rendered for dimension stability, but hidden when chart active) */}
+                    <div className={`flex flex-col flex-1 ${isChartActive ? 'invisible pointer-events-none' : 'visible'}`}>
+                        <div className={`flex justify-between px-3 md:px-2 py-2 md:py-1 ${headerColor} text-white text-xs md:text-[11px] font-bold`}>
+                            <span className="w-[18%]">Program</span>
+                            <span className="w-[10%] text-center" title="Enrolled Students">Enroll</span>
+                            <span className="w-[10%] text-center" title="Registered Students">Reg</span>
+                            <span className="w-[10%] text-center" title="Permanent Dropout">P-Drop</span>
+                            <span className="w-[10%] text-center" title="Temporary Dropout">T-Drop</span>
+                            <span className="w-[10%] text-center whitespace-nowrap" title="Credit Completed Students">Cr. Com</span>
+                            <span className="w-[10%] text-center whitespace-nowrap" title="Defense Registration">Def. Reg</span>
+                            <span className="w-[12%] text-center whitespace-nowrap" title="Reg. Pending">Reg. Pending</span>
+                            <span className="w-[10%] text-right whitespace-nowrap" title="Targeted Follow-up Done">F/U</span>
                         </div>
-                    ))}
-                </div>
-                <div className="bg-slate-50 border-t border-slate-200 px-2 py-1 flex justify-between text-[10px] font-bold text-gray-800">
-                    <span className="w-[20%]">Total</span>
-                    <span className="w-[12%] text-center">{totalAdm}</span>
-                    <span className="w-[12%] text-center text-green-700">{totalReg}</span>
-                    <span className="w-[10%] text-center text-rose-800">{totalP}</span>
-                    <span className="w-[10%] text-center text-orange-700">{totalT}</span>
-                    <span className="w-[12%] text-center text-emerald-900">{totalCC}</span>
-                    <span className="w-[12%] text-center text-teal-900">{totalDef}</span>
-                    <span className="w-[12%] text-right text-amber-900">{totalPnd}</span>
+                        <div className={`divide-y divide-gray-100 overflow-y-auto thin-scrollbar ${mobile ? 'max-h-[400px]' : 'max-h-none flex-1'}`}>
+                            {programs.map((p: any) => (
+                                <div key={p.pid} className="flex justify-between px-2 py-1 text-[10px] hover:bg-blue-50/40 items-center h-[28px]">
+                                    <span className="w-[18%] text-gray-700 truncate font-medium" title={`${p.pid} ${p.name}`}><span className="font-mono font-bold mr-1 text-gray-400">{p.pid}</span>{p.name}</span>
+                                    <span className="w-[10%] text-center font-bold text-gray-900 cursor-pointer hover:underline hover:text-blue-600 transition-colors" onClick={() => p.totalAdmitted > 0 && handleListClick('ALL', p.pid, p.name, 'all')}>{p.totalAdmitted}</span>
+                                    <span className="w-[10%] text-center text-green-600 font-bold cursor-pointer hover:underline transition-colors" onClick={() => p.totalRegistered > 0 && handleListClick('ALL', p.pid, p.name, 'registered')}>{p.totalRegistered}</span>
+                                    <span className="w-[10%] text-center text-rose-700 font-black cursor-pointer hover:underline transition-colors" onClick={() => p.totalPDrop > 0 && handleListClick('ALL', p.pid, p.name, 'pdrop')}>{p.totalPDrop}</span>
+                                    <span className="w-[10%] text-center text-orange-600 font-bold cursor-pointer hover:underline transition-colors" onClick={() => p.totalTDrop > 0 && handleListClick('ALL', p.pid, p.name, 'tdrop')}>{p.totalTDrop}</span>
+                                    <span className="w-[10%] text-center text-emerald-700 font-black cursor-pointer hover:underline transition-colors" onClick={() => p.totalCrCom > 0 && handleListClick('ALL', p.pid, p.name, 'crcom')}>{totalCC}</span>
+                                    <span className="w-[10%] text-center text-teal-700 font-black cursor-pointer hover:underline transition-colors" onClick={() => p.totalDefense > 0 && handleListClick('ALL', p.pid, p.name, 'defense')}>{p.totalDefense}</span>
+                                    <span className="w-[12%] text-center text-amber-700 font-black cursor-pointer hover:underline transition-colors" onClick={() => p.totalRegPending > 0 && handleListClick('ALL', p.pid, p.name, 'regPending')}>{p.totalRegPending}</span>
+                                    <span className="w-[10%] text-right text-pink-700 font-black cursor-pointer hover:underline transition-colors" onClick={() => p.totalFollowupTarget > 0 && handleListClick('ALL', p.pid, p.name, 'followupTarget')}>{p.totalFollowupTarget}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="bg-slate-50 border-t border-slate-200 px-2 py-1 flex justify-between text-[10px] font-bold text-gray-800 shrink-0">
+                            <span className="w-[18%]">Subtotal</span>
+                            <span className="w-[10%] text-center text-blue-800 cursor-pointer hover:underline transition-colors" onClick={() => totalAdm > 0 && handleListClick('ALL', 'ALL', fac, 'all')}>{totalAdm}</span>
+                            <span className="w-[10%] text-center text-green-700 cursor-pointer hover:underline transition-colors" onClick={() => totalReg > 0 && handleListClick('ALL', 'ALL', fac, 'registered')}>{totalReg}</span>
+                            <span className="w-[10%] text-center text-rose-800 cursor-pointer hover:underline transition-colors" onClick={() => totalP > 0 && handleListClick('ALL', 'ALL', fac, 'pdrop')}>{totalP}</span>
+                            <span className="w-[10%] text-center text-orange-700 cursor-pointer hover:underline transition-colors" onClick={() => totalT > 0 && handleListClick('ALL', 'ALL', fac, 'tdrop')}>{totalT}</span>
+                            <span className="w-[10%] text-center text-emerald-900 cursor-pointer hover:underline transition-colors" onClick={() => totalCC > 0 && handleListClick('ALL', 'ALL', fac, 'crcom')}>{totalCC}</span>
+                            <span className="w-[10%] text-center text-teal-900 cursor-pointer hover:underline transition-colors" onClick={() => totalDef > 0 && handleListClick('ALL', 'ALL', fac, 'defense')}>{totalDef}</span>
+                            <span className="w-[12%] text-center text-amber-900 cursor-pointer hover:underline transition-colors" onClick={() => totalPnd > 0 && handleListClick('ALL', 'ALL', fac, 'regPending')}>{totalPnd}</span>
+                            <span className="w-[10%] text-right text-pink-900 cursor-pointer hover:underline transition-colors" onClick={() => totalFU > 0 && handleListClick('ALL', 'ALL', fac, 'followupTarget')}>{totalFU}</span>
+                        </div>
+                    </div>
+
+                    {/* Chart Overlay (Contextual) */}
+                    {isChartActive && (
+                        <div className="absolute inset-0 bg-white z-20 flex flex-col animate-in fade-in zoom-in-95 duration-200 border-t border-slate-100">
+                             <div className="flex-1 p-2 flex flex-col min-h-0">
+                                {/* SVG Chart Area */}
+                                <div className="flex-1 flex items-end justify-between space-x-1 border-b border-slate-100 pb-1 px-1 relative">
+                                    {programs.map((p: any, idx: number) => {
+                                        const maxVal = Math.max(...programs.map(p => (p as any)[activeChartMetric] || 0), 1);
+                                        const val = p[activeChartMetric] || 0;
+                                        const height = (val / maxVal) * 82;
+                                        // Use unique color for each bar
+                                        const barColor = BAR_COLORS[idx % BAR_COLORS.length];
+                                        
+                                        // Metric Mapping for List Loading on click
+                                        const metricConfig = CHART_METRICS.find(m => m.id === activeChartMetric);
+                                        const currentListType = (metricConfig?.listType as any) || 'all';
+
+                                        return (
+                                            <div key={idx} className="flex-1 flex flex-col items-center group relative h-full justify-end">
+                                                {/* Value Badge above Bar */}
+                                                {val > 0 && (
+                                                    <span className="text-[8px] font-black text-slate-700 mb-0.5 animate-in fade-in duration-500">{val}</span>
+                                                )}
+                                                <div 
+                                                    onClick={() => val > 0 && handleListClick('ALL', p.pid, p.name, currentListType)}
+                                                    className="w-full max-w-[24px] rounded-t-sm transition-all duration-500 hover:brightness-110 shadow-sm relative cursor-pointer"
+                                                    style={{ 
+                                                        height: `${height}%`, 
+                                                        backgroundColor: barColor,
+                                                        minHeight: val > 0 ? '2px' : '0'
+                                                    }}
+                                                >
+                                                    {/* Tooltip Enhanced with Program Name */}
+                                                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 text-[8px] font-black text-slate-800 opacity-0 group-hover:opacity-100 transition-opacity bg-white p-1 rounded border shadow-md z-30 pointer-events-none whitespace-nowrap flex flex-col items-center min-w-[50px]">
+                                                        <span className="text-blue-600 border-b border-blue-50 w-full text-center pb-0.5 mb-0.5">{p.name}</span>
+                                                        <span className="text-[10px] text-slate-800">{val}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-1 w-full text-center shrink-0">
+                                                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-tighter block truncate w-full" title={p.name}>
+                                                        {p.pid}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Metric Tabs - Scrollable */}
+                                <div className="shrink-0 overflow-x-auto no-scrollbar py-2 border-t border-slate-50 mt-auto">
+                                    <div className="flex items-center space-x-1 px-1 w-fit mx-auto">
+                                        {CHART_METRICS.map(m => {
+                                            const isActive = activeChartMetric === m.id;
+                                            return (
+                                                <button 
+                                                    key={m.id}
+                                                    onClick={() => setActiveChartMetric(m.id)}
+                                                    className={`px-2 py-1 rounded text-[8px] font-black uppercase tracking-wider transition-all border shrink-0 ${
+                                                        isActive 
+                                                        ? `${m.color} text-white ${m.activeBorder} shadow-sm` 
+                                                        : m.inactiveClass
+                                                    }`}
+                                                >
+                                                    {m.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                             </div>
+                        </div>
+                    )}
                 </div>
             </div>
         );
     };
 
-    const renderChart = (facultiesToShow: string[]) => {
-        const chartData: any[] = [];
-        facultiesToShow.forEach(fac => {
-            const progs = facultyGroups[fac];
-            if (progs) chartData.push(...progs.map(p => ({ ...p, faculty: fac })));
+    const employeeOptions = useMemo(() => {
+        const map = new Map<string, string>();
+        diuEmployeeData.forEach(e => { 
+            const id = e['Employee ID']?.trim();
+            if (!id) return;
+            map.set(normalizeId(id), `${e['Employee Name']} - ${[e['Administrative Designation'], e['Academic Designation']].filter(Boolean).join('/')} (${id})`); 
         });
-        if (chartData.length === 0) return <div className="w-full text-center text-gray-400 self-center">No data available</div>;
-        const maxCount = Math.max(...chartData.map(p => p.totalAdmitted), 1);
+        teacherData.forEach(t => {
+            const id = t['Employee ID']?.trim();
+            if (!id) return;
+            const normId = normalizeId(id);
+            if (!map.has(normId)) map.set(normId, `${t['Employee Name']} - ${t.Designation} (${id})`);
+        });
+        return Array.from(map.values()).sort();
+    }, [diuEmployeeData, teacherData]);
 
-        return (
-            <div className="absolute inset-0 flex items-end justify-between space-x-1 px-2 pb-2 pt-12 overflow-x-auto thin-scrollbar">
-                {chartData.map((p, idx) => {
-                    const heightPercent = Math.max((p.totalAdmitted / maxCount) * 70, 2);
-                    const barColor = FACULTY_COLORS[p.faculty] || 'bg-gray-400';
-                    return (
-                        <div key={idx} className="flex-1 flex flex-col items-center justify-end group relative h-full hover:bg-gray-50/50 rounded-lg transition-colors min-w-[20px]">
-                            <span className="text-[9px] font-bold text-gray-500 mb-0.5">{p.totalAdmitted}</span>
-                            <div className="absolute left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1.5 rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 flex flex-col items-center mb-5" style={{ bottom: `${heightPercent}%` }}>
-                                <span className="font-bold">{p.pid}</span>
-                                <span className="text-[9px] opacity-90">Enroll: {p.totalAdmitted}</span>
-                                <div className="w-2 h-2 bg-slate-800 rotate-45 absolute -bottom-1"></div>
-                            </div>
-                            <div className={`w-full rounded-t-sm ${barColor} transition-all hover:opacity-80 relative`} style={{ height: `${heightPercent}%`, minHeight: '4px' }}></div>
-                        </div>
-                    );
-                })}
-            </div>
+    const programInfoAtSelection = useMemo(() => {
+        if (!selectedStudent) return null;
+        const pid = normalize(selectedStudent.PID);
+        const details = programDetailsMap.get(pid);
+        return {
+            PID: selectedStudent.PID,
+            'Program Short Name': programMap.get(pid) || selectedStudent.PID,
+            'Program Full Name': programMap.get(pid) || selectedStudent.PID,
+            'Faculty Short Name': details?.['Faculty Short Name'] || '',
+            'Faculty Full Name': details?.['Faculty Full Name'] || '',
+        } as any;
+    }, [selectedStudent, programMap, programDetailsMap]);
+
+    const filteredInlineStudents = useMemo(() => {
+        if (!inlineSelection) return [];
+        if (!listSearchTerm.trim()) return inlineSelection.students;
+        const lower = listSearchTerm.toLowerCase();
+        return inlineSelection.students.filter(s => 
+            s['Student Name'].toLowerCase().includes(lower) || 
+            s['Student ID'].toLowerCase().includes(lower) ||
+            (s.Mobile && s.Mobile.toLowerCase().includes(lower))
         );
-    };
+    }, [inlineSelection, listSearchTerm]);
 
     return (
         <div className="flex flex-col h-full bg-white rounded shadow-sm relative">
             <div className="px-3 py-1.5 border-b border-gray-200 bg-slate-50 flex items-center justify-between shrink-0 gap-3 overflow-hidden h-[40px]">
                 <div className="text-[10px] font-bold text-gray-800 flex items-center shrink-0 uppercase tracking-wider">
                     <BarChart3 className="w-3 h-3 mr-1.5 text-blue-600" />
-                    {viewType === 'summary' ? 'Summary' : isTransposed ? `${allPrograms[0].pid} Semester Analysis` : 'Semester Analysis'}
+                    {viewType === 'summary' ? 'Faculty Analysis' : isTransposed ? `${allPrograms[0]?.pid} Semester Analysis` : 'Semester Analysis'}
                 </div>
+                
+                {viewType === 'summary' && !isTransposed && (
+                    <div className="hidden md:flex items-center space-x-1 overflow-x-auto thin-scrollbar ml-4">
+                        <button onClick={() => setSelectedFaculties(new Set())} className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all whitespace-nowrap ${selectedFaculties.size === 0 ? 'bg-slate-700 text-white border-slate-700 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-100'}`}>All</button>
+                        {uniqueFaculties.map(fac => (
+                            <button key={fac} onClick={() => { const newSet = new Set(selectedFaculties); if (newSet.has(fac)) newSet.delete(fac); else newSet.add(fac); setSelectedFaculties(newSet); }} className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all whitespace-nowrap ${selectedFaculties.has(fac) ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200'}`}>{fac}</button>
+                        ))}
+                    </div>
+                )}
+
                 <div className="flex items-center space-x-3 overflow-hidden justify-end flex-1" onMouseDown={(e) => e.stopPropagation()}>
-                    {!isTransposed && (
+                    {viewType !== 'summary' && !isTransposed && (
                         <div className="hidden md:flex items-center space-x-1 overflow-x-auto thin-scrollbar">
                             <span className="text-[9px] font-bold text-gray-400 uppercase mr-1 whitespace-nowrap">Faculty:</span>
                             <button onClick={() => setSelectedFaculties(new Set())} className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all whitespace-nowrap ${selectedFaculties.size === 0 ? 'bg-slate-700 text-white border-slate-700 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-100'}`}>All</button>
@@ -345,10 +603,12 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                             ))}
                         </div>
                     )}
-                    <div className="flex items-center bg-white border border-gray-200 rounded p-0.5 shadow-sm hidden md:flex">
-                        <button onClick={() => setViewType('detailed')} className={`p-1 rounded transition-colors ${viewType === 'detailed' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`} title="Detailed"><ListIcon className="w-3 h-3" /></button>
-                        <button onClick={() => setViewType('summary')} className={`p-1 rounded transition-colors ${viewType === 'summary' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`} title="Summary"><LayoutGrid className="w-3 h-3" /></button>
-                    </div>
+                    {!hideSummaryToggle && (
+                        <div className="flex items-center bg-white border border-gray-200 rounded p-0.5 shadow-sm hidden md:flex">
+                            <button onClick={() => setViewType('detailed')} className={`p-1 rounded transition-colors ${viewType === 'detailed' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`} title="Detailed"><ListIcon className="w-3 h-3" /></button>
+                            <button onClick={() => setViewType('summary')} className={`p-1 rounded transition-colors ${viewType === 'summary' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`} title="Summary"><LayoutGrid className="w-3 h-3" /></button>
+                        </div>
+                    )}
                     <div className="flex items-center space-x-1 shrink-0">
                         <span className="text-[9px] font-bold text-gray-500 uppercase whitespace-nowrap hidden md:inline">Compare:</span>
                         <select 
@@ -368,16 +628,17 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                         <div className="flex-1 overflow-auto thin-scrollbar relative" ref={containerRef}>
                             {isTransposed ? (
                                 <table className="w-full text-left border-collapse">
-                                    <thead className="bg-slate-700 sticky top-0 z-20 shadow-sm">
+                                    <thead className="bg-slate-700 sticky top-0 z-10 shadow-sm">
                                         <tr>
-                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white sticky left-0 z-30 bg-slate-700 w-48 uppercase tracking-wider">Semester</th>
-                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider" title="Enrolled Students">Enroll</th>
-                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider" title="Registered Students">Reg</th>
-                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Permanent Dropout">P-Drop</th>
-                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Temporary Dropout">T-Drop</th>
-                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Credit Completed Students (Met Requirements)">Cr. Com</th>
-                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Defense Registration">Def. Reg</th>
-                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Registration Pending (Unreg - PDrop - CrCom)">Reg. Pending</th>
+                                            <th className="px-3 py-1.5 text-[10px] font-bold text-white sticky left-0 z-30 bg-slate-700 w-40 uppercase tracking-wider">Semester</th>
+                                            <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider" title="Enrolled Students">Enroll</th>
+                                            <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider" title="Registered Students">Reg</th>
+                                            <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Permanent Dropout">P-Drop</th>
+                                            <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Temporary Dropout">T-Drop</th>
+                                            <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Credit Completed Students">Cr. Com</th>
+                                            <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Defense Registration">Def. Reg</th>
+                                            <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Registration Pending">Reg. Pending</th>
+                                            <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap" title="Followed Up (Targeted)">Followed Up</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
@@ -391,118 +652,73 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                             const crCom = data?.crCom || 0;
                                             const defense = data?.defense || 0;
                                             const regPending = data?.regPending || 0;
+                                            const followupTarget = data?.followupTarget || 0;
                                             const reg = adm - unreg;
 
                                             return (
-                                                <tr key={sem} className="group hover:bg-blue-50/40 transition-colors h-[28px]">
-                                                    <td className="px-3 py-1 font-bold text-gray-700 border-r border-gray-100 sticky left-0 bg-white group-hover:bg-slate-50 transition-colors text-[11px]">
+                                                <tr key={sem} className="group transition-colors h-[28px]">
+                                                    <td className="px-3 py-1 font-bold text-gray-700 border-r border-gray-100 sticky left-0 bg-white transition-colors text-[11px]">
                                                         {sem}
                                                     </td>
-                                                    <td className="px-3 py-1 text-center text-[11px] font-medium text-gray-800 border-r border-gray-50">
-                                                        {adm > 0 ? (
-                                                            <span 
-                                                                className="cursor-pointer hover:underline decoration-slate-400"
-                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'registered')}
-                                                            >
-                                                                {adm}
-                                                            </span>
-                                                        ) : <span className="text-gray-300">-</span>}
+                                                    <td className="px-2 py-1 text-center text-[11px] font-medium text-gray-800 border-r border-gray-50">
+                                                        {adm > 0 ? <span className="cursor-pointer hover:underline hover:text-blue-600 transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'all')}>{adm}</span> : <span className="text-gray-300">-</span>}
                                                     </td>
-                                                    <td className="px-3 py-1 text-center text-[11px] font-bold text-green-600 border-r border-gray-50">
-                                                        {reg > 0 ? (
-                                                            <span 
-                                                                className="cursor-pointer hover:underline decoration-green-500"
-                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'registered')}
-                                                            >
-                                                                {reg}
-                                                            </span>
-                                                        ) : <span className="text-gray-300">-</span>}
+                                                    <td className="px-2 py-1 text-center text-[11px] font-bold text-green-600 border-r border-gray-50">
+                                                        {reg > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'registered')}>{reg}</span> : <span className="text-gray-300">-</span>}
                                                     </td>
-                                                    <td className="px-3 py-1 text-center text-[11px] font-black text-rose-700 border-r border-gray-50">
-                                                        {pDrop > 0 ? (
-                                                            <span 
-                                                                className="cursor-pointer hover:underline decoration-rose-500"
-                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'pdrop')}
-                                                            >
-                                                                {pDrop}
-                                                            </span>
-                                                        ) : <span className="text-gray-300">-</span>}
+                                                    <td className="px-2 py-1 text-center text-[11px] font-black text-rose-700 border-r border-gray-50">
+                                                        {pDrop > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'pdrop')}>{pDrop}</span> : <span className="text-gray-300">-</span>}
                                                     </td>
-                                                    <td className="px-3 py-1 text-center text-[11px] font-black text-orange-600 border-r border-gray-50">
-                                                        {tDrop > 0 ? (
-                                                            <span 
-                                                                className="cursor-pointer hover:underline decoration-orange-400"
-                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'tdrop')}
-                                                            >
-                                                                {tDrop}
-                                                            </span>
-                                                        ) : <span className="text-gray-300">-</span>}
+                                                    <td className="px-2 py-1 text-center text-[11px] font-black text-orange-600 border-r border-gray-50">
+                                                        {tDrop > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'tdrop')}>{tDrop}</span> : <span className="text-gray-300">-</span>}
                                                     </td>
-                                                    <td className="px-3 py-1 text-center text-[11px] font-black text-emerald-700 border-r border-gray-50">
-                                                        {crCom > 0 ? (
-                                                            <span 
-                                                                className="cursor-pointer hover:underline decoration-emerald-400"
-                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'crcom')}
-                                                            >
-                                                                {crCom}
-                                                            </span>
-                                                        ) : <span className="text-gray-300">-</span>}
+                                                    <td className="px-2 py-1 text-center text-[11px] font-black text-emerald-700 border-r border-gray-50">
+                                                        {crCom > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'crcom')}>{crCom}</span> : <span className="text-gray-300">-</span>}
                                                     </td>
-                                                    <td className="px-3 py-1 text-center text-[11px] font-black text-teal-700 border-r border-gray-50">
-                                                        {defense > 0 ? (
-                                                            <span 
-                                                                className="cursor-pointer hover:underline decoration-teal-400"
-                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'defense')}
-                                                            >
-                                                                {defense}
-                                                            </span>
-                                                        ) : <span className="text-gray-300">-</span>}
+                                                    <td className="px-2 py-1 text-center text-[11px] font-black text-teal-700 border-r border-gray-50">
+                                                        {defense > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'defense')}>{defense}</span> : <span className="text-gray-300">-</span>}
                                                     </td>
-                                                    <td className="px-3 py-1 text-center text-[11px] font-black text-amber-700">
-                                                        {regPending > 0 ? (
-                                                            <span 
-                                                                className="cursor-pointer hover:underline decoration-amber-400"
-                                                                onClick={() => handleListClick(sem, prog.pid, prog.name, 'regPending')}
-                                                            >
-                                                                {regPending}
-                                                            </span>
-                                                        ) : <span className="text-gray-300">-</span>}
+                                                    <td className="px-2 py-1 text-center text-[11px] font-black text-amber-700 border-r border-gray-50">
+                                                        {regPending > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'regPending')}>{regPending}</span> : <span className="text-gray-300">-</span>}
+                                                    </td>
+                                                    <td className="px-2 py-1 text-center text-[11px] font-black text-pink-700">
+                                                        {followupTarget > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'followupTarget')}>{followupTarget}</span> : <span className="text-gray-300">-</span>}
                                                     </td>
                                                 </tr>
                                             );
                                         })}
                                         {paginatedData.length === 0 && (
-                                            <tr><td colSpan={8} className="py-8 text-center text-gray-400 italic text-[11px]">No semesters found for analysis.</td></tr>
+                                            <tr><td colSpan={9} className="py-8 text-center text-gray-400 italic text-[11px]">No semesters found for analysis.</td></tr>
                                         )}
                                     </tbody>
                                 </table>
                             ) : (
                                 <table className="w-full text-left border-collapse">
-                                    <thead className="bg-slate-700 sticky top-0 z-20 shadow-sm">
+                                    <thead className="bg-slate-700 sticky top-0 z-10 shadow-sm border-b border-gray-200">
                                         <tr>
                                             <th className="px-2 py-1.5 text-[10px] font-bold text-white sticky left-0 z-30 bg-slate-700 min-w-[150px] w-auto whitespace-nowrap uppercase tracking-wider">Program</th>
                                             {sortedAdmittedSemesters.map(sem => (
-                                                <th key={sem} className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[210px]">
+                                                <th key={sem} className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[240px]">
                                                     <div className="flex items-center justify-center space-x-1 mb-1"><span>{sem}</span></div>
-                                                    <div className="grid grid-cols-7 gap-1 border-t border-slate-600 pt-1 uppercase text-white/70">
-                                                        <span title="Admitted Student">Adm</span><span title="Registered Student">Reg</span><span className="whitespace-nowrap" title="Permanent Dropout">PDr</span><span className="whitespace-nowrap" title="Temporary Dropout">TDr</span><span className="whitespace-nowrap" title="Credit Completed Students">CC</span><span className="whitespace-nowrap" title="Defense Registration">Def</span><span className="whitespace-nowrap" title="Reg. Pending">Pnd</span>
+                                                    <div className="grid grid-cols-8 gap-1 border-t border-slate-600 pt-1 uppercase text-white/70">
+                                                        <span title="Admitted Student">Adm</span><span title="Registered Student">Reg</span><span className="whitespace-nowrap" title="Permanent Dropout">PDr</span><span className="whitespace-nowrap" title="Temporary Dropout">TDr</span><span className="whitespace-nowrap" title="Credit Completed Students">CC</span><span className="whitespace-nowrap" title="Defense Registration">Def</span><span className="whitespace-nowrap" title="Reg. Pending">Pnd</span><span className="whitespace-nowrap" title="Followed Up (Targeted)">F/U</span>
                                                     </div>
                                                 </th>
                                             ))}
-                                            <th className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[210px] uppercase">
+                                            <th className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[240px] uppercase">
                                                 <div className="mb-1">Total</div>
-                                                <div className="grid grid-cols-7 gap-1 border-t border-slate-600 pt-1 text-white/70">
-                                                    <span title="Total Admitted">Adm</span><span title="Total Registered">Reg</span><span title="Total Permanent Dropout">PDr</span><span title="Total Temporary Dropout">TDr</span><span title="Total Credit Completed Students">CC</span><span title="Total Defense Registration">Def</span><span title="Total Reg. Pending">Pnd</span>
+                                                <div className="grid grid-cols-8 gap-1 border-t border-slate-600 pt-1 text-white/70">
+                                                    <span title="Total Admitted">Adm</span><span title="Total Registered">Reg</span><span title="Total Permanent Dropout">PDr</span><span title="Total Temporary Dropout">TDr</span><span title="Total Credit Completed Students">CC</span><span title="Total Defense Registration">Def</span><span title="Total Reg. Pending">Pnd</span><span title="Total Targeted Follow-up Done">F/U</span>
                                                 </div>
                                             </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
                                         {paginatedData.map((prog: any) => (
-                                            <tr key={prog.pid} className="group hover:bg-blue-50/40 transition-colors text-[10px] h-[28px]">
-                                                <td className="px-2 py-1 font-bold text-gray-600 border-r border-gray-100 sticky left-0 bg-white group-hover:bg-slate-50 transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-auto">
-                                                    <span className="inline-block w-8 text-right mr-2 text-gray-400 group-hover:text-blue-50 font-mono transition-colors">{prog.pid}</span>
-                                                    <span className="text-gray-700 group-hover:text-blue-900 transition-colors" title={prog.name}>{prog.name}</span>
+                                            <tr key={prog.pid} className="text-[10px] h-[28px]">
+                                                <td className="px-2 py-1 font-bold text-gray-600 border-r border-gray-100 sticky left-0 bg-white transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-auto">
+                                                    <span className="inline-block w-8 text-right mr-2 text-gray-400 font-mono">{prog.pid}</span>
+                                                    <span className="text-gray-700" title={prog.name}>{prog.name}</span>
                                                 </td>
                                                 {sortedAdmittedSemesters.map(sem => {
                                                     const data = prog.data[sem];
@@ -510,33 +726,36 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                                     const unreg = data?.unregistered || 0;
                                                     const pDrop = data?.pDrop || 0;
                                                     const tDrop = data?.tDrop || 0;
-                                                    const crCom = data?.crCom || 0;
+                                                    const crComValue = data?.crCom || 0;
                                                     const defense = data?.defense || 0;
                                                     const regPending = data?.regPending || 0;
+                                                    const followupTarget = data?.followupTarget || 0;
                                                     const reg = adm - unreg;
                                                     return (
                                                         <td key={sem} className="px-1 py-1 border-r border-gray-100 text-center">
-                                                            <div className="grid grid-cols-7 gap-1">
-                                                                <span className={`${adm > 0 ? 'text-gray-700 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => adm > 0 && handleListClick(sem, prog.pid, prog.name, 'registered')}>{adm}</span>
-                                                                <span className={`${reg > 0 ? 'text-green-600 font-bold cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => reg > 0 && handleListClick(sem, prog.pid, prog.name, 'registered')}>{reg}</span>
-                                                                <span className={`font-black ${pDrop > 0 ? 'text-rose-700 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => pDrop > 0 && handleListClick(sem, prog.pid, prog.name, 'pdrop')}>{pDrop}</span>
-                                                                <span className={`font-bold ${tDrop > 0 ? 'text-orange-600 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => tDrop > 0 && handleListClick(sem, prog.pid, prog.name, 'tdrop')}>{tDrop}</span>
-                                                                <span className={`font-black ${crCom > 0 ? 'text-emerald-700 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => crCom > 0 && handleListClick(sem, prog.pid, prog.name, 'crcom')}>{crCom}</span>
-                                                                <span className={`font-black ${defense > 0 ? 'text-teal-700 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => defense > 0 && handleListClick(sem, prog.pid, prog.name, 'defense')}>{defense}</span>
-                                                                <span className={`font-black ${regPending > 0 ? 'text-amber-700 cursor-pointer hover:underline' : 'text-gray-300'}`} onClick={() => regPending > 0 && handleListClick(sem, prog.pid, prog.name, 'regPending')}>{regPending}</span>
+                                                            <div className="grid grid-cols-8 gap-1">
+                                                                <span className={`${adm > 0 ? 'text-gray-700 cursor-pointer hover:underline hover:text-blue-600 transition-colors' : 'text-gray-300'}`} onClick={() => adm > 0 && handleListClick(sem, prog.pid, prog.name, 'all')}>{adm}</span>
+                                                                <span className={`${reg > 0 ? 'text-green-600 font-bold cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => reg > 0 && handleListClick(sem, prog.pid, prog.name, 'registered')}>{reg}</span>
+                                                                <span className={`font-black ${pDrop > 0 ? 'text-rose-700 cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => pDrop > 0 && handleListClick(sem, prog.pid, prog.name, 'pdrop')}>{pDrop}</span>
+                                                                <span className={`font-bold ${tDrop > 0 ? 'text-orange-600 cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => tDrop > 0 && handleListClick(sem, prog.pid, prog.name, 'tdrop')}>{tDrop}</span>
+                                                                <span className={`font-black ${crComValue > 0 ? 'text-emerald-700 cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => crComValue > 0 && handleListClick(sem, prog.pid, prog.name, 'crcom')}>{crComValue}</span>
+                                                                <span className={`font-black ${defense > 0 ? 'text-teal-700 cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => defense > 0 && handleListClick(sem, prog.pid, prog.name, 'defense')}>{defense}</span>
+                                                                <span className={`font-black ${regPending > 0 ? 'text-amber-700 cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => regPending > 0 && handleListClick(sem, prog.pid, prog.name, 'regPending')}>{regPending}</span>
+                                                                <span className={`font-black ${followupTarget > 0 ? 'text-pink-700 cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => followupTarget > 0 && handleListClick(sem, prog.pid, prog.name, 'followupTarget')}>{followupTarget}</span>
                                                             </div>
                                                         </td>
                                                     );
                                                 })}
                                                 <td className="px-1 py-1 font-bold text-center bg-slate-50 border-l border-gray-200">
-                                                    <div className="grid grid-cols-7 gap-1">
-                                                        <span className="text-blue-800 cursor-pointer hover:underline" onClick={() => prog.totalAdmitted > 0 && handleListClick('ALL', prog.pid, prog.name, 'registered')}>{prog.totalAdmitted}</span>
-                                                        <span className="text-green-700 cursor-pointer hover:underline" onClick={() => prog.totalRegistered > 0 && handleListClick('ALL', prog.pid, prog.name, 'registered')}>{prog.totalRegistered}</span>
-                                                        <span className="text-rose-800 cursor-pointer hover:underline" onClick={() => prog.totalPDrop > 0 && handleListClick('ALL', prog.pid, prog.name, 'pdrop')}>{prog.totalPDrop}</span>
-                                                        <span className="text-orange-700 cursor-pointer hover:underline" onClick={() => prog.totalTDrop > 0 && handleListClick('ALL', prog.pid, prog.name, 'tdrop')}>{prog.totalTDrop}</span>
-                                                        <span className="text-emerald-900 cursor-pointer hover:underline" onClick={() => prog.totalCrCom > 0 && handleListClick('ALL', prog.pid, prog.name, 'crcom')}>{prog.totalCrCom}</span>
-                                                        <span className="text-teal-900 cursor-pointer hover:underline" onClick={() => prog.totalDefense > 0 && handleListClick('ALL', prog.pid, prog.name, 'defense')}>{prog.totalDefense}</span>
-                                                        <span className="text-amber-900 cursor-pointer hover:underline" onClick={() => prog.totalRegPending > 0 && handleListClick('ALL', prog.pid, prog.name, 'regPending')}>{prog.totalRegPending}</span>
+                                                    <div className="grid grid-cols-8 gap-1">
+                                                        <span className="text-blue-800 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalAdmitted > 0 && handleListClick('ALL', prog.pid, prog.name, 'all')}>{prog.totalAdmitted}</span>
+                                                        <span className="text-green-700 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalRegistered > 0 && handleListClick('ALL', prog.pid, prog.name, 'registered')}>{prog.totalRegistered}</span>
+                                                        <span className="text-rose-800 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalPDrop > 0 && handleListClick('ALL', prog.pid, prog.name, 'pdrop')}>{prog.totalPDrop}</span>
+                                                        <span className="text-orange-700 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalTDrop > 0 && handleListClick('ALL', prog.pid, prog.name, 'tdrop')}>{prog.totalTDrop}</span>
+                                                        <span className="text-emerald-900 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalCrCom > 0 && handleListClick('ALL', prog.pid, prog.name, 'crcom')}>{prog.totalCrCom}</span>
+                                                        <span className="text-teal-900 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalDefense > 0 && handleListClick('ALL', prog.pid, prog.name, 'defense')}>{prog.totalDefense}</span>
+                                                        <span className="text-amber-900 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalRegPending > 0 && handleListClick('ALL', prog.pid, prog.name, 'regPending')}>{prog.totalRegPending}</span>
+                                                        <span className="text-pink-900 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalFollowupTarget > 0 && handleListClick('ALL', prog.pid, prog.name, 'followupTarget')}>{prog.totalFollowupTarget}</span>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -555,11 +774,11 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                 <span className="font-bold">{paginationDataInput.length}</span>
                             </div>
                             <div className="flex items-center space-x-1">
-                                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsLeft className="w-3 h-3" /></button>
-                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronLeft className="w-3 h-3" /></button>
+                                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsLeft className="w-3" /></button>
+                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronLeft className="w-3" /></button>
                                 <span className="min-w-[20px] text-center font-black">{currentPage}</span>
-                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronRight className="w-3 h-3" /></button>
-                                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsRight className="w-3 h-3" /></button>
+                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronRight className="w-3" /></button>
+                                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsRight className="w-3" /></button>
                             </div>
                         </div>
                     </>
@@ -573,43 +792,168 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                             </div>
                             <div className="flex-1 overflow-y-auto p-3 space-y-4 bg-gray-50">
                                 {activeFaculty && renderFacultyCard(activeFaculty, true)}
-                                {activeFaculty && (
-                                    <div className="bg-white p-2 rounded border border-gray-200 shadow-sm relative h-[300px]">
-                                        <h4 className="text-[10px] font-bold text-gray-500 mb-2 uppercase flex items-center"><BarChart3 className="w-3 h-3 mr-1"/> {activeFaculty} Distribution</h4>
-                                        <div className="w-full relative h-[250px]">{renderChart([activeFaculty])}</div>
+                            </div>
+                        </div>
+                        <div className="hidden md:flex flex-row flex-1 overflow-hidden">
+                            <div className="basis-[45%] w-[45%] border-r border-gray-200 overflow-y-auto p-3 space-y-3 thin-scrollbar bg-slate-50/30 shrink-0">
+                                {sortedFaculties.map(fac => renderFacultyCard(fac))}
+                            </div>
+                            
+                            <div className="basis-[25%] w-[25%] border-r border-gray-200 flex flex-col overflow-hidden bg-white shrink-0">
+                                {inlineSelection ? (
+                                    <div className="flex-1 flex flex-col overflow-hidden">
+                                        <div className="px-3 py-2 border-b border-gray-100 flex items-center bg-white shrink-0 min-h-[48px] h-auto gap-3">
+                                            <div className="shrink-0 min-w-0 max-w-[100px]">
+                                                <h4 className="text-[9px] font-black text-blue-600 uppercase tracking-tight leading-tight break-words">
+                                                    {inlineSelection.title}
+                                                </h4>
+                                            </div>
+                                            <div className="flex-1 flex justify-center">
+                                                <div className="relative w-full max-w-[160px] group">
+                                                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                                    <input 
+                                                        type="text"
+                                                        placeholder="Search list..."
+                                                        value={listSearchTerm}
+                                                        onChange={(e) => setListSearchTerm(e.target.value)}
+                                                        className="w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 rounded-md text-[11px] outline-none transition-all font-medium"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center space-x-1 shrink-0">
+                                                <button 
+                                                    onClick={() => {
+                                                        setListSearchTerm('');
+                                                        setInlineSelection({ 
+                                                            title: 'All Enrolled Students', 
+                                                            students: getStudentsByType('ALL', 'ALL', 'all'), 
+                                                            listType: 'all' 
+                                                        });
+                                                    }}
+                                                    className="p-1 rounded bg-gray-100 text-gray-500 hover:bg-blue-50 hover:text-blue-600 transition-colors shrink-0"
+                                                    title="Reset List Filter"
+                                                >
+                                                    <FilterX className="w-3.5 h-3.5" />
+                                                </button>
+                                                <div className="flex flex-col items-end shrink-0 ml-1">
+                                                    <span className="text-[9px] font-black text-slate-800 leading-none">{filteredInlineStudents.length}</span>
+                                                    <span className="text-[7px] font-bold text-gray-400 uppercase tracking-tighter leading-none mt-0.5">Records</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex-1 overflow-hidden">
+                                            <StudentDetailList
+                                                students={filteredInlineStudents}
+                                                onRowClick={(student) => setSelectedStudentId(student['Student ID'])}
+                                                selectedId={selectedStudentId}
+                                                listType={inlineSelection.listType as any}
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex-1 flex flex-col items-center justify-center p-12 text-slate-300">
+                                        <Users className="w-8 h-8 opacity-20 mb-2" />
+                                        <p className="text-[9px] font-black uppercase text-center">Select Data</p>
                                     </div>
                                 )}
                             </div>
-                        </div>
-                        <div className="hidden md:flex flex-col flex-1 overflow-y-auto p-2 space-y-4 thin-scrollbar">
-                            <div className="flex flex-nowrap overflow-x-auto gap-3 items-start shrink-0">
-                                {sortedFaculties.map(fac => renderFacultyCard(fac))}
-                            </div>
-                            <div className="bg-white p-2 rounded border border-gray-200 shadow-sm mt-4 flex-1 min-h-[300px] flex flex-col">
-                                <h4 className="text-xs font-bold text-gray-700 mb-2 pl-2 shrink-0">Student Directory Distribution</h4>
-                                <div className="w-full relative flex-1 mt-2">{renderChart(sortedFaculties)}</div>
-                                <div className="flex justify-center flex-wrap gap-4 mt-2 border-t border-gray-100 pt-2 shrink-0">
-                                    {sortedFaculties.map(fac => (<div key={fac} className="flex items-center space-x-1.5"><div className={`w-3 h-3 rounded-sm ${FACULTY_COLORS[fac]}`}></div><span className="text-[10px] font-bold text-gray-600">{fac}</span></div>))}
-                                </div>
+
+                            <div className="basis-[30%] w-[30%] flex flex-col overflow-hidden bg-slate-50 shadow-inner">
+                                {selectedStudent && programInfoAtSelection ? (
+                                    <div className="h-full animate-in slide-in-from-right-2 duration-300">
+                                        <StudentDetailView 
+                                            student={selectedStudent}
+                                            program={programInfoAtSelection}
+                                            diuEmployeeData={diuEmployeeData}
+                                            teacherData={teacherData}
+                                            employeeOptions={employeeOptions}
+                                            onSaveStudent={handleSaveStudentInternal}
+                                            onClose={() => setSelectedStudentId(null)}
+                                            registrationLookup={registrationLookup}
+                                            studentSemester={(selectedStudent as any)._semester}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="flex-1 flex flex-col items-center justify-center p-12 text-slate-300">
+                                        <div className="w-16 h-16 rounded-full bg-white border border-slate-200 flex items-center justify-center mb-4 shadow-sm">
+                                            <UserIcon className="w-8 h-8 opacity-20 text-blue-300" />
+                                        </div>
+                                        <p className="text-[11px] font-black uppercase tracking-widest text-center text-slate-400 px-4">Click on a student to view profile</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
                 )}
             </div>
-            {listModalState?.isOpen && (
-                <UnregisteredStudentsModal 
-                    isOpen={listModalState.isOpen} 
-                    onClose={() => setListModalState(null)} 
-                    semester={listModalState.semester} 
-                    programName={listModalState.programName} 
-                    programId={listModalState.programId} 
-                    targetSemester={targetRegSemester} 
-                    students={listModalState.students}
-                    programMap={programMap}
-                    registrationLookup={registrationLookup}
-                    listType={listModalState.listType}
-                />
-            )}
+        </div>
+    );
+};
+
+const StudentDetailList = ({ students, onRowClick, selectedId, listType }: { students: StudentDataRow[], onRowClick: (s: StudentDataRow) => void, selectedId: string | null, listType: string }) => {
+    const { currentPage, setCurrentPage, rowsPerPage, totalPages, paginatedData, containerRef } = useResponsivePagination<StudentDataRow>(students);
+
+    return (
+        <div className="flex flex-col h-full bg-white overflow-hidden">
+            <div className="flex-1 overflow-auto thin-scrollbar relative" ref={containerRef}>
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-700 sticky top-0 z-10 shadow-sm border-b border-gray-200">
+                        <tr>
+                            <th className="px-2 py-1.5 text-[10px] font-bold text-white w-8 text-center uppercase tracking-wider">Sl</th>
+                            <th className="px-2 py-1.5 text-[10px] font-bold text-white uppercase tracking-wider">Student ID</th>
+                            <th className="px-2 py-1.5 text-[10px] font-bold text-white uppercase tracking-wider">Student Name</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {paginatedData.map((student, idx) => {
+                            const globalIdx = (currentPage - 1) * rowsPerPage + idx + 1;
+                            const isSelected = selectedId === student['Student ID'];
+                            const followupCount = (student['Discussion Remark'] || '').split(' || ').filter(Boolean).length;
+
+                            return (
+                                <tr 
+                                    key={idx} 
+                                    onClick={() => onRowClick(student)}
+                                    className={`transition-all text-[11px] h-[28px] cursor-pointer relative z-0 ${
+                                        isSelected 
+                                        ? 'bg-blue-100 ring-1 ring-blue-300 ring-inset shadow-[inset_0_0_0_1px_rgba(59,130,246,0.2)] z-10' 
+                                        : 'hover:bg-blue-50/60'
+                                    }`}
+                                >
+                                    <td className={`px-2 py-1 text-center font-medium ${isSelected ? 'text-blue-700' : 'text-gray-400'}`}>{globalIdx}</td>
+                                    <td className={`px-2 py-1 font-bold font-mono flex items-center space-x-1.5 ${isSelected ? 'text-blue-800' : 'text-blue-600'}`}>
+                                        <span>{student['Student ID']}</span>
+                                        {followupCount > 0 && (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-pink-100 text-pink-700 text-[8px] font-black border border-pink-200 shadow-sm leading-none shrink-0" title={`Has ${followupCount} follow-up(s)`}>
+                                                <MessageSquare className="w-2.5 h-2.5 mr-0.5" />
+                                                {followupCount}
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className={`px-2 py-1 font-medium truncate max-w-[150px] ${isSelected ? 'text-blue-900' : 'text-gray-700'}`} title={student['Student Name']}>{student['Student Name']}</td>
+                                </tr>
+                            );
+                        })}
+                        {students.length === 0 && (
+                            <tr><td colSpan={3} className="py-8 text-center text-gray-400 italic text-[11px]">No students found.</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+            <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-200 text-[9px] text-gray-500 flex justify-between items-center shrink-0 select-none">
+                <div className="flex items-center space-x-1">
+                    <span className="font-bold">{students.length > 0 ? (currentPage - 1) * rowsPerPage + 1 : 0}-{Math.min(currentPage * rowsPerPage, students.length)}</span>
+                    <span>of</span>
+                    <span className="font-bold">{students.length}</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                    <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsLeft className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                    <span className="min-w-[15px] text-center font-black">{currentPage}</span>
+                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronRight className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsRight className="w-3.5 h-3.5" /></button>
+                </div>
+            </div>
         </div>
     );
 };

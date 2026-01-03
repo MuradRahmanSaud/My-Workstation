@@ -32,8 +32,8 @@ export const FollowupTimelineDashboard: React.FC<FollowupTimelineDashboardProps>
     const programMap = useMemo(() => {
         const map = new Map<string, string>();
         programData.forEach(p => {
-            if (p.PID && p['Program Full Name']) {
-                map.set(normalizeId(p.PID), p['Program Full Name']);
+            if (p.PID && p['Program Short Name']) {
+                map.set(normalizeId(p.PID), p['Program Short Name']);
             }
         });
         return map;
@@ -414,37 +414,46 @@ export const FollowupTimelineDashboard: React.FC<FollowupTimelineDashboardProps>
                                     );
                                 })
                             ) : (
-                                analytics.programEntries.map(([pid, stats], idx) => {
-                                    const isActive = selectedProgramId === pid;
-                                    const sliceColor = COLORS[idx % COLORS.length];
-                                    const progName = programMap.get(normalizeId(pid)) || pid;
-                                    return (
-                                        <div 
-                                            key={pid} 
-                                            onClick={() => setSelectedProgramId(isActive ? null : pid)}
-                                            className={`flex items-start p-2 rounded-lg cursor-pointer transition-all border ${isActive ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-50 border-transparent'}`}
-                                        >
-                                            <div className="w-8 h-8 rounded-lg border border-slate-100 flex items-center justify-center bg-slate-50 shrink-0 mt-0.5 mr-3">
-                                                <School className="w-4 h-4 text-slate-400" />
-                                            </div>
-                                            <div className="flex-1 min-w-0 mr-2">
-                                                <div className="text-[11px] font-black text-slate-800 truncate leading-tight uppercase tracking-tight">{progName}</div>
-                                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter truncate mt-0.5">PID: {pid}</div>
-                                                <div className="flex items-center space-x-3 mt-1.5 pt-1.5 border-t border-slate-100">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[8px] font-black text-slate-300 uppercase leading-none mb-0.5">Students</span>
-                                                        <span className="text-[10px] font-black text-blue-600 leading-none">{stats.uniqueStudents.size}</span>
-                                                    </div>
-                                                    <div className="flex flex-col border-l border-slate-100 pl-3">
-                                                        <span className="text-[8px] font-black text-slate-300 uppercase leading-none mb-0.5">Follow-Ups</span>
-                                                        <span className="text-[10px] font-black text-pink-600 leading-none">{stats.totalInteractions}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: sliceColor }}></div>
-                                        </div>
-                                    );
-                                })
+                                <div className="border border-slate-100 rounded-lg overflow-hidden">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead className="bg-slate-50">
+                                            <tr>
+                                                <th className="px-2 py-2 text-[9px] font-black text-slate-400 uppercase tracking-wider">Pid Program</th>
+                                                <th className="px-2 py-2 text-[9px] font-black text-slate-400 uppercase tracking-wider text-center">Student</th>
+                                                <th className="px-2 py-2 text-[9px] font-black text-slate-400 uppercase tracking-wider text-center">Follow-Ups</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50">
+                                            {analytics.programEntries.map(([pid, stats], idx) => {
+                                                const isActive = selectedProgramId === pid;
+                                                const sliceColor = COLORS[idx % COLORS.length];
+                                                const progName = programMap.get(normalizeId(pid)) || pid;
+                                                return (
+                                                    <tr 
+                                                        key={pid} 
+                                                        onClick={() => setSelectedProgramId(isActive ? null : pid)}
+                                                        className={`cursor-pointer transition-colors ${isActive ? 'bg-blue-50/50' : 'hover:bg-slate-50/50'}`}
+                                                    >
+                                                        <td className="px-2 py-2">
+                                                            <div className="flex items-center">
+                                                                <div className="w-1 h-1 rounded-full shrink-0 mr-2" style={{ backgroundColor: sliceColor }}></div>
+                                                                <span className={`text-[10px] font-bold truncate tracking-tight ${isActive ? 'text-blue-700' : 'text-slate-700'}`}>
+                                                                    {pid} {progName}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className={`px-2 py-2 text-center text-[10px] font-black ${isActive ? 'text-blue-700' : 'text-slate-600'}`}>
+                                                            {stats.uniqueStudents.size}
+                                                        </td>
+                                                        <td className={`px-2 py-2 text-center text-[10px] font-black ${isActive ? 'text-blue-700' : 'text-slate-600'}`}>
+                                                            {stats.totalInteractions}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
                             )}
                         </div>
                     </section>

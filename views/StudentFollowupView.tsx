@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquareQuote, Search, RefreshCw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Plus, Pencil, Trash2, CheckCircle2, Calendar, Loader2, Fingerprint, AlertCircle } from 'lucide-react';
+import { MessageSquareQuote, Search, RefreshCw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Plus, Pencil, Trash2, CheckCircle2, Calendar, Loader2, Fingerprint, AlertCircle, Target } from 'lucide-react';
 import { useSheetData } from '../hooks/useSheetData';
 import { useResponsivePagination } from '../hooks/useResponsivePagination';
 import { EditEntryModal } from '../components/EditEntryModal';
@@ -93,6 +94,7 @@ export const StudentFollowupView: React.FC = () => {
         'Date',
         'Student ID',
         'Student Name',
+        'Target Semester', // Added new column
         'Remark',
         'Re-follow up',
         'Status',
@@ -112,6 +114,7 @@ export const StudentFollowupView: React.FC = () => {
             'Date': datePart,
             'Student ID': '',
             'Student Name': '',
+            'Target Semester': '', // New field
             'Remark': '',
             'Re-follow up': '',
             'Status': 'Call Busy',
@@ -307,6 +310,14 @@ export const StudentFollowupView: React.FC = () => {
                                             </td>
                                             <td className="px-3 py-1 font-medium text-gray-900 whitespace-nowrap">
                                                 {row['Student Name'] || '-'}
+                                            </td>
+                                            <td className="px-3 py-1 text-center whitespace-nowrap">
+                                                {row['Target Semester'] ? (
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-600 text-white text-[9px] font-black uppercase shadow-sm">
+                                                        <Target className="w-2.5 h-2.5 mr-1" />
+                                                        {row['Target Semester']}
+                                                    </span>
+                                                ) : <span className="text-gray-300">-</span>}
                                             </td>
                                             <td className="px-3 py-1 max-w-[250px] truncate" title={row.Remark}>
                                                 {row.Remark || '-'}

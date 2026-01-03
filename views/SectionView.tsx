@@ -1,7 +1,6 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { RefreshCw, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowLeft, Database, ExternalLink, CheckCircle, XCircle, BarChart3, List, Menu, X, LogIn, Settings } from 'lucide-react';
+import { RefreshCw, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowLeft, Database, ExternalLink, CheckCircle, XCircle, BarChart3, List, Menu, X, LogIn, Settings, PieChart } from 'lucide-react';
 import { useSheetData } from '../hooks/useSheetData';
 import { useSectionFilters } from '../hooks/useSectionFilters';
 import { useClassRoomFilters } from '../hooks/useClassRoomFilters';
@@ -14,6 +13,7 @@ import { CourseSummaryTable } from '../components/CourseSummaryTable';
 import { TeacherSummaryTable } from '../components/TeacherSummaryTable';
 import { FilterPanel } from '../components/FilterPanel'; 
 import { AdmittedReportTable } from '../components/AdmittedReportTable'; 
+import { AdmittedReportModal } from '../components/AdmittedReportModal';
 import { CourseDistributionReport } from '../components/CourseDistributionReport';
 import { SectionDistributionReport } from '../components/SectionDistributionReport';
 import { TeacherDistributionReport } from '../components/TeacherDistributionReport';
@@ -27,7 +27,8 @@ import { CourseDetailsPanel } from '../components/CourseDetailsPanel';
 import { TeacherDetailsPanel } from '../components/TeacherDetailsPanel';
 import { EditEntryModal } from '../components/EditEntryModal';
 import { MAIN_SHEET_ID, MAIN_SHEET_GID, REF_SHEET_ID, REF_SHEET_GID, CLASSROOM_SHEET_GID, SHEET_NAMES } from '../constants';
-import { ProgramDataRow, CourseSectionData, ReferenceDataRow } from '../types';
+import { ProgramDataRow, CourseSectionData, ReferenceDataRow, StudentDataRow } from '../types';
+import { submitSheetData, extractSheetIdAndGid, normalizeId } from '../services/sheetService';
 
 interface SectionViewProps {
     showStats?: boolean;
@@ -48,7 +49,7 @@ const viewColors: Record<ViewMode, string> = {
 };
 
 export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) => {
-  const { data, programData, classroomData, diuEmployeeData, referenceData, loading, reloadData, semesterLinks, studentCache, loadStudentData, registeredData, loadRegisteredData, studentDataLinks, updateClassroomData, updateReferenceData, updateSectionData, semesterFilter, setSemesterFilter, uniqueSemesters } = useSheetData();
+  const { data, programData, classroomData, diuEmployeeData, teacherData, referenceData, loading, reloadData, semesterLinks, studentCache, loadStudentData, updateStudentData, registeredData, loadRegisteredData, studentDataLinks, updateClassroomData, updateReferenceData, updateSectionData, semesterFilter, setSemesterFilter, uniqueSemesters } = useSheetData();
   
   const { 
       searchTerm, setSearchTerm, 
@@ -111,6 +112,8 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
   const [isReferenceEditModalOpen, setIsReferenceEditModalOpen] = useState(false);
   const [referenceEditMode, setReferenceEditMode] = useState<'add' | 'edit'>('edit');
   const [referenceEditingRow, setReferenceEditingRow] = useState<any>(undefined);
+
+  const [isAdmittedReportModalOpen, setIsAdmittedReportModalOpen] = useState(false);
 
   const [reportModePreferences, setReportModePreferences] = useState<Record<string, boolean>>({
       'sections': showStats,
@@ -610,9 +613,6 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
       };
   }, [data]);
 
-  // Fix for line 1428: Defined transformReferenceData as identity function as no transformation is required for Reference sheet.
-  const transformReferenceData = (data: any) => data;
-
   const handleEditReference = (row: CourseSummaryItem) => {
       const existingRef = referenceData.find(r => r.Ref === row.ref);
       
@@ -670,6 +670,23 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
               return row;
           }));
       }
+  };
+
+  const handleSaveStudent = async (semester: string, student: StudentDataRow) => {
+    const link = studentDataLinks.get(semester);
+    if (!link) return;
+    const { id: sheetId } = extractSheetIdAndGid(link);
+    if (!sheetId) return;
+
+    // Update local React cache immediately for responsiveness
+    updateStudentData(semester, student['Student ID'], student);
+    
+    const { _semester, ...apiPayload } = student as any;
+    try {
+        await submitSheetData('update', semester, apiPayload, 'Student ID', student['Student ID'].trim(), sheetId);
+    } catch (e) {
+        console.error("Failed to persist student update in SectionView", e);
+    }
   };
 
   const headerActionsTarget = document.getElementById('header-actions-area');
@@ -799,6 +816,18 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
       {/* PORTAL: App Header Action Area */}
       {headerActionsTarget && createPortal(
           <div className="flex items-center space-x-1 md:space-x-2 animate-in fade-in slide-in-from-right-2 duration-300 overflow-hidden">
+            
+            {viewMode === 'admitted' && (
+                <button 
+                    onClick={() => setIsAdmittedReportModalOpen(true)}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 text-[11px] font-bold rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-sm active:scale-95"
+                    title="Semester Analysis"
+                >
+                    <BarChart3 className="w-3.5 h-3.5" />
+                    <span>Semester Analysis</span>
+                </button>
+            )}
+
             <button 
                 onClick={() => setIsFilterPanelOpen(true)}
                 className={`flex items-center space-x-1 px-3 py-1.5 text-[11px] font-bold rounded-full border transition-all ${activeFilterCount > 0 ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}
@@ -957,6 +986,9 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
                             setSelectedFaculties={setSelectedFaculties}
                             selectedProgramTypes={selectedProgramTypes}
                             selectedSemesterTypes={selectedSemesterTypes}
+                            diuEmployeeData={diuEmployeeData}
+                            teacherData={teacherData}
+                            onSaveStudent={handleSaveStudent}
                         />
                     ) : viewMode === 'courses' && isReportMode ? (
                         <CourseDistributionReport 
@@ -1399,11 +1431,22 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
           ]}
           hiddenFields={['Program', 'Credit', 'Type']} 
           fieldOptions={referenceFieldOptions} 
-          transformData={transformReferenceData} 
+          transformData={(d) => d} 
           initialData={referenceEditingRow}
           keyColumn="Ref"
           spreadsheetId={REF_SHEET_ID} 
           onSuccess={handleReferenceModalSuccess}
+      />
+
+      {/* MODAL: Admitted Student Semester Analysis */}
+      <AdmittedReportModal 
+          isOpen={isAdmittedReportModalOpen}
+          onClose={() => setIsAdmittedReportModalOpen(false)}
+          selectedAdmittedSemesters={selectedAdmittedSemesters}
+          studentCache={studentCache}
+          registrationLookup={registrationLookup}
+          registeredSemesters={registeredSemesters}
+          programMap={programMap}
       />
 
     </div>

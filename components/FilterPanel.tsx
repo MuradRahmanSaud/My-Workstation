@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { ProgramDataRow } from '../types';
 import { X, Search, RotateCcw, ChevronDown, ChevronRight, UserPlus, UserMinus, FileSpreadsheet, AlertTriangle, Check, Plus } from 'lucide-react';
@@ -736,7 +737,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = (props) => {
 
     return (
         <>
-            <div className={`fixed inset-y-0 left-0 w-56 bg-white shadow-xl z-[100] transform transition-transform duration-300 border-r flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className={`fixed bottom-0 left-0 top-10 md:top-14 w-56 bg-white shadow-xl z-[100] transform transition-transform duration-300 border-r flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="px-3 py-3 border-b flex justify-between items-center bg-white shrink-0">
                     <h2 className="text-sm font-bold text-gray-800">{viewMode === 'classroom' ? 'Filter Rooms' : 'Filter Data'}</h2>
                     <div className="flex items-center space-x-1">
