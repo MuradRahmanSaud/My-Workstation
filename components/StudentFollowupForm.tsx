@@ -34,7 +34,7 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
     const handleInternalSave = () => {
         const finalData = { 
             ...formData, 
-            Status: formData.Status || 'Call Busy',
+            Status: formData.Status, // Removed fallback to respect blank/user input
             'Target Semester': `${targetSem} ${targetYear}`
         };
         onSave(finalData);
@@ -47,13 +47,13 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
         <div className="absolute inset-x-3 top-12 bottom-3 z-[150] bg-white border border-rose-100 rounded-xl flex flex-col shadow-2xl ring-1 ring-black/5 animate-in slide-in-from-top-2">
             <div className="flex flex-col space-y-3 border-b border-rose-100/50 p-4 shrink-0 bg-slate-50/30 rounded-t-xl">
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                        <MessageSquarePlus className="w-4 h-4 text-rose-500" />
-                        <h5 className="text-[10px] font-black text-rose-700 uppercase tracking-tight">
-                            {isEdit ? 'Update Conversation' : 'New Conversation'}
+                    <div className="flex items-center space-x-2 min-w-0">
+                        <MessageSquarePlus className="w-4 h-4 text-rose-500 shrink-0" />
+                        <h5 className="text-[10px] font-black text-rose-700 uppercase tracking-tight truncate">
+                            {isEdit ? 'Update Conversation' : 'New Conversation'} — {student['Student Name']} ({student['Student ID']})
                         </h5>
                     </div>
-                    <button onClick={onClose} className="p-1 hover:bg-rose-100 rounded-full text-rose-400 transition-colors">
+                    <button onClick={onClose} className="p-1 hover:bg-rose-100 rounded-full text-rose-400 transition-colors shrink-0 ml-2">
                         <X className="w-4 h-4" />
                     </button>
                 </div>

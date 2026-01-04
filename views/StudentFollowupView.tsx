@@ -5,6 +5,7 @@ import { MessageSquareQuote, Search, RefreshCw, ChevronLeft, ChevronRight, Chevr
 import { useSheetData } from '../hooks/useSheetData';
 import { useResponsivePagination } from '../hooks/useResponsivePagination';
 import { EditEntryModal } from '../components/EditEntryModal';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SHEET_NAMES, STUDENT_LINK_SHEET_ID } from '../constants';
 import { StudentFollowupRow } from '../types';
 import { submitSheetData, normalizeId } from '../services/sheetService';
@@ -18,6 +19,9 @@ export const StudentFollowupView: React.FC = () => {
     const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
     const [showSuccessToast, setShowSuccessToast] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    
+    // Confirmation state
+    const [rowToConfirmDelete, setRowToConfirmDelete] = useState<StudentFollowupRow | null>(null);
 
     // Local state to manage UI updates before sheet confirmation
     const [localData, setLocalData] = useState<StudentFollowupRow[]>([]);
@@ -144,8 +148,7 @@ export const StudentFollowupView: React.FC = () => {
         const uid = getRowUidValue(row);
         if (!uid) return;
 
-        if (!window.confirm(`Are you sure you want to delete this record?`)) return;
-
+        setRowToConfirmDelete(null);
         const previousData = [...localData];
         setIsDeletingId(uid);
         setLocalData(prev => prev.filter(r => getRowUidValue(r) !== uid));
@@ -169,10 +172,8 @@ export const StudentFollowupView: React.FC = () => {
     };
 
     const handleModalSuccess = (newData: any) => {
-        // Step 1: Set a lock for 5 seconds to prevent stale context data from overwriting this change
         ignoreContextSyncUntil.current = Date.now() + 5000;
 
-        // Step 2: Immediate UI Update (Optimistic)
         if (editMode === 'add') {
             setLocalData(prev => [newData, ...prev]);
         } else {
@@ -184,12 +185,10 @@ export const StudentFollowupView: React.FC = () => {
             }
         }
 
-        // Step 3: UI Feedback
         setIsModalOpen(false); 
         setShowSuccessToast(true);
         setTimeout(() => setShowSuccessToast(false), 3000);
         
-        // Step 4: Silent Background Refresh
         reloadData('followup', false);
     };
 
@@ -283,7 +282,7 @@ export const StudentFollowupView: React.FC = () => {
                                                         <Pencil className="w-3.5 h-3.5" />
                                                     </button>
                                                     <button 
-                                                        onClick={() => handleDeleteRow(row)}
+                                                        onClick={() => setRowToConfirmDelete(row)}
                                                         disabled={isDeleting}
                                                         className="p-1 text-gray-400 hover:text-red-600 transition-colors rounded hover:bg-red-100 disabled:opacity-30"
                                                         title="Delete"
@@ -382,6 +381,14 @@ export const StudentFollowupView: React.FC = () => {
                 <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform duration-300" />
             </button>
 
+            <ConfirmDialog 
+                isOpen={!!rowToConfirmDelete}
+                title="Delete Record?"
+                message="Are you sure you want to permanently delete this followup record from the database? This action cannot be undone."
+                onConfirm={() => rowToConfirmDelete && handleDeleteRow(rowToConfirmDelete)}
+                onCancel={() => setRowToConfirmDelete(null)}
+            />
+
             <EditEntryModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
@@ -402,21 +409,18 @@ export const StudentFollowupView: React.FC = () => {
                 transformData={(data) => {
                     const now = new Date();
                     const datePart = now.toISOString().split('T')[0];
-                    const timePart = now.toTimeString().split(' ')[0]; // HH:mm:ss
+                    const timePart = now.toTimeString().split(' ')[0]; 
                     
-                    // Extract only the Employee ID from the selection if applicable
                     const contactedByText = data['Contacted By'] || '';
                     const idMatch = contactedByText.match(/\(([^)]+)\)$/);
                     const contactedById = idMatch ? idMatch[1] : contactedByText;
 
-                    // Ensure Re-follow up is strictly a date string (YYYY-MM-DD)
                     const reFollowupClean = (data['Re-follow up'] || '').split(' ')[0].split('T')[0];
 
                     return {
                         ...data,
                         'uniqueid': data['uniqueid'] || `SF-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
                         Timestamp: data.Timestamp || `${datePart} ${timePart}`,
-                        // Append current time ONLY to the Contact Date
                         Date: `${data.Date} ${timePart}`,
                         'Re-follow up': reFollowupClean,
                         'Contacted By': contactedById

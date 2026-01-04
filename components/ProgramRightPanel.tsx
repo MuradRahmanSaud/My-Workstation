@@ -1,11 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
-import { User, ShieldCheck, GraduationCap, Plus, Edit2, X, Eye } from 'lucide-react';
+import { User, ShieldCheck, GraduationCap, Plus, Edit2, X, Eye, School, BookOpen } from 'lucide-react';
 import { ProgramDataRow, DiuEmployeeRow, TeacherDataRow, FacultyLeadershipRow, StudentDataRow } from '../types';
 import { normalizeId } from '../services/sheetService';
 import { MultiSearchableSelect } from './EditEntryModal';
 import { getImageUrl, isValEmpty } from '../views/EmployeeView';
 import { EmployeeDetailsPanel } from './EmployeeDetailsPanel';
-import { StudentDetailView } from './StudentDetailView';
 
 interface ProgramRightPanelProps {
     program: ProgramDataRow;
@@ -19,13 +19,9 @@ interface ProgramRightPanelProps {
     onSaveProgramLeadership: (data: any) => Promise<void>;
     onSaveProgramData: (data: any) => Promise<void>;
     onSaveEmployee: (data: any, persist?: boolean) => Promise<void>;
-    onSaveStudent?: (semester: string, student: StudentDataRow) => Promise<void>;
     forceEditTrigger?: number;
-    selectedStudent?: StudentDataRow | null;
-    studentSemester?: string;
-    onCloseStudent?: () => void;
     registrationLookup?: Map<string, Set<string>>;
-    autoOpenRemarks?: boolean;
+    isModular?: boolean; // New prop to handle embedded view
 }
 
 type PanelView = 'details' | 'edit-faculty' | 'edit-program' | 'edit-employee' | 'edit-program-leadership';
@@ -51,7 +47,7 @@ const parseMetric = (str: string | undefined) => {
 };
 
 export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({ 
-    program, facultyLeadership, diuEmployeeData, teacherData, employeeOptions, employeeFieldOptions, onSaveFacultyLeadership, onSaveProgramLeadership, onSaveProgramData, onSaveEmployee, onSaveStudent, forceEditTrigger = 0, selectedStudent, studentSemester, onCloseStudent, registrationLookup, autoOpenRemarks = false
+    program, facultyLeadership, diuEmployeeData, teacherData, employeeOptions, employeeFieldOptions, onSaveFacultyLeadership, onSaveProgramLeadership, onSaveProgramData, onSaveEmployee, forceEditTrigger = 0, registrationLookup, isModular = false
 }) => {
     const [view, setView] = useState<PanelView>('details');
     const [isSaving, setIsSaving] = useState(false);
@@ -90,7 +86,7 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
                     {list.map(({ id, emp, teacher, raw, isMissing }, idx) => {
                         const displayName = emp?.['Employee Name'] || teacher?.['Employee Name'] || (raw.includes('(') ? raw.split('(')[0].trim() : 'Unknown');
                         const displayDesig = emp ? [emp['Academic Designation'], emp['Administrative Designation']].filter(Boolean).join(', ') : (teacher?.Designation || 'Officer');
-                        const photoUrl = getImageUrl(emp?.Photo || findInRow(teacher, ['Photo', 'Photo URL', 'Image']));
+                        const photoUrl = getImageUrl(emp?.Photo || (teacher ? (teacher['Photo'] || teacher['Photo URL'] || teacher['Image']) : ''));
                         return (
                             <div key={idx} className={`flex items-center bg-white p-2 rounded border transition-all ${isMissing ? 'bg-red-50 border-red-100' : 'border-slate-100 hover:border-blue-200'}`}>
                                 <div className="w-8 h-8 rounded-full shrink-0 mr-3 border overflow-hidden flex items-center justify-center bg-gray-50">{photoUrl ? <img src={photoUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <User className="w-4 h-4 text-slate-300" />}</div>
@@ -106,7 +102,7 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
 
     if (view !== 'details') {
         return (
-            <div className="w-full lg:w-[380px] xl:w-[420px] flex flex-col bg-white border-l border-slate-100 shrink-0 overflow-hidden font-sans">
+            <div className={`${isModular ? 'w-full' : 'w-full lg:w-[380px] xl:w-[420px]'} flex flex-col bg-white border-l border-slate-100 shrink-0 overflow-hidden font-sans`}>
                 <div className="px-4 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0"><h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{view === 'edit-faculty' ? 'Faculty Leadership' : view === 'edit-program' ? 'Edit Program' : 'Program Leadership'}</h3><button onClick={() => setView('details')} className="p-1.5 hover:bg-white rounded-full text-slate-400"><X className="w-4 h-4" /></button></div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 thin-scrollbar bg-slate-50/30">
                     {(view === 'edit-faculty' || view === 'edit-program-leadership') && (
@@ -126,56 +122,68 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
     const classRequirement = parseMetric(program['Class Requirement']);
 
     return (
-        <div className="w-full lg:w-[380px] xl:w-[420px] flex flex-col bg-white overflow-hidden border-l border-slate-100 shrink-0 relative font-sans">
-            <div className="flex-1 flex flex-col min-h-0">
-                {!selectedStudent ? (
-                    <div className="flex-1 overflow-y-auto thin-scrollbar pt-5 pb-3">
-                        <div className="text-center px-4 space-y-1.5 relative group">
-                            <button onClick={handleEditProgram} className="absolute top-0 right-4 p-1.5 bg-blue-50 text-blue-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" title="Edit Program Data"><Edit2 className="w-3.5 h-3.5" /></button>
-                            <h1 className="text-sm font-black text-slate-900 leading-tight uppercase tracking-tight">{program['Program Full Name']}</h1>
-                            <h2 className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{program['Faculty Full Name']}</h2>
-                            <div className="bg-slate-50 border border-slate-100 rounded p-2 mt-3">
-                                <div className="grid grid-cols-2 gap-4 divide-x divide-slate-200">
-                                    <div className="flex flex-col items-center"><span className="text-[9px] font-black text-slate-600 uppercase mb-1.5">Class Duration</span><div className="flex items-center space-x-2 text-[10px] font-bold text-slate-800"><div><span className="text-slate-400 mr-1">T</span>{classDuration.theory}m</div><div><span className="text-slate-400 mr-1">L</span>{classDuration.lab}m</div></div></div>
-                                    <div className="flex flex-col items-center"><span className="text-[9px] font-black text-slate-600 uppercase mb-1.5">Requirement</span><div className="flex items-center space-x-2 text-[10px] font-bold text-slate-800"><div><span className="text-slate-400 mr-1">T</span>{classRequirement.theory}m</div><div><span className="text-slate-400 mr-1">L</span>{classRequirement.lab}m</div></div></div>
+        <div className={`${isModular ? 'w-full' : 'w-full lg:w-[320px] border-l border-slate-100'} flex flex-col bg-white overflow-hidden shrink-0 relative font-sans h-full`}>
+            <div className="flex-1 overflow-y-auto thin-scrollbar pt-4 pb-3">
+                <div className="text-center px-4 space-y-2 relative group">
+                    <button onClick={handleEditProgram} className="absolute top-0 right-4 p-1.5 bg-blue-50 text-blue-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" title="Edit Program Data"><Edit2 className="w-3.5 h-3.5" /></button>
+                    
+                    {/* Program Information Headers */}
+                    <div className="flex flex-col items-center">
+                        <h1 className={`text-sm font-black text-slate-900 leading-tight uppercase tracking-tight ${isModular ? 'text-center max-w-[280px]' : ''}`}>
+                            {program['Program Full Name']}
+                        </h1>
+                        <h2 className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mt-1">
+                            {program['Faculty Full Name']}
+                        </h2>
+                    </div>
+
+                    {/* Metadata Badges */}
+                    <div className="flex items-center justify-center space-x-1.5 mt-2">
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[8px] font-black uppercase border border-slate-200 shadow-sm flex items-center">
+                            <School className="w-2 h-2 mr-1" />
+                            {program['Program Type']}
+                        </span>
+                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[8px] font-black uppercase border border-indigo-100 shadow-sm flex items-center">
+                            <BookOpen className="w-2 h-2 mr-1" />
+                            {program['Semester Type']}
+                        </span>
+                    </div>
+
+                    {/* Duration & Requirement Grid */}
+                    <div className="bg-slate-50 border border-slate-100 rounded p-1.5 mt-2 shadow-inner">
+                        <div className="grid grid-cols-2 gap-1.5 divide-x divide-slate-200">
+                            <div className="flex flex-col items-center">
+                                <span className="text-[8px] font-black text-slate-600 uppercase mb-0.5">Duration</span>
+                                <div className="flex items-center space-x-1 text-[9px] font-bold text-slate-800">
+                                    <div><span className="text-slate-400 mr-0.5">T</span>{classDuration.theory}m</div>
+                                    <div><span className="text-slate-400 mr-0.5">L</span>{classDuration.lab}m</div>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <span className="text-[8px] font-black text-slate-600 uppercase mb-0.5">Req.</span>
+                                <div className="flex items-center space-x-1 text-[9px] font-bold text-slate-800">
+                                    <div><span className="text-slate-400 mr-0.5">T</span>{classRequirement.theory}m</div>
+                                    <div><span className="text-slate-400 mr-0.5">L</span>{classRequirement.lab}m</div>
                                 </div>
                             </div>
                         </div>
-                        <div className="p-3 space-y-3">
-                            <div className="bg-white rounded border border-slate-200 p-3 shadow-sm">
-                                <h4 className="text-[10px] font-bold text-slate-900 border-b border-slate-100 pb-1.5 mb-2.5 flex items-center justify-between uppercase tracking-widest"><div className="flex items-center"><ShieldCheck className="w-3 h-3 mr-1.5 text-blue-600" />Faculty Leadership</div><button onClick={() => setView('edit-faculty')} className="p-1 hover:bg-slate-100 rounded text-slate-400"><Plus className="w-3 h-3" /></button></h4>
-                                {renderPersonnelSection('Dean', facultyLeadership?.Dean)}
-                                {renderPersonnelSection('Associate Dean', facultyLeadership?.['Associate Dean'])}
-                                {renderPersonnelSection('Administration', facultyLeadership?.Administration)}
-                            </div>
-                            <div className="bg-white rounded border border-slate-200 p-3 shadow-sm">
-                                <h4 className="text-[10px] font-bold text-slate-900 border-b border-slate-100 pb-1.5 mb-2.5 flex items-center justify-between uppercase tracking-widest"><div className="flex items-center"><GraduationCap className="w-3 h-3 mr-1.5 text-indigo-600" />Program Leadership</div><button onClick={() => setView('edit-program-leadership')} className="p-1 hover:bg-slate-100 rounded text-slate-400"><Plus className="w-3 h-3" /></button></h4>
-                                {renderPersonnelSection('Head', program.Head)}
-                                {renderPersonnelSection('Associate Head', program['Associate Head'])}
-                                {renderPersonnelSection('Administration', program.Administration)}
-                            </div>
-                        </div>
                     </div>
-                ) : (
-                    <div className="flex-1 flex flex-col min-h-0 animate-in slide-in-from-right duration-300">
-                        <div className="px-4 py-2 border-b border-gray-100 bg-slate-50 flex items-center justify-between shrink-0">
-                            <h3 className="text-[11px] font-bold text-gray-800 uppercase tracking-widest flex items-center"><User className="w-3.5 h-3.5 mr-1.5 text-blue-600" />Student Profile</h3>
-                            <button onClick={onCloseStudent} className="p-1 hover:bg-white rounded-full text-slate-400"><X className="w-5 h-5" /></button>
-                        </div>
-                        <StudentDetailView 
-                            student={selectedStudent} 
-                            program={program} 
-                            diuEmployeeData={diuEmployeeData} 
-                            teacherData={teacherData} 
-                            employeeOptions={employeeOptions} 
-                            onSaveStudent={onSaveStudent || (async () => {})} 
-                            onClose={onCloseStudent || (() => {})} 
-                            registrationLookup={registrationLookup} 
-                            studentSemester={studentSemester} 
-                            initialRemarksOpen={autoOpenRemarks}
-                        />
+                </div>
+
+                <div className="p-2.5 space-y-2.5 mt-1">
+                    <div className="bg-white rounded border border-slate-200 p-2.5 shadow-sm">
+                        <h4 className="text-[10px] font-bold text-slate-900 border-b border-slate-100 pb-1 mb-2 flex items-center justify-between uppercase tracking-widest"><div className="flex items-center"><ShieldCheck className="w-3 h-3 mr-1.5 text-blue-600" />Faculty</div><button onClick={() => setView('edit-faculty')} className="p-1 hover:bg-slate-100 rounded text-slate-400"><Plus className="w-2.5 h-2.5" /></button></h4>
+                        {renderPersonnelSection('Dean', facultyLeadership?.Dean)}
+                        {renderPersonnelSection('Associate Dean', facultyLeadership?.['Associate Dean'])}
+                        {renderPersonnelSection('Administration', facultyLeadership?.Administration)}
                     </div>
-                )}
+                    <div className="bg-white rounded border border-slate-200 p-2.5 shadow-sm">
+                        <h4 className="text-[10px] font-bold text-slate-900 border-b border-slate-100 pb-1 mb-2 flex items-center justify-between uppercase tracking-widest"><div className="flex items-center"><GraduationCap className="w-3 h-3 mr-1.5 text-indigo-600" />Program</div><button onClick={() => setView('edit-program-leadership')} className="p-1 hover:bg-slate-100 rounded text-slate-400"><Plus className="w-2.5 h-2.5" /></button></h4>
+                        {renderPersonnelSection('Head', program.Head)}
+                        {renderPersonnelSection('Associate Head', program['Associate Head'])}
+                        {renderPersonnelSection('Administration', program.Administration)}
+                    </div>
+                </div>
             </div>
             {selectedEmployeeForDetails && (
                 <div className="absolute inset-0 z-50 bg-white flex flex-col animate-in slide-in-from-right duration-300 shadow-2xl">
@@ -184,15 +192,4 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
             )}
         </div>
     );
-};
-
-// Robust field discovery helper locally used for employee photos
-const findInRow = (row: any, patterns: string[]): string => {
-    if (!row) return '';
-    const keys = Object.keys(row);
-    for (const pattern of patterns) {
-        const found = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === pattern.toLowerCase().replace(/[^a-z0-9]/g, ''));
-        if (found && !isValEmpty(row[found])) return String(row[found]).trim();
-    }
-    return '';
 };

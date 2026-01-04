@@ -1,7 +1,8 @@
-import React from 'react';
-import { UserPlus, UserCheck, Award, ShieldCheck, GraduationCap, Clock, PowerOff, AlertCircle, MessageSquare } from 'lucide-react';
 
-export type DropoutKpiType = 'all' | 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' | 'followup';
+import React from 'react';
+import { UserPlus, UserCheck, Award, ShieldCheck, GraduationCap, Clock, PowerOff, AlertCircle, MessageSquare, Banknote } from 'lucide-react';
+
+export type DropoutKpiType = 'all' | 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' | 'dues' | 'followup';
 
 interface DropOutDashboardProps {
     stats: {
@@ -13,6 +14,7 @@ interface DropOutDashboardProps {
         crCom: number;
         defense: number;
         regPending: number;
+        dues: number;
         followup: number;
     };
     comparisonSemester: string;
@@ -29,6 +31,7 @@ const COLOR_SHADOW_MAP: Record<string, string> = {
     'bg-emerald-600': '0 12px 20px -5px rgba(5, 150, 105, 0.5)',
     'bg-teal-600': '0 12px 20px -5px rgba(13, 148, 136, 0.5)',
     'bg-amber-600': '0 12px 20px -5px rgba(217, 119, 6, 0.5)',
+    'bg-amber-800': '0 12px 20px -5px rgba(146, 64, 14, 0.5)',
     'bg-pink-600': '0 12px 20px -5px rgba(219, 39, 119, 0.5)',
 };
 
@@ -41,18 +44,19 @@ export const DropOutDashboard: React.FC<DropOutDashboardProps> = ({ stats, compa
         { id: 'crcom', label: 'Credit Completed', value: stats.crCom, icon: GraduationCap, color: 'bg-emerald-600' },
         { id: 'defense', label: 'Defense Reg.', value: stats.defense, icon: ShieldCheck, color: 'bg-teal-600' },
         { id: 'regPending', label: 'Reg. Pending', value: stats.regPending, icon: AlertCircle, color: 'bg-amber-600' },
+        { id: 'dues', label: 'Total Dues', value: stats.dues, icon: Banknote, color: 'bg-amber-800' },
         { id: 'followup', label: 'Follow-up', value: stats.followup, icon: MessageSquare, color: 'bg-pink-600' },
     ];
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-9 gap-2 w-full">
             {cards.map((card) => {
                 const isActive = activeType === card.id;
                 return (
                     <div 
                         key={card.id} 
                         onClick={() => onCardClick?.(card.id)}
-                        className={`${card.color} rounded-lg p-2 text-white flex flex-col justify-center relative overflow-visible group transition-all duration-300 cursor-pointer border-none ${isActive ? 'scale-[1.05] z-10' : 'opacity-90 hover:opacity-100 shadow-sm'}`}
+                        className={`${card.color} rounded-lg p-2 text-white flex flex-col justify-center relative overflow-visible group transition-all duration-300 cursor-pointer border-none h-[64px] ${isActive ? 'scale-[1.05] z-10' : 'opacity-90 hover:opacity-100 shadow-sm'}`}
                         style={{
                             boxShadow: isActive ? COLOR_SHADOW_MAP[card.color] : 'none'
                         }}

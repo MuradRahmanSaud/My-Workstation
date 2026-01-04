@@ -18,7 +18,6 @@ interface UnregisteredStudentsModalProps {
     registrationLookup?: Map<string, Set<string>>;
     isInline?: boolean; 
     onRowClick?: (student: StudentDataRow) => void;
-    // Fix: Updated listType union to include 'all' and 'followup' types to match broader set from AdmittedReportTable
     listType?: 'all' | 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'dropout' | 'crcom' | 'defense' | 'regPending' | 'followupTarget' | 'followup';
 }
 
@@ -144,18 +143,6 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
         return Array.from(set).sort().join(', ');
     };
 
-    const getTargetFollowupCount = (student: StudentDataRow) => {
-        const raw = student['Discussion Remark'];
-        if (!raw || raw.trim() === '') return 0;
-        
-        const remarks = raw.split(RECORD_SEP).filter(Boolean);
-        return remarks.reduce((count, r) => {
-            const fields = r.split(FIELD_SEP);
-            const remarkTarget = fields[4]?.trim();
-            return remarkTarget === targetSemester ? count + 1 : count;
-        }, 0);
-    };
-
     const handleCopy = () => {
         let header = "Student ID\tName\tMobile\tEmail\tRegistered In";
         if (showProgramColumn) header = "Program\t" + header;
@@ -201,7 +188,6 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
     const isCrCom = listType === 'crcom';
     const isDefense = listType === 'defense';
     const isRegPending = listType === 'regPending';
-    // Fix: Added handling for 'all' and 'followup' types to correctly set UI states
     const isFollowup = listType === 'followup';
     const isAll = listType === 'all';
     
@@ -281,7 +267,7 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
                             const isSelected = selectedId === student['Student ID'];
                             const hoverBg = isReg ? 'hover:bg-emerald-50/40' : (isPDrop ? 'hover:bg-rose-50/40' : (isTDrop ? 'hover:bg-amber-50/40' : (isCrCom ? 'hover:bg-emerald-50/40' : (isDefense ? 'hover:bg-teal-50/40' : (isRegPending ? 'hover:bg-amber-50/40' : 'hover:bg-red-50/40')))));
                             
-                            const targetFollowupCount = getTargetFollowupCount(student);
+                            const followupCount = (student['Discussion Remark'] || '').split(' || ').filter(Boolean).length;
 
                             return (
                                 <tr 
@@ -299,10 +285,10 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
                                     <td className={`px-2 py-1 text-center font-medium ${isSelected ? 'text-blue-700' : 'text-gray-400'}`}>{globalIdx}</td>
                                     <td className={`px-2 py-1 font-bold font-mono flex items-center space-x-1.5 ${isSelected ? 'text-blue-800' : 'text-blue-600'}`}>
                                         <span>{student['Student ID']}</span>
-                                        {targetFollowupCount > 0 && (
-                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-pink-100 text-pink-700 text-[8px] font-black border border-pink-200 shadow-sm leading-none" title={`Has ${targetFollowupCount} follow-up(s) for ${targetSemester}`}>
+                                        {followupCount > 0 && (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-pink-100 text-pink-700 text-[8px] font-black border border-pink-200 shadow-sm leading-none shrink-0" title={`Has ${followupCount} follow-up(s)`}>
                                                 <MessageSquare className="w-2.5 h-2.5 mr-0.5" />
-                                                {targetFollowupCount}
+                                                {followupCount}
                                             </span>
                                         )}
                                     </td>

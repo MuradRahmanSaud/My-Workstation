@@ -172,6 +172,7 @@ export interface StudentFollowupRow {
     'Target Semester'?: string;
     Status: string;
     'Contacted By': string;
+    'Category'?: string; // New Category Field
 }
 
 export type ViewState = 'launcher' | 'dashboard' | 'section' | 'program' | 'dropout' | 'employee' | 'settings' | 'student' | 'classroom' | 'pdf_to_excel';

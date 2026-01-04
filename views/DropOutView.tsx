@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { UserX, RefreshCw, ArrowLeft, School, Search, Filter, MessageSquare } from 'lucide-react';
+import { UserX, RefreshCw, ArrowLeft, School, Search, Filter, MessageSquare, User, X } from 'lucide-react';
 import { useSheetData } from '../hooks/useSheetData';
 import { DropOutDashboard, DropoutKpiType } from '../components/DropOutDashboard';
 import { AdmittedReportTable } from '../components/AdmittedReportTable';
@@ -8,25 +9,13 @@ import { UnregisteredStudentsModal } from '../components/UnregisteredStudentsMod
 import { ProgramRightPanel } from '../components/ProgramRightPanel';
 import { FilterPanel } from '../components/FilterPanel';
 import { FollowupTimelineDashboard } from '../components/FollowupTimelineDashboard';
+import { StudentDetailView } from '../components/StudentDetailView';
 import { ProgramDataRow, StudentDataRow } from '../types';
 import { normalizeId, submitSheetData, extractSheetIdAndGid } from '../services/sheetService';
 import { isValEmpty } from './EmployeeView';
 
-const FACULTY_CHIP_COLORS: Record<string, string> = {
-  'FBE': 'bg-red-100 text-red-700 border-red-200',
-  'FE': 'bg-orange-100 text-orange-700 border-orange-200',
-  'FHLS': 'bg-amber-100 text-amber-700 border-amber-200',
-  'FHSS': 'bg-green-100 text-green-700 border-green-200',
-  'FSIT': 'bg-blue-100 text-blue-700 border-blue-200',
-};
-
-const FACULTY_HEADER_COLORS: Record<string, string> = {
-  'FBE': 'bg-red-50 text-red-800',
-  'FE': 'bg-orange-50 text-orange-800',
-  'FHLS': 'bg-amber-50 text-amber-800',
-  'FHSS': 'bg-green-50 text-green-800',
-  'FSIT': 'bg-blue-50 text-blue-800',
-};
+const FIELD_SEP = ' ;; ';
+const RECORD_SEP = ' || ';
 
 export const DropOutView: React.FC = () => {
     const { 
@@ -131,10 +120,33 @@ export const DropOutView: React.FC = () => {
         return map;
     }, [programData]);
 
+    const normalizeSemesterString = (sem: string) => {
+        if (!sem) return '';
+        const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/);
+        if (!match) return sem.trim().toLowerCase();
+        const season = match[1].toLowerCase();
+        let year = match[2];
+        if (year.length === 2) year = '20' + year;
+        return `${season} ${year}`;
+    };
+
+    const checkDuesForSemester = (duesStr: string | undefined, targetSem: string) => {
+        if (!duesStr || isValEmpty(duesStr)) return false;
+        if (!duesStr.includes(FIELD_SEP)) return true; 
+        const normalizedTarget = normalizeSemesterString(targetSem);
+        const records = duesStr.split(RECORD_SEP).map(r => r.trim()).filter(Boolean);
+        return records.some(r => {
+            const fields = r.split(FIELD_SEP).map(f => f.trim());
+            const recordSemesterNormalized = normalizeSemesterString(fields[3]);
+            const isDone = fields[6] === 'DONE';
+            return recordSemesterNormalized === normalizedTarget && !isDone;
+        });
+    };
+
     const kpiStats = useMemo(() => {
-        if (!selectedProgram || !targetRegSem) return { enrolled: 0, registered: 0, unregistered: 0, pDrop: 0, tDrop: 0, crCom: 0, defense: 0, regPending: 0, followup: 0 };
+        if (!selectedProgram || !targetRegSem) return { enrolled: 0, registered: 0, unregistered: 0, pDrop: 0, tDrop: 0, crCom: 0, defense: 0, regPending: 0, dues: 0, followup: 0 };
         const pidNorm = normalizeId(selectedProgram.PID);
-        let enrolled = 0, registered = 0, pDrop = 0, tDrop = 0, crCom = 0, defense = 0, regPending = 0, followup = 0;
+        let enrolled = 0, registered = 0, pDrop = 0, tDrop = 0, crCom = 0, defense = 0, regPending = 0, dues = 0, followup = 0;
         
         const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
         const parseSem = (sem: string) => {
@@ -156,22 +168,18 @@ export const DropOutView: React.FC = () => {
                     const id = String(s['Student ID']).trim();
                     const isRegistered = registrationLookup.get(id)?.has(targetRegSem) || false;
                     if (isRegistered) registered++;
-
                     const dropClass = s['Dropout Classification'] || '';
                     const isPDrop = dropClass.includes('Permanent');
                     const isTDrop = dropClass.includes('Temporary');
                     if (isPDrop) pDrop++;
                     if (isTDrop) tDrop++;
-
                     const credReq = parseFloat(s['Credit Requirement'] || '0');
                     const credCom = parseFloat(s['Credit Completed'] || '0');
                     const hasCrCom = !isNaN(credReq) && !isNaN(credCom) && credReq > 0 && (credCom >= credReq);
                     if (hasCrCom) crCom++;
-
                     if (!isValEmpty(s['Defense Registration'])) defense++;
-
                     if (!isRegistered && !isPDrop && !hasCrCom) regPending++;
-
+                    if (checkDuesForSemester(s.Dues, targetRegSem)) dues++;
                     const remarksRaw = s['Discussion Remark'] || '';
                     if (remarksRaw) {
                         followup += remarksRaw.split(' || ').filter(Boolean).length;
@@ -179,7 +187,7 @@ export const DropOutView: React.FC = () => {
                 }
             });
         });
-        return { enrolled, registered, unregistered: enrolled - registered, pDrop, tDrop, crCom, defense, regPending, followup };
+        return { enrolled, registered, unregistered: enrolled - registered, pDrop, tDrop, crCom, defense, regPending, dues, followup };
     }, [selectedProgram, selectedAdmittedSemesters, studentCache, registrationLookup, targetRegSem]);
 
     const getFilteredStudentList = useCallback((type: DropoutKpiType) => {
@@ -224,6 +232,7 @@ export const DropOutView: React.FC = () => {
                     else if (type === 'crcom') match = hasCrCom;
                     else if (type === 'defense') match = isDefense;
                     else if (type === 'regPending') match = !isRegistered && !isPDrop && !hasCrCom;
+                    else if (type === 'dues') match = checkDuesForSemester(s.Dues, targetRegSem);
                     else if (type === 'followup') match = hasFollowup;
 
                     if (match) {
@@ -260,13 +269,9 @@ export const DropOutView: React.FC = () => {
         }
     };
 
-    // Robust Initial Population: Runs when program changes OR when data cache updates
     useEffect(() => {
         if (selectedProgram && targetRegSem) {
-            // Check if we already have some data for the selected semesters
             const hasData = Array.from(selectedAdmittedSemesters).some(sem => studentCache.has(sem));
-            
-            // Only update active list if it's currently null OR if we are in 'all' mode and data has arrived
             if (!activeUnregList || (activeUnregList.students.length === 0 && hasData)) {
                 handleCardClick(currentListType);
             }
@@ -360,32 +365,26 @@ export const DropOutView: React.FC = () => {
                 </div>, 
                 headerActionsTarget
             )}
-            <div className="flex-1 overflow-hidden flex flex-row relative">
+            <div className="flex-1 overflow-hidden flex flex-col relative">
+                {selectedProgram && (
+                    <div className="p-2 md:p-3 shrink-0 bg-white shadow-sm border-b border-gray-100 z-20 w-full overflow-x-auto">
+                        <DropOutDashboard stats={kpiStats} comparisonSemester={targetRegSem} onCardClick={handleCardClick} activeType={currentListType} />
+                    </div>
+                )}
+
                 <div className="flex-1 min-w-0 bg-white overflow-hidden flex flex-col lg:flex-row">
                     {selectedProgram ? (
                         <>
-                            <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/50 border-r border-gray-100">
-                                <div className="p-2 md:p-3 shrink-0 bg-white shadow-sm border-b border-gray-100">
-                                    <DropOutDashboard 
-                                        stats={kpiStats} 
-                                        comparisonSemester={targetRegSem} 
-                                        onCardClick={handleCardClick}
-                                        activeType={currentListType}
-                                    />
-                                </div>
+                            <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/50">
                                 <div className="flex-1 flex flex-col overflow-hidden">
                                     {currentListType === 'followup' ? (
                                         <div className="flex-1 overflow-hidden p-2 md:p-3">
-                                            <FollowupTimelineDashboard 
-                                                students={getFilteredStudentList('followup')} 
-                                                onRowClick={handleFollowupStudentClick}
-                                                diuEmployeeData={diuEmployeeData}
-                                                teacherData={teacherData}
-                                            />
+                                            <FollowupTimelineDashboard students={getFilteredStudentList('followup')} onRowClick={handleFollowupStudentClick} diuEmployeeData={diuEmployeeData} teacherData={teacherData} />
                                         </div>
                                     ) : (
-                                        <div className="flex flex-row h-full gap-2 p-2">
-                                            <div className="flex-[1.6] border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col">
+                                        <div className="flex flex-row h-full gap-2 p-2 overflow-hidden">
+                                            {/* Column 1: Analysis Table (45%) */}
+                                            <div className="basis-[45%] w-[45%] shrink-0 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col">
                                                 <AdmittedReportTable 
                                                     selectedAdmittedSemesters={selectedAdmittedSemesters}
                                                     studentCache={studentCache}
@@ -408,7 +407,9 @@ export const DropOutView: React.FC = () => {
                                                     hideSummaryToggle={true}
                                                 />
                                             </div>
-                                            <div className="flex-1 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col">
+                                            
+                                            {/* Column 2: Student List (25%) */}
+                                            <div className="basis-[25%] w-[25%] shrink-0 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col">
                                                 {activeUnregList ? (
                                                     <UnregisteredStudentsModal 
                                                         isInline={true} isOpen={true} 
@@ -436,9 +437,66 @@ export const DropOutView: React.FC = () => {
                                                         ) : (
                                                             <>
                                                                 <UserX className="w-12 h-12 mb-3 opacity-10" />
-                                                                <p className="text-[10px] font-bold uppercase tracking-widest opacity-40">Select a category to view analysis</p>
+                                                                <p className="text-[10px] font-bold uppercase tracking-widest opacity-40">Select a category</p>
                                                             </>
                                                         )}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Column 3: Contextual Right Panel (30%) (Program Info behind Profile) */}
+                                            <div className="basis-[30%] w-[30%] shrink-0 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col relative">
+                                                {selectedStudent ? (
+                                                    <div className="flex flex-col h-full overflow-hidden animate-in slide-in-from-right-2 duration-300 bg-white z-10">
+                                                        <div className="px-3 py-2 border-b border-gray-100 bg-slate-50 flex items-center justify-between shrink-0 h-[40px]">
+                                                            <h3 className="text-[10px] font-bold text-gray-800 uppercase tracking-widest flex items-center">
+                                                                <User className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
+                                                                Student Profile
+                                                            </h3>
+                                                            <button onClick={handleCloseStudent} className="p-1 hover:bg-white rounded-full text-slate-400 transition-colors">
+                                                                <X className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                        <div className="flex-1 overflow-hidden">
+                                                            <StudentDetailView 
+                                                                student={selectedStudent} 
+                                                                program={selectedProgram} 
+                                                                diuEmployeeData={diuEmployeeData} 
+                                                                teacherData={teacherData} 
+                                                                employeeOptions={employeeOptions} 
+                                                                onSaveStudent={handleSaveStudent} 
+                                                                onClose={handleCloseStudent} 
+                                                                registrationLookup={registrationLookup} 
+                                                                studentSemester={(selectedStudent as any)._semester} 
+                                                                initialRemarksOpen={shouldAutoOpenRemarks}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col h-full overflow-hidden animate-in fade-in duration-300">
+                                                        <div className="px-3 py-2 border-b border-gray-100 bg-slate-50 flex items-center shrink-0 h-[40px]">
+                                                            <h3 className="text-[10px] font-bold text-gray-800 uppercase tracking-widest flex items-center">
+                                                                <School className="w-3.5 h-3.5 mr-1.5 text-indigo-600" />
+                                                                Program Coordination
+                                                            </h3>
+                                                        </div>
+                                                        <div className="flex-1 overflow-hidden">
+                                                            <ProgramRightPanel 
+                                                                program={selectedProgram}
+                                                                facultyLeadership={facultyLeadershipData.find(f => f['Faculty Short Name'] === selectedProgram['Faculty Short Name'])}
+                                                                facultyLeadershipData={facultyLeadershipData}
+                                                                diuEmployeeData={diuEmployeeData}
+                                                                teacherData={teacherData}
+                                                                employeeOptions={employeeOptions}
+                                                                employeeFieldOptions={employeeFieldOptions}
+                                                                onSaveFacultyLeadership={async () => {}}
+                                                                onSaveProgramLeadership={async () => {}}
+                                                                onSaveProgramData={async () => {}}
+                                                                onSaveEmployee={handleUpdatePersonnel}
+                                                                registrationLookup={registrationLookup}
+                                                                isModular={true}
+                                                            />
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
@@ -446,25 +504,6 @@ export const DropOutView: React.FC = () => {
                                     )}
                                 </div>
                             </div>
-                            <ProgramRightPanel 
-                                program={selectedProgram}
-                                facultyLeadership={facultyLeadershipData.find(f => f['Faculty Short Name'] === selectedProgram['Faculty Short Name'])}
-                                facultyLeadershipData={facultyLeadershipData}
-                                diuEmployeeData={diuEmployeeData}
-                                teacherData={teacherData}
-                                employeeOptions={employeeOptions}
-                                employeeFieldOptions={employeeFieldOptions}
-                                onSaveFacultyLeadership={async () => {}}
-                                onSaveProgramLeadership={async () => {}}
-                                onSaveProgramData={async () => {}}
-                                onSaveEmployee={handleUpdatePersonnel}
-                                onSaveStudent={handleSaveStudent}
-                                selectedStudent={selectedStudent}
-                                studentSemester={selectedStudent ? (selectedStudent as any)._semester : undefined}
-                                onCloseStudent={handleCloseStudent}
-                                registrationLookup={registrationLookup}
-                                autoOpenRemarks={shouldAutoOpenRemarks}
-                            />
                         </>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-slate-50/50">
@@ -476,59 +515,7 @@ export const DropOutView: React.FC = () => {
             </div>
             
             <FilterPanel 
-                isOpen={isFilterPanelOpen} 
-                onClose={() => setIsFilterPanelOpen(false)} 
-                programData={programData} 
-                semesterFilter="All" 
-                setSemesterFilter={() => {}} 
-                uniqueSemesters={[]} 
-                selectedFaculties={selectedFaculty === 'All' ? new Set() : new Set([selectedFaculty])} 
-                setSelectedFaculties={(f) => setSelectedFaculty(Array.from(f)[0] || 'All')} 
-                selectedProgramTypes={new Set()} 
-                setSelectedProgramTypes={() => {}} 
-                selectedSemesterTypes={new Set()} 
-                setSelectedSemesterTypes={() => {}} 
-                selectedPrograms={new Set()} 
-                setSelectedPrograms={() => {}} 
-                attributeOptions={{ teachers: [], courseTypes: [], types: [], credits: [], capacities: [], studentCounts: [], classTakenCounts: [] }} 
-                selectedTeachers={new Set()} 
-                setSelectedTeachers={() => {}} 
-                selectedCourseTypes={new Set()} 
-                setSelectedCourseTypes={() => {}} 
-                selectedTypes={new Set()} 
-                setSelectedTypes={() => {}} 
-                selectedCredits={new Set()} 
-                setSelectedCredits={() => {}} 
-                selectedCapacities={new Set()} 
-                setSelectedCapacities={() => {}} 
-                studentMin="" 
-                setStudentMin={() => {}} 
-                studentMax="" 
-                setStudentMax={() => {}} 
-                selectedStudentCounts={new Set()} 
-                setSelectedStudentCounts={() => {}} 
-                classTakenMin="" 
-                setClassTakenMin={() => {}} 
-                classTakenMax="" 
-                setClassTakenMax={() => {}} 
-                selectedClassTakens={new Set()} 
-                setSelectedClassTakens={() => {}} 
-                onClearAll={() => {}} 
-                hideProgramTab={false} 
-                viewMode="dropout" 
-                admittedSemestersOptions={admittedSemestersOptions} 
-                selectedAdmittedSemesters={selectedAdmittedSemesters} 
-                onAdmittedSemesterChange={setSelectedAdmittedSemesters} 
-                registeredSemestersOptions={registeredSemesters} 
-                registrationFilters={registrationFilters} 
-                onRegistrationFilterChange={setRegistrationFilters}
-                selectedType={selectedType}
-                setSelectedType={setSelectedType}
-                selectedSemesterMode={selectedSemesterMode}
-                setSelectedSemesterMode={setSelectedSemesterMode}
-                onSelectProgram={(p) => { setSelectedProgram(p); }}
-                selectedProgram={selectedProgram}
-            />
+                isOpen={isFilterPanelOpen} onClose={() => setIsFilterPanelOpen(false)} programData={programData} semesterFilter="All" setSemesterFilter={() => {}} uniqueSemesters={[]} selectedFaculties={selectedFaculty === 'All' ? new Set() : new Set([selectedFaculty])} setSelectedFaculties={(f) => setSelectedFaculty(Array.from(f)[0] || 'All')} selectedProgramTypes={new Set()} setSelectedProgramTypes={() => {}} selectedSemesterTypes={new Set()} setSelectedSemesterTypes={() => {}} selectedPrograms={new Set()} setSelectedPrograms={() => {}} attributeOptions={{ teachers: [], courseTypes: [], types: [], credits: [], capacities: [], studentCounts: [], classTakenCounts: [] }} selectedTeachers={new Set()} setSelectedTeachers={() => {}} selectedCourseTypes={new Set()} setSelectedCourseTypes={() => {}} selectedTypes={new Set()} setSelectedTypes={() => {}} selectedCredits={new Set()} setSelectedCredits={() => {}} selectedCapacities={new Set()} setSelectedCapacities={() => {}} studentMin="" setStudentMin={() => {}} studentMax="" setStudentMax={() => {}} selectedStudentCounts={new Set()} setSelectedStudentCounts={() => {}} classTakenMin="" setClassTakenMin={() => {}} classTakenMax="" setClassTakenMax={() => {}} selectedClassTakens={new Set()} setSelectedClassTakens={(() => {})} onClearAll={(() => {})} hideProgramTab={false} viewMode="dropout" admittedSemestersOptions={admittedSemestersOptions} selectedAdmittedSemesters={selectedAdmittedSemesters} onAdmittedSemesterChange={setSelectedAdmittedSemesters} registeredSemestersOptions={registeredSemesters} registrationFilters={registrationFilters} onRegistrationFilterChange={setRegistrationFilters} selectedType={selectedType} setSelectedType={setSelectedType} selectedSemesterMode={selectedSemesterMode} setSelectedSemesterMode={setSelectedSemesterMode} onSelectProgram={(p) => { setSelectedProgram(p); }} selectedProgram={selectedProgram} />
         </div>
     );
 };
