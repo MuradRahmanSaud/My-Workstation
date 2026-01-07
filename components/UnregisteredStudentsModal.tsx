@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { X, Copy, Check, Users, GripHorizontal, Download, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, UserCheck, UserX, UserMinus, PowerOff, Clock, Calculator, ShieldCheck, GraduationCap, Target, AlertCircle, MessageSquare, Search, FilterX } from 'lucide-react';
 import { StudentDataRow } from '../types';
@@ -317,7 +316,7 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
                 </table>
             </div>
 
-            <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-200 text-[9px] text-gray-500 flex justify-between items-center shrink-0 select-none">
+            <div className="px-3 py-1 bg-gray-50 border-t border-gray-200 text-[9px] text-gray-500 flex justify-between items-center shrink-0 select-none h-[32px]">
                 <div className="flex items-center space-x-2">
                     {!isInline && <span>Target Check: <span className="font-medium text-gray-600">{targetSemester}</span></span>}
                     <div className="flex items-center space-x-1">
@@ -327,11 +326,11 @@ export const UnregisteredStudentsModal: React.FC<UnregisteredStudentsModalProps>
                     </div>
                 </div>
                 <div className="flex items-center space-x-1">
-                    <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsLeft className="w-3.5 h-3.5" /></button>
-                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-0.5 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsLeft className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-0.5 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronLeft className="w-3.5 h-3.5" /></button>
                     <span className="min-w-[15px] text-center font-black">{currentPage}</span>
-                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronRight className="w-3.5 h-3.5" /></button>
-                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsRight className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="p-0.5 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronRight className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0} className="p-0.5 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsRight className="w-3.5 h-3.5" /></button>
                 </div>
             </div>
         </div>

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Banknote, Save, Loader2, X, Calendar, UserCheck, Layers, RefreshCcw, AlertTriangle, Clock, MessageSquare } from 'lucide-react';
+import { Banknote, Save, Loader2, X, Calendar, UserCheck, Layers, RefreshCcw, AlertTriangle, Clock, MessageSquare, Phone } from 'lucide-react';
 import { SearchableSelect } from './EditEntryModal';
 import { StudentDataRow } from '../types';
 
@@ -117,6 +117,22 @@ export const StudentDuesForm: React.FC<StudentDuesFormProps> = ({
                         <X className="w-4 h-4" />
                     </button>
                 </div>
+
+                {/* Quick Contact Info */}
+                <div className="grid grid-cols-3 gap-2 bg-white/60 p-2 rounded-lg border border-amber-100/50">
+                    <div className="flex flex-col">
+                        <span className="text-[7px] font-black text-amber-600 uppercase tracking-tighter">Student Mob</span>
+                        <span className="text-[11px] font-black text-slate-800 font-mono leading-tight truncate">{student.Mobile || '-'}</span>
+                    </div>
+                    <div className="flex flex-col border-l border-amber-100 pl-2">
+                        <span className="text-[7px] font-black text-amber-600 uppercase tracking-tighter">Father Mob</span>
+                        <span className="text-[11px] font-black text-slate-800 font-mono leading-tight truncate">{student['Father Mobile'] || '-'}</span>
+                    </div>
+                    <div className="flex flex-col border-l border-amber-100 pl-2">
+                        <span className="text-[7px] font-black text-amber-600 uppercase tracking-tighter">Mother Mob</span>
+                        <span className="text-[11px] font-black text-slate-800 font-mono leading-tight truncate">{student['Mother Mobile'] || '-'}</span>
+                    </div>
+                </div>
             </div>
             
             <form onSubmit={handleInternalSave} className="flex-1 overflow-y-auto p-5 space-y-5 thin-scrollbar">
@@ -129,82 +145,84 @@ export const StudentDuesForm: React.FC<StudentDuesFormProps> = ({
                     </div>
                 )}
 
-                {/* Academic Session */}
-                <div className="space-y-2">
-                    <label className="block text-[9px] font-black text-amber-600 uppercase tracking-wider flex items-center">
-                        <Calendar className="w-3 h-3 mr-1.5" /> Academic Session (Dues Applied For)
+                {/* Unified Academic Session & Period Selection */}
+                <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-inner">
+                    <label className="block text-[10px] font-black text-amber-700 uppercase tracking-wider flex items-center">
+                        <Calendar className="w-3.5 h-3.5 mr-2" /> Academic Session & Exam Period
                     </label>
-                    <div className="flex items-center space-x-3">
-                        <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-sm flex-1">
-                            {semesters.map(sem => (
-                                <button
-                                    key={sem}
-                                    type="button"
-                                    onClick={() => setSemester(sem)}
-                                    className={`flex-1 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${semester === sem ? 'bg-amber-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
-                                >
-                                    {sem}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="w-24">
-                            <input 
-                                type="text" 
-                                placeholder="Year"
-                                value={year}
-                                onChange={(e) => setYear(e.target.value)}
-                                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg shadow-sm font-bold focus:ring-1 focus:ring-amber-200 focus:border-amber-500 outline-none text-center"
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {/* Exam Period */}
-                <div className="space-y-2">
-                    <label className="block text-[9px] font-black text-amber-600 uppercase tracking-wider flex items-center">
-                        <Layers className="w-3 h-3 mr-1.5" /> Exam Period
-                    </label>
-                    <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-sm">
-                        {periods.map(p => (
+                    
+                    {/* Primary Semester Tabs */}
+                    <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+                        {semesters.map(sem => (
                             <button
-                                key={p}
+                                key={sem}
                                 type="button"
-                                onClick={() => setPeriod(p)}
-                                className={`flex-1 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${period === p ? 'bg-amber-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                                onClick={() => setSemester(sem)}
+                                className={`flex-1 py-2 text-[10px] font-black uppercase rounded-md transition-all ${semester === sem ? 'bg-amber-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
                             >
-                                {p}
+                                {sem}
                             </button>
                         ))}
                     </div>
-                </div>
 
-                {/* Amount */}
-                <div>
-                    <label className="block text-[9px] font-black text-amber-600 uppercase tracking-wider mb-1.5">Dues Amount (BDT)</label>
-                    <div className="relative">
-                        <input 
-                            required
-                            type="number" 
-                            value={amount} 
-                            onChange={e => setAmount(e.target.value)} 
-                            className="w-full px-4 py-3 text-sm font-black text-red-600 border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-amber-100 focus:border-amber-500 outline-none transition-all"
-                            placeholder="Enter amount..." 
-                        />
-                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300 uppercase">BDT</span>
+                    {/* Secondary Period Tabs + Year integrated */}
+                    <div className="flex items-center space-x-2">
+                        <div className="flex bg-white p-0.5 rounded-lg border border-slate-200 shadow-sm flex-1">
+                            {periods.map(p => (
+                                <button
+                                    key={p}
+                                    type="button"
+                                    onClick={() => setPeriod(p)}
+                                    className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-md transition-all ${period === p ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    {p}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="w-20 shrink-0">
+                            <div className="relative">
+                                <input 
+                                    type="text" 
+                                    placeholder="Year"
+                                    value={year}
+                                    onChange={(e) => setYear(e.target.value)}
+                                    className="w-full px-2 py-1.5 text-[11px] border border-slate-200 rounded-lg shadow-sm font-black focus:ring-1 focus:ring-amber-200 focus:border-amber-500 outline-none text-center bg-white text-slate-800"
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {/* Approver */}
-                <div>
-                    <label className="block text-[9px] font-black text-amber-600 uppercase tracking-wider mb-1.5 flex items-center">
-                        <UserCheck className="w-3 h-3 mr-1.5" /> Send for Approval to
-                    </label>
-                    <SearchableSelect 
-                        value={approver} 
-                        onChange={setApprover} 
-                        options={employeeOptions} 
-                        placeholder="Search employee..." 
-                    />
+                {/* Amount & Approver Grid - Adjusted for narrower Amount field */}
+                <div className="grid grid-cols-[2fr_3fr] gap-4">
+                    {/* Amount */}
+                    <div className="space-y-2">
+                        <label className="block text-[9px] font-black text-amber-600 uppercase tracking-wider">Dues Amount (BDT)</label>
+                        <div className="relative">
+                            <input 
+                                required
+                                type="number" 
+                                value={amount} 
+                                onChange={e => setAmount(e.target.value)} 
+                                className="w-full px-3 py-2.5 text-[13px] font-black text-red-600 border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-amber-100 focus:border-amber-500 outline-none transition-all"
+                                placeholder="0.00" 
+                            />
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] font-black text-slate-300 uppercase">BDT</span>
+                        </div>
+                    </div>
+
+                    {/* Approver */}
+                    <div className="space-y-2">
+                        <label className="block text-[9px] font-black text-amber-600 uppercase tracking-wider flex items-center">
+                            <UserCheck className="w-3.5 h-3.5 mr-1.5" /> Send for Approval to
+                        </label>
+                        <SearchableSelect 
+                            value={approver} 
+                            onChange={setApprover} 
+                            options={employeeOptions} 
+                            placeholder="Search employee..." 
+                        />
+                    </div>
                 </div>
 
                 {/* Optional Snooze Section */}

@@ -1,7 +1,6 @@
-
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { UserX, RefreshCw, ArrowLeft, School, Search, Filter, MessageSquare, User, X } from 'lucide-react';
+import { MessageSquareQuote, RefreshCw, ArrowLeft, School, Search, Filter, MessageSquare, User, X } from 'lucide-react';
 import { useSheetData } from '../hooks/useSheetData';
 import { DropOutDashboard, DropoutKpiType } from '../components/DropOutDashboard';
 import { AdmittedReportTable } from '../components/AdmittedReportTable';
@@ -272,11 +271,11 @@ export const DropOutView: React.FC = () => {
     useEffect(() => {
         if (selectedProgram && targetRegSem) {
             const hasData = Array.from(selectedAdmittedSemesters).some(sem => studentCache.has(sem));
-            if (!activeUnregList || (activeUnregList.students.length === 0 && hasData)) {
+            if (!activeUnregList && hasData && !selectedStudent) {
                 handleCardClick(currentListType);
             }
         }
-    }, [selectedProgram?.PID, targetRegSem, studentCache, selectedAdmittedSemesters, currentListType, handleCardClick, activeUnregList]);
+    }, [selectedProgram?.PID, targetRegSem, studentCache, selectedAdmittedSemesters, currentListType, handleCardClick, activeUnregList, selectedStudent]);
 
     const employeeOptions = useMemo(() => {
         const map = new Map<string, string>();
@@ -334,13 +333,15 @@ export const DropOutView: React.FC = () => {
     const headerTitleTarget = document.getElementById('header-title-area');
     const headerActionsTarget = document.getElementById('header-actions-area');
 
+    const isAdmittedLoading = loading.status === 'loading' && (loading.message?.includes('Fetching') || loading.message?.includes('Syncing'));
+
     return (
         <div className="flex flex-col h-full bg-gray-50 relative overflow-hidden">
             {headerTitleTarget && createPortal(
                 <div className="flex items-center space-x-3 animate-in fade-in slide-in-from-left-2 duration-300">
                     <h2 className="text-[13px] md:text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center truncate">
-                        <UserX className="w-4 h-4 mr-2 text-red-600 shrink-0" />
-                        Dropout Analysis
+                        <MessageSquareQuote className="w-4 h-4 mr-2 text-blue-600 shrink-0" />
+                        Student Follow-up Analysis
                         {selectedProgram && (
                             <>
                                 <span className="mx-2 text-gray-300 font-normal shrink-0">|</span>
@@ -359,7 +360,8 @@ export const DropOutView: React.FC = () => {
                         <Filter className="w-3.5 h-3.5" />
                         <span>Filter Program & Data</span>
                     </button>
-                    <button onClick={() => reloadData('admitted', true)} disabled={loading.status === 'loading'} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all">
+                    {/* FIXED: Changed reloadData('admitted', true) to reloadData('all', true) to sync all relevant page data */}
+                    <button onClick={() => reloadData('all', true)} disabled={loading.status === 'loading'} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all">
                         <RefreshCw className={`w-4 h-4 ${loading.status === 'loading' ? 'animate-spin' : ''}`} />
                     </button>
                 </div>, 
@@ -383,7 +385,6 @@ export const DropOutView: React.FC = () => {
                                         </div>
                                     ) : (
                                         <div className="flex flex-row h-full gap-2 p-2 overflow-hidden">
-                                            {/* Column 1: Analysis Table (45%) */}
                                             <div className="basis-[45%] w-[45%] shrink-0 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col">
                                                 <AdmittedReportTable 
                                                     selectedAdmittedSemesters={selectedAdmittedSemesters}
@@ -408,7 +409,6 @@ export const DropOutView: React.FC = () => {
                                                 />
                                             </div>
                                             
-                                            {/* Column 2: Student List (25%) */}
                                             <div className="basis-[25%] w-[25%] shrink-0 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col">
                                                 {activeUnregList ? (
                                                     <UnregisteredStudentsModal 
@@ -429,14 +429,14 @@ export const DropOutView: React.FC = () => {
                                                     />
                                                 ) : (
                                                     <div className="h-full flex flex-col items-center justify-center text-slate-300 p-8 text-center bg-slate-50/20">
-                                                        {loading.status === 'loading' ? (
+                                                        {isAdmittedLoading ? (
                                                             <div className="flex flex-col items-center">
                                                                 <RefreshCw className="w-10 h-10 mb-3 text-blue-500 animate-spin opacity-40" />
                                                                 <p className="text-[10px] font-bold uppercase tracking-widest opacity-40">Syncing Student Data...</p>
                                                             </div>
                                                         ) : (
                                                             <>
-                                                                <UserX className="w-12 h-12 mb-3 opacity-10" />
+                                                                <MessageSquareQuote className="w-12 h-12 mb-3 opacity-10" />
                                                                 <p className="text-[10px] font-bold uppercase tracking-widest opacity-40">Select a category</p>
                                                             </>
                                                         )}
@@ -444,7 +444,6 @@ export const DropOutView: React.FC = () => {
                                                 )}
                                             </div>
 
-                                            {/* Column 3: Contextual Right Panel (30%) (Program Info behind Profile) */}
                                             <div className="basis-[30%] w-[30%] shrink-0 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col relative">
                                                 {selectedStudent ? (
                                                     <div className="flex flex-col h-full overflow-hidden animate-in slide-in-from-right-2 duration-300 bg-white z-10">
@@ -507,8 +506,8 @@ export const DropOutView: React.FC = () => {
                         </>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-slate-50/50">
-                            <UserX className="w-16 h-16 mb-4 opacity-10" />
-                            <p className="text-sm font-medium">Select a program via Filter to analyze dropouts</p>
+                            <MessageSquareQuote className="w-16 h-16 mb-4 opacity-10" />
+                            <p className="text-sm font-medium">Select a program via Filter to manage follow-ups</p>
                         </div>
                     )}
                 </div>

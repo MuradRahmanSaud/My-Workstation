@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { ViewState } from '../types';
-import { LayoutDashboard, TableProperties, Settings, GraduationCap, School, FileText, Building2, IdCard, FileSpreadsheet, UserX } from 'lucide-react';
+import { LayoutDashboard, TableProperties, Settings, GraduationCap, School, FileText, Building2, IdCard, FileSpreadsheet, MessageSquareQuote } from 'lucide-react';
 
 interface SidebarProps {
   currentView: ViewState;
@@ -12,7 +13,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'section', label: 'Section', icon: TableProperties },
     { id: 'program', label: 'Program', icon: School },
-    { id: 'dropout', label: 'Dropout', icon: UserX },
+    { id: 'dropout', label: 'Student Follow-up', icon: MessageSquareQuote },
     { id: 'student', label: 'Student', icon: FileText },
     { id: 'employee', label: 'Employee', icon: IdCard },
     { id: 'classroom', label: 'Class Room', icon: Building2 },

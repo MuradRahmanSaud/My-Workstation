@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef } from 'react';
 import { CourseSectionData, ProgramDataRow, TeacherDataRow, ClassRoomDataRow, LoadingState, SheetContextType, StudentDataRow, StudentLinkRow, MainSheetRow, DiuEmployeeRow, ReferenceDataRow, FacultyLeadershipRow, StudentFollowupRow } from '../types';
 import { fetchRegisteredStudentData, fetchStudentLinks, fetchMainSheet, fetchTeacherData, fetchProgramData, fetchClassRoomData, fetchMergedSectionData, fetchDiuEmployeeData, normalizeId, fetchReferenceData, getMobileNumber, fetchSubSheet, fetchFacultyLeadershipData, fetchStudentFollowupData } from '../services/sheetService';
@@ -94,7 +95,12 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (isSyncing.current) return;
     isSyncing.current = true;
     
-    setLoading({ status: 'loading', message: 'Syncing Data...' });
+    // Set descriptive message based on mode
+    let loadMsg = 'Syncing Data...';
+    if (mode === 'followup') loadMsg = 'Updating Followup Logs...';
+    else if (mode === 'admitted') loadMsg = 'Fetching Student Records...';
+    
+    setLoading({ status: 'loading', message: loadMsg });
     
     if (force) {
         ['reference', 'teacher', 'program', 'faculty_leadership', 'employee'].forEach(key => {

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { MessageSquarePlus, Save, Loader2, X, Calendar } from 'lucide-react';
+import { MessageSquarePlus, Save, Loader2, X, Calendar, Clock, CheckCircle2, UserCheck } from 'lucide-react';
 import { SearchableSelect } from './EditEntryModal';
 import { StudentDataRow } from '../types';
 
@@ -20,6 +20,10 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
 }) => {
     const [targetSem, setTargetSem] = useState('Spring');
     const [targetYear, setTargetYear] = useState(new Date().getFullYear().toString());
+    
+    // Snooze States
+    const [snoozeUntil, setSnoozeUntil] = useState('');
+    const [snoozeRemark, setSnoozeRemark] = useState('');
 
     useEffect(() => {
         if (formData['Target Semester']) {
@@ -31,17 +35,23 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
         }
     }, [formData]);
 
-    const handleInternalSave = () => {
+    const handleInternalSave = (e: React.FormEvent) => {
+        e.preventDefault();
+        
         const finalData = { 
             ...formData, 
-            Status: formData.Status, // Removed fallback to respect blank/user input
-            'Target Semester': `${targetSem} ${targetYear}`
+            'Target Semester': `${targetSem} ${targetYear}`,
+            'Re-follow up': snoozeUntil, 
+            Remark: snoozeRemark || formData.Status,
+            snoozeDate: snoozeUntil, 
+            snoozeRemark: snoozeRemark
         };
         onSave(finalData);
     };
 
-    const isEdit = !!formData.uniqueid;
     const semesters = ['Spring', 'Summer', 'Fall'];
+
+    const isFormInvalid = !formData.Status || !formData['Contacted By'];
 
     return (
         <div className="absolute inset-x-3 top-12 bottom-3 z-[150] bg-white border border-rose-100 rounded-xl flex flex-col shadow-2xl ring-1 ring-black/5 animate-in slide-in-from-top-2">
@@ -50,26 +60,24 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
                     <div className="flex items-center space-x-2 min-w-0">
                         <MessageSquarePlus className="w-4 h-4 text-rose-500 shrink-0" />
                         <h5 className="text-[10px] font-black text-rose-700 uppercase tracking-tight truncate">
-                            {isEdit ? 'Update Conversation' : 'New Conversation'} — {student['Student Name']} ({student['Student ID']})
+                            Student Follow-up — {student['Student Name']}
                         </h5>
                     </div>
                     <button onClick={onClose} className="p-1 hover:bg-rose-100 rounded-full text-rose-400 transition-colors shrink-0 ml-2">
                         <X className="w-4 h-4" />
                     </button>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                    <div className="flex flex-col"><span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Student</span><span className="text-[11px] md:text-[13px] font-black text-slate-800 font-mono leading-tight truncate">{student.Mobile || '-'}</span></div>
-                    <div className="flex flex-col border-l border-slate-100 pl-2"><span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Father</span><span className="text-[11px] md:text-[13px] font-black text-slate-800 font-mono leading-tight truncate">{student['Father Name'] || '-'}</span></div>
-                    <div className="flex flex-col border-l border-slate-100 pl-2"><span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Mother</span><span className="text-[11px] md:text-[13px] font-black text-slate-800 font-mono leading-tight truncate">{student['Mother Name'] || '-'}</span></div>
-                </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 thin-scrollbar">
-                {/* Target Semester Tabs & Year */}
-                <div className="bg-rose-50/50 p-3 rounded-xl border border-rose-100">
-                    <label className="block text-[9px] font-black text-rose-600 uppercase mb-2">Target Registration Semester *</label>
+            <form onSubmit={handleInternalSave} className="flex-1 overflow-y-auto p-5 space-y-6 thin-scrollbar">
+                
+                {/* PART 1: Academic Session (Target) */}
+                <div className="space-y-3 bg-rose-50/30 p-4 rounded-xl border border-rose-100/50 shadow-inner">
+                    <label className="block text-[10px] font-black text-rose-700 uppercase tracking-wider flex items-center">
+                        <Calendar className="w-3.5 h-3.5 mr-2" /> Academic Session (Target)
+                    </label>
                     <div className="flex items-center space-x-3">
-                        <div className="flex bg-white p-1 rounded-lg border border-rose-100 shadow-sm flex-1">
+                        <div className="flex bg-white p-1 rounded-lg border border-rose-200 shadow-sm flex-1">
                             {semesters.map(sem => (
                                 <button
                                     key={sem}
@@ -81,65 +89,84 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
                                 </button>
                             ))}
                         </div>
-                        <div className="w-24">
+                        <div className="w-24 shrink-0">
                             <input 
                                 type="text" 
                                 placeholder="Year"
                                 value={targetYear}
                                 onChange={(e) => setTargetYear(e.target.value)}
-                                className="w-full px-3 py-2 text-xs border border-rose-100 rounded-lg shadow-sm font-bold focus:ring-1 focus:ring-rose-200 outline-none text-center"
+                                className="w-full px-3 py-2 text-xs border border-rose-200 rounded-lg shadow-sm font-black focus:ring-1 focus:ring-rose-300 outline-none text-center bg-white"
                             />
                         </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-[9px] font-black text-rose-600 uppercase mb-1">Contact Date *</label>
-                        <input 
-                            type="date" 
-                            value={formData.Date} 
-                            onChange={e => setFormData({...formData, Date: e.target.value})} 
-                            className="w-full px-2 py-2 text-xs border rounded shadow-sm font-bold focus:ring-1 focus:ring-rose-200 outline-none" 
-                        />
+                <div className="space-y-5">
+                    <div className="flex items-center space-x-2 text-indigo-600 mb-1">
+                        <Clock className="w-3.5 h-3.5" />
+                        <h4 className="text-[10px] font-black uppercase tracking-wider">Follow-up Setting</h4>
                     </div>
-                    <div>
-                        <label className="block text-[9px] font-black text-rose-600 uppercase mb-1">Contacted By</label>
-                        <SearchableSelect value={formData['Contacted By']} onChange={v => setFormData({...formData, 'Contacted By': v})} options={employeeOptions} placeholder="Select employee" />
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="block text-[9px] font-black text-rose-600 uppercase tracking-wider flex items-center">
+                                <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Response Status *
+                            </label>
+                            <SearchableSelect 
+                                value={formData.Status} 
+                                onChange={v => setFormData({...formData, Status: v})} 
+                                options={statusOptions} 
+                                placeholder="Select status..." 
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider flex items-center">
+                                <UserCheck className="w-3.5 h-3.5 mr-1.5" /> Follow-up By *
+                            </label>
+                            <SearchableSelect 
+                                value={formData['Contacted By']} 
+                                onChange={v => setFormData({...formData, 'Contacted By': v})} 
+                                options={employeeOptions} 
+                                placeholder="Search personnel..." 
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Snooze Until</label>
+                            <input 
+                                type="date" 
+                                value={snoozeUntil} 
+                                onChange={e => setSnoozeUntil(e.target.value)} 
+                                className="w-full px-3 py-2.5 text-xs font-bold border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all bg-indigo-50/20"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Snooze Remark</label>
+                            <textarea 
+                                value={snoozeRemark} 
+                                onChange={e => setSnoozeRemark(e.target.value)} 
+                                rows={1}
+                                className="w-full px-3 py-2.5 text-xs font-medium border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all resize-none bg-indigo-50/20"
+                                placeholder="Reason for follow-up..."
+                            />
+                        </div>
                     </div>
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-[9px] font-black text-rose-600 uppercase mb-1">Response Status *</label>
-                        <SearchableSelect value={formData.Status} onChange={v => setFormData({...formData, Status: v})} options={statusOptions} placeholder="Select status" />
-                    </div>
-                    <div>
-                        <label className="block text-[9px] font-black text-rose-600 uppercase mb-1">Re-follow up Date</label>
-                        <input type="date" value={formData['Re-follow up']} onChange={e => setFormData({...formData, 'Re-follow up': e.target.value})} className="w-full px-2 py-2 text-xs border rounded shadow-sm font-bold focus:ring-1 focus:ring-rose-200 outline-none" />
-                    </div>
-                </div>
-                
-                <div>
-                    <label className="block text-[9px] font-black text-rose-600 uppercase mb-1">Discussion Remark *</label>
-                    <textarea 
-                        value={formData.Remark} 
-                        onChange={e => setFormData({...formData, Remark: e.target.value})} 
-                        rows={3} 
-                        className="w-full px-3 py-2 text-xs border rounded shadow-sm font-medium resize-none focus:ring-1 focus:ring-rose-200 outline-none" 
-                        placeholder="What did you talk about?" 
-                    />
-                </div>
-            </div>
+            </form>
             
-            <div className="p-4 pt-3 flex space-x-2 shrink-0 border-t bg-slate-50/50">
-                <button onClick={onClose} className="flex-1 py-2.5 text-[10px] font-bold text-slate-500 bg-white border border-slate-200 rounded-lg uppercase hover:bg-slate-50 transition-colors">Cancel</button>
+            <div className="p-4 pt-3 flex space-x-2 shrink-0 border-t bg-slate-50/50 rounded-b-xl">
+                <button type="button" onClick={onClose} className="flex-1 py-3 text-[10px] font-black text-slate-500 bg-white border border-slate-200 rounded-xl uppercase hover:bg-slate-50 transition-colors">
+                    Cancel
+                </button>
                 <button 
                     onClick={handleInternalSave} 
-                    disabled={isSaving} 
-                    className="flex-[1.5] py-2.5 text-[10px] font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-md flex items-center justify-center uppercase transition-all active:scale-95"
+                    disabled={isSaving || isFormInvalid} 
+                    className="flex-[1.5] py-3 text-[10px] font-black text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-lg flex items-center justify-center uppercase transition-all active:scale-95 disabled:opacity-50"
                 >
-                    {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Save className="w-3.5 h-3.5 mr-1.5" />} {isEdit ? 'Update Record' : 'Save Record'}
+                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                    Save Follow-up Info
                 </button>
             </div>
         </div>

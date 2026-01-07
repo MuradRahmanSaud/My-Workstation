@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useEffect } from 'react';
 import { StudentDataRow, ProgramDataRow, DiuEmployeeRow, TeacherDataRow } from '../types';
 import { LayoutGrid, List as ListIcon, Check, Copy, BarChart3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, UserCheck, UserX, UserMinus, PowerOff, Clock, Calculator, ShieldCheck, GraduationCap, Target, AlertCircle, MessageSquare, Download, Users, X, RotateCcw, User as UserIcon, Search, FilterX, TrendingUp, Banknote } from 'lucide-react';
@@ -6,6 +5,63 @@ import { useResponsivePagination } from '../hooks/useResponsivePagination';
 import { isValEmpty } from '../views/EmployeeView';
 import { StudentDetailView } from './StudentDetailView';
 import { normalizeId } from '../services/sheetService';
+
+// Fix: Add missing StudentDetailList component to render student rows in the summary view list
+const StudentDetailList = ({ students, onRowClick, selectedId }: { students: StudentDataRow[], onRowClick: (s: StudentDataRow) => void, selectedId: string | null, listType: any }) => {
+    const { currentPage, setCurrentPage, rowsPerPage, totalPages, paginatedData, containerRef } = useResponsivePagination<StudentDataRow>(students, { defaultRows: 15 });
+
+    return (
+        <div className="flex flex-col h-full overflow-hidden">
+            <div className="flex-1 overflow-auto thin-scrollbar" ref={containerRef}>
+                <table className="w-full text-left border-separate border-spacing-0">
+                    <thead className="bg-slate-700 sticky top-0 z-10 shadow-sm border-b border-gray-200">
+                        <tr>
+                            <th className="px-2 py-1.5 text-[9px] font-bold text-white w-8 text-center uppercase tracking-wider">Sl</th>
+                            <th className="px-2 py-1.5 text-[9px] font-bold text-white uppercase tracking-wider">Student ID</th>
+                            <th className="px-2 py-1.5 text-[9px] font-bold text-white uppercase tracking-wider">Student Name</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {paginatedData.map((student, idx) => {
+                            const globalIdx = (currentPage - 1) * rowsPerPage + idx + 1;
+                            const isSelected = selectedId === student['Student ID'];
+                            
+                            return (
+                                <tr 
+                                    key={student['Student ID']} 
+                                    onClick={() => onRowClick(student)}
+                                    className={`transition-all text-[11px] h-[32px] cursor-pointer relative z-0 ${
+                                        isSelected 
+                                        ? 'bg-blue-100 ring-1 ring-blue-300 ring-inset shadow-[inset_0_0_0_1px_rgba(59,130,246,0.2)] z-10' 
+                                        : 'hover:bg-blue-50/60'
+                                    }`}
+                                >
+                                    <td className={`px-2 py-1 text-center font-medium ${isSelected ? 'text-blue-700' : 'text-gray-400'}`}>{globalIdx}</td>
+                                    <td className={`px-2 py-1 font-bold font-mono ${isSelected ? 'text-blue-800' : 'text-blue-600'}`}>{student['Student ID']}</td>
+                                    <td className={`px-2 py-1 font-medium truncate max-w-[150px] ${isSelected ? 'text-blue-900' : 'text-gray-700'}`} title={student['Student Name']}>{student['Student Name']}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+            <div className="px-3 py-1 bg-slate-50 border-t border-gray-200 text-[9px] text-gray-500 flex justify-between items-center shrink-0 select-none h-[32px]">
+                <div className="flex items-center space-x-1">
+                    <span className="font-bold">{students.length > 0 ? (currentPage - 1) * rowsPerPage + 1 : 0}-{Math.min(currentPage * rowsPerPage, students.length)}</span>
+                    <span>of</span>
+                    <span className="font-bold">{students.length}</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                    <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-0.5 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsLeft className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-0.5 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                    <span className="min-w-[20px] text-center font-black text-blue-600 bg-white border border-slate-200 rounded py-0">{currentPage}</span>
+                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="p-0.5 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronRight className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0} className="p-0.5 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsRight className="w-3.5 h-3.5" /></button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 interface AdmittedReportTableProps {
     selectedAdmittedSemesters: Set<string>;
@@ -58,11 +114,11 @@ const RECORD_SEP = ' || ';
 const CHART_METRICS = [
     { id: 'totalAdmitted', label: 'Enroll', color: 'bg-blue-600', activeBorder: 'border-blue-700', listType: 'all', inactiveClass: 'bg-blue-50 text-blue-500 border-blue-100 hover:bg-blue-100' },
     { id: 'totalRegistered', label: 'Reg', color: 'bg-green-600', activeBorder: 'border-green-700', listType: 'registered', inactiveClass: 'bg-green-50 text-green-600 border-green-100 hover:bg-green-100' },
+    { id: 'totalRegPending', label: 'Unreg', color: 'bg-amber-600', activeBorder: 'border-amber-700', listType: 'regPending', inactiveClass: 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100' },
     { id: 'totalPDrop', label: 'P-Drop', color: 'bg-rose-700', activeBorder: 'border-rose-800', listType: 'pdrop', inactiveClass: 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100' },
     { id: 'totalTDrop', label: 'T-Drop', color: 'bg-orange-600', activeBorder: 'border-orange-700', listType: 'tdrop', inactiveClass: 'bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-100' },
     { id: 'totalCrCom', label: 'Cr. Com', color: 'bg-emerald-600', activeBorder: 'border-emerald-700', listType: 'crcom', inactiveClass: 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100' },
     { id: 'totalDefense', label: 'Def. Reg', color: 'bg-teal-600', activeBorder: 'border-teal-700', listType: 'defense', inactiveClass: 'bg-teal-50 text-teal-600 border-teal-100 hover:bg-teal-100' },
-    { id: 'totalRegPending', label: 'Pending', color: 'bg-amber-600', activeBorder: 'border-amber-700', listType: 'regPending', inactiveClass: 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100' },
     { id: 'totalDues', label: 'Dues', color: 'bg-amber-700', activeBorder: 'border-amber-800', listType: 'dues', inactiveClass: 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100' }
 ];
 
@@ -450,11 +506,11 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                             <span className="w-[18%]">Program</span>
                             <span className="w-[10%] text-center" title="Enrolled Students">Enroll</span>
                             <span className="w-[10%] text-center" title="Registered Students">Reg</span>
+                            <span className="w-[12%] text-center whitespace-nowrap" title="Unregistered">Unreg</span>
                             <span className="w-[10%] text-center" title="Permanent Dropout">P-Drop</span>
                             <span className="w-[10%] text-center" title="Temporary Dropout">T-Drop</span>
                             <span className="w-[10%] text-center whitespace-nowrap" title="Credit Completed Students">Cr. Com</span>
                             <span className="w-[10%] text-center whitespace-nowrap" title="Defense Registration">Def. Reg</span>
-                            <span className="w-[12%] text-center whitespace-nowrap" title="Reg. Pending">Reg. Pending</span>
                             <span className="w-[10%] text-right whitespace-nowrap" title="Students with Dues">Dues</span>
                         </div>
                         <div className={`divide-y divide-gray-100 overflow-y-auto thin-scrollbar ${mobile ? 'max-h-[400px]' : 'max-h-none flex-1'}`}>
@@ -463,11 +519,11 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                     <span className="w-[18%] text-gray-700 truncate font-medium"><span className="font-mono font-bold mr-1 text-gray-400">{p.pid}</span>{p.name}</span>
                                     <span className="w-[10%] text-center font-bold text-gray-900 cursor-pointer hover:underline hover:text-blue-600 transition-colors" onClick={() => p.totalAdmitted > 0 && handleListClick('ALL', p.pid, p.name, 'all')}>{p.totalAdmitted}</span>
                                     <span className="w-[10%] text-center text-green-600 font-bold cursor-pointer hover:underline transition-colors" onClick={() => p.totalRegistered > 0 && handleListClick('ALL', p.pid, p.name, 'registered')}>{p.totalRegistered}</span>
+                                    <span className="w-[12%] text-center text-amber-700 font-black cursor-pointer hover:underline transition-colors" onClick={() => p.totalRegPending > 0 && handleListClick('ALL', p.pid, p.name, 'regPending')}>{p.totalRegPending}</span>
                                     <span className="w-[10%] text-center text-rose-700 font-black cursor-pointer hover:underline transition-colors" onClick={() => p.totalPDrop > 0 && handleListClick('ALL', p.pid, p.name, 'pdrop')}>{p.totalPDrop}</span>
                                     <span className="w-[10%] text-center text-orange-600 font-bold cursor-pointer hover:underline transition-colors" onClick={() => p.totalTDrop > 0 && handleListClick('ALL', p.pid, p.name, 'tdrop')}>{p.totalTDrop}</span>
                                     <span className="w-[10%] text-center text-emerald-700 font-black cursor-pointer hover:underline transition-colors" onClick={() => p.totalCrCom > 0 && handleListClick('ALL', p.pid, p.name, 'crcom')}>{p.totalCrCom}</span>
                                     <span className="w-[10%] text-center text-teal-700 font-black cursor-pointer hover:underline transition-colors" onClick={() => p.totalDefense > 0 && handleListClick('ALL', p.pid, p.name, 'defense')}>{p.totalDefense}</span>
-                                    <span className="w-[12%] text-center text-amber-700 font-black cursor-pointer hover:underline transition-colors" onClick={() => p.totalRegPending > 0 && handleListClick('ALL', p.pid, p.name, 'regPending')}>{p.totalRegPending}</span>
                                     <span className="w-[10%] text-right text-amber-900 font-black cursor-pointer hover:underline transition-colors" onClick={() => p.totalDues > 0 && handleListClick('ALL', p.pid, p.name, 'dues')}>{p.totalDues}</span>
                                 </div>
                             ))}
@@ -476,11 +532,11 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                             <span className="w-[18%]">Subtotal</span>
                             <span className="w-[10%] text-center text-blue-800 cursor-pointer hover:underline transition-colors" onClick={() => totalAdm > 0 && handleListClick('ALL', 'ALL', fac, 'all')}>{totalAdm}</span>
                             <span className="w-[10%] text-center text-green-700 cursor-pointer hover:underline transition-colors" onClick={() => totalReg > 0 && handleListClick('ALL', 'ALL', fac, 'registered')}>{totalReg}</span>
+                            <span className="text-[10px] text-center w-[12%] text-amber-900 cursor-pointer hover:underline transition-colors" onClick={() => totalPnd > 0 && handleListClick('ALL', 'ALL', fac, 'regPending')}>{totalPnd}</span>
                             <span className="text-[10px] text-center w-[10%] text-rose-800 cursor-pointer hover:underline transition-colors" onClick={() => totalP > 0 && handleListClick('ALL', 'ALL', fac, 'pdrop')}>{totalP}</span>
                             <span className="text-[10px] text-center w-[10%] text-orange-700 cursor-pointer hover:underline transition-colors" onClick={() => totalT > 0 && handleListClick('ALL', 'ALL', fac, 'tdrop')}>{totalT}</span>
                             <span className="text-[10px] text-center w-[10%] text-emerald-900 cursor-pointer hover:underline transition-colors" onClick={() => totalCC > 0 && handleListClick('ALL', 'ALL', fac, 'crcom')}>{totalCC}</span>
                             <span className="text-[10px] text-center w-[10%] text-teal-900 cursor-pointer hover:underline transition-colors" onClick={() => totalDef > 0 && handleListClick('ALL', 'ALL', fac, 'defense')}>{totalDef}</span>
-                            <span className="text-[10px] text-center w-[12%] text-amber-900 cursor-pointer hover:underline transition-colors" onClick={() => totalPnd > 0 && handleListClick('ALL', 'ALL', fac, 'regPending')}>{totalPnd}</span>
                             <span className="w-[10%] text-right text-amber-900 cursor-pointer hover:underline transition-colors" onClick={() => totalDues > 0 && handleListClick('ALL', 'ALL', fac, 'dues')}>{totalDues}</span>
                         </div>
                     </div>
@@ -567,11 +623,11 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                             <th className="px-3 py-1.5 text-[10px] font-bold text-white sticky left-0 z-30 bg-slate-700 w-40 uppercase tracking-wider">Semester</th>
                                             <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider">Enroll</th>
                                             <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider">Reg</th>
+                                            <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap">Unreg</th>
                                             <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap">P-Drop</th>
                                             <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap">T-Drop</th>
                                             <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap">Cr. Com</th>
                                             <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap">Def. Reg</th>
-                                            <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap">Pending</th>
                                             <th className="px-2 py-1.5 text-[10px] font-bold text-white text-center uppercase tracking-wider whitespace-nowrap">Dues</th>
                                         </tr>
                                     </thead>
@@ -586,11 +642,11 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                                     <td className="px-3 py-1 font-bold text-gray-700 border-r border-gray-100 sticky left-0 bg-white transition-colors text-[11px]">{sem}</td>
                                                     <td className="px-2 py-1 text-center text-[11px] font-medium text-gray-800 border-r border-gray-50">{adm > 0 ? <span className="cursor-pointer hover:underline hover:text-blue-600 transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'all')}>{adm}</span> : <span className="text-gray-300">-</span>}</td>
                                                     <td className="px-2 py-1 text-center text-[11px] font-bold text-green-600 border-r border-gray-50">{reg > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'registered')}>{reg}</span> : <span className="text-gray-300">-</span>}</td>
+                                                    <td className="px-2 py-1 text-center text-[11px] font-black text-amber-700 border-r border-gray-50">{regPending > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'regPending')}>{regPending}</span> : <span className="text-gray-300">-</span>}</td>
                                                     <td className="px-2 py-1 text-center text-[11px] font-black text-rose-700 border-r border-gray-50">{pDrop > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'pdrop')}>{pDrop}</span> : <span className="text-gray-300">-</span>}</td>
                                                     <td className="px-2 py-1 text-center text-[11px] font-black text-orange-600 border-r border-gray-50">{tDrop > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'tdrop')}>{tDrop}</span> : <span className="text-gray-300">-</span>}</td>
                                                     <td className="px-2 py-1 text-center text-[11px] font-black text-emerald-700 border-r border-gray-50">{crCom > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'crcom')}>{crCom}</span> : <span className="text-gray-300">-</span>}</td>
                                                     <td className="px-2 py-1 text-center text-[11px] font-black text-teal-700 border-r border-gray-50">{defense > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'defense')}>{defense}</span> : <span className="text-gray-300">-</span>}</td>
-                                                    <td className="px-2 py-1 text-center text-[11px] font-black text-amber-700 border-r border-gray-50">{regPending > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'regPending')}>{regPending}</span> : <span className="text-gray-300">-</span>}</td>
                                                     <td className="px-2 py-1 text-center text-[11px] font-black text-amber-900">{dues > 0 ? <span className="cursor-pointer hover:underline transition-colors" onClick={() => handleListClick(sem, prog.pid, prog.name, 'dues')}>{dues}</span> : <span className="text-gray-300">-</span>}</td>
                                                 </tr>
                                             );
@@ -606,11 +662,11 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                                 <th key={sem} className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[240px]">
                                                     <div className="mb-1">{sem}</div>
                                                     <div className="grid grid-cols-8 gap-1 border-t border-slate-600 pt-1 uppercase text-white/70">
-                                                        <span>Adm</span><span>Reg</span><span>PDr</span><span>TDr</span><span>CC</span><span>Def</span><span>Pnd</span><span>Due</span>
+                                                        <span>Adm</span><span>Reg</span><span>Unr</span><span>PDr</span><span>TDr</span><span>CC</span><span>Def</span><span>Due</span>
                                                     </div>
                                                 </th>
                                             ))}
-                                            <th className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[240px] uppercase"><div className="mb-1">Total</div><div className="grid grid-cols-8 gap-1 border-t border-slate-600 pt-1 text-white/70"><span>Adm</span><span>Reg</span><span>PDr</span><span>TDr</span><span>CC</span><span>Def</span><span>Pnd</span><span>Due</span></div></th>
+                                            <th className="px-1 py-1 text-[9px] font-bold text-white text-center min-w-[240px] uppercase"><div className="mb-1">Total</div><div className="grid grid-cols-8 gap-1 border-t border-slate-600 pt-1 text-white/70"><span>Adm</span><span>Reg</span><span>Unr</span><span>PDr</span><span>TDr</span><span>CC</span><span>Def</span><span>Due</span></div></th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
@@ -626,11 +682,11 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                                             <div className="grid grid-cols-8 gap-1">
                                                                 <span className={`${adm > 0 ? 'text-gray-700 cursor-pointer hover:underline hover:text-blue-600 transition-colors' : 'text-gray-300'}`} onClick={() => adm > 0 && handleListClick(sem, prog.pid, prog.name, 'all')}>{adm}</span>
                                                                 <span className={`${reg > 0 ? 'text-green-600 font-bold cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => reg > 0 && handleListClick(sem, prog.pid, prog.name, 'registered')}>{reg}</span>
+                                                                <span className={`${regPending > 0 ? 'text-amber-700 font-black cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => regPending > 0 && handleListClick(sem, prog.pid, prog.name, 'regPending')}>{regPending}</span>
                                                                 <span className={`${pDrop > 0 ? 'text-rose-700 font-black cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => pDrop > 0 && handleListClick(sem, prog.pid, prog.name, 'pdrop')}>{pDrop}</span>
                                                                 <span className={`${tDrop > 0 ? 'text-orange-600 font-bold cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => tDrop > 0 && handleListClick(sem, prog.pid, prog.name, 'tdrop')}>{tDrop}</span>
                                                                 <span className={`${crComValue > 0 ? 'text-emerald-700 font-black cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => crComValue > 0 && handleListClick(sem, prog.pid, prog.name, 'crcom')}>{crComValue}</span>
                                                                 <span className={`${defense > 0 ? 'text-teal-700 font-black cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => defense > 0 && handleListClick(sem, prog.pid, prog.name, 'defense')}>{defense}</span>
-                                                                <span className={`${regPending > 0 ? 'text-amber-700 font-black cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => regPending > 0 && handleListClick(sem, prog.pid, prog.name, 'regPending')}>{regPending}</span>
                                                                 <span className={`${dues > 0 ? 'text-amber-900 font-black cursor-pointer hover:underline transition-colors' : 'text-gray-300'}`} onClick={() => dues > 0 && handleListClick(sem, prog.pid, prog.name, 'dues')}>{dues}</span>
                                                             </div>
                                                         </td>
@@ -640,11 +696,11 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                                     <div className="grid grid-cols-8 gap-1">
                                                         <span className="text-blue-800 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalAdmitted > 0 && handleListClick('ALL', prog.pid, prog.name, 'all')}>{prog.totalAdmitted}</span>
                                                         <span className="text-green-700 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalRegistered > 0 && handleListClick('ALL', prog.pid, prog.name, 'registered')}>{prog.totalRegistered}</span>
+                                                        <span className="text-amber-900 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalRegPending > 0 && handleListClick('ALL', prog.pid, prog.name, 'regPending')}>{prog.totalRegPending}</span>
                                                         <span className="text-rose-800 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalPDrop > 0 && handleListClick('ALL', prog.pid, prog.name, 'pdrop')}>{prog.totalPDrop}</span>
                                                         <span className="text-orange-700 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalTDrop > 0 && handleListClick('ALL', prog.pid, prog.name, 'tdrop')}>{prog.totalTDrop}</span>
                                                         <span className="text-emerald-900 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalCrCom > 0 && handleListClick('ALL', prog.pid, prog.name, 'crcom')}>{prog.totalCrCom}</span>
                                                         <span className="text-teal-900 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalDefense > 0 && handleListClick('ALL', prog.pid, prog.name, 'defense')}>{prog.totalDefense}</span>
-                                                        <span className="text-amber-900 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalRegPending > 0 && handleListClick('ALL', prog.pid, prog.name, 'regPending')}>{prog.totalRegPending}</span>
                                                         <span className="text-amber-900 cursor-pointer hover:underline transition-colors" onClick={() => prog.totalDues > 0 && handleListClick('ALL', prog.pid, prog.name, 'dues')}>{prog.totalDues}</span>
                                                     </div>
                                                 </td>
@@ -654,9 +710,9 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                                 </table>
                             )}
                         </div>
-                        <div className="px-3 py-1.5 bg-slate-50 border-t border-gray-200 flex justify-between items-center text-[9px] text-gray-500 shrink-0 select-none">
+                        <div className="px-3 py-1 bg-slate-50 border-t border-gray-200 flex justify-between items-center text-[9px] text-gray-500 shrink-0 select-none h-[32px]">
                             <div className="flex items-center space-x-2"><span className="font-bold">{currentPage * rowsPerPage - rowsPerPage + 1}-{Math.min(currentPage * rowsPerPage, paginationDataInput.length)}</span><span>of</span><span className="font-bold">{paginationDataInput.length}</span></div>
-                            <div className="flex items-center space-x-1"><button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsLeft className="w-3" /></button><button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronLeft className="w-3" /></button><span className="min-w-[20px] text-center font-black">{currentPage}</span><button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronRight className="w-3" /></button><button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsRight className="w-3" /></button></div>
+                            <div className="flex items-center space-x-1"><button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-0.5 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsLeft className="w-3.5 h-3.5" /></button><button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-0.5 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronLeft className="w-3.5 h-3.5" /></button><span className="min-w-[20px] text-center font-black">{currentPage}</span><button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-0.5 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronRight className="w-3.5 h-3.5" /></button><button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-0.5 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsRight className="w-3.5 h-3.5" /></button></div>
                         </div>
                     </>
                 ) : (
@@ -679,38 +735,6 @@ export const AdmittedReportTable: React.FC<AdmittedReportTableProps> = ({
                         </div>
                     </div>
                 )}
-            </div>
-        </div>
-    );
-};
-
-const StudentDetailList = ({ students, onRowClick, selectedId, listType }: { students: StudentDataRow[], onRowClick: (s: StudentDataRow) => void, selectedId: string | null, listType: string }) => {
-    const { currentPage, setCurrentPage, rowsPerPage, totalPages, paginatedData, containerRef } = useResponsivePagination<StudentDataRow>(students);
-    return (
-        <div className="flex flex-col h-full bg-white overflow-hidden">
-            <div className="flex-1 overflow-auto thin-scrollbar relative" ref={containerRef}>
-                <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-700 sticky top-0 z-10 shadow-sm border-b border-gray-200">
-                        <tr><th className="px-2 py-1.5 text-[10px] font-bold text-white w-8 text-center uppercase tracking-wider">Sl</th><th className="px-2 py-1.5 text-[10px] font-bold text-white uppercase tracking-wider">Student ID</th><th className="px-2 py-1.5 text-[10px] font-bold text-white uppercase tracking-wider">Student Name</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                        {paginatedData.map((student, idx) => {
-                            const globalIdx = (currentPage - 1) * rowsPerPage + idx + 1;
-                            const isSelected = selectedId === student['Student ID'];
-                            return (
-                                <tr key={idx} onClick={() => onRowClick(student)} className={`transition-all text-[11px] h-[28px] cursor-pointer relative z-0 ${isSelected ? 'bg-blue-100 ring-1 ring-blue-300 ring-inset shadow-[inset_0_0_0_1px_rgba(59,130,246,0.2)] z-10' : 'hover:bg-blue-50/60'}`}>
-                                    <td className={`px-2 py-1 text-center font-medium ${isSelected ? 'text-blue-700' : 'text-gray-400'}`}>{globalIdx}</td>
-                                    <td className={`px-2 py-1 font-bold font-mono flex items-center space-x-1.5 ${isSelected ? 'text-blue-800' : 'text-blue-600'}`}><span>{student['Student ID']}</span></td>
-                                    <td className={`px-2 py-1 font-medium truncate max-w-[150px] ${isSelected ? 'text-blue-900' : 'text-gray-700'}`} title={student['Student Name']}>{student['Student Name']}</td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
-            <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-200 text-[9px] text-gray-500 flex justify-between items-center shrink-0 select-none">
-                <div className="flex items-center space-x-1"><span className="font-bold">{students.length > 0 ? (currentPage - 1) * rowsPerPage + 1 : 0}-{Math.min(currentPage * rowsPerPage, students.length)}</span><span>of</span><span className="font-bold">{students.length}</span></div>
-                <div className="flex items-center space-x-1"><button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsLeft className="w-3.5 h-3.5" /></button><button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronLeft className="w-3.5 h-3.5" /></button><span className="min-w-[15px] text-center font-black">{currentPage}</span><button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronRight className="w-3.5 h-3.5" /></button><button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0} className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"><ChevronsRight className="w-3.5 h-3.5" /></button></div>
             </div>
         </div>
     );

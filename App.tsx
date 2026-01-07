@@ -13,7 +13,7 @@ import { ViewState } from './types';
 import { SheetProvider } from './context/SheetContext';
 import { 
   LayoutDashboard, TableProperties, Settings, GraduationCap, School, 
-  FileText, Building2, IdCard, FileSpreadsheet, UserX, Search
+  FileText, Building2, IdCard, FileSpreadsheet, MessageSquareQuote, Search
 } from 'lucide-react';
 
 // Immersive backgrounds only for active modules (optional)
@@ -33,7 +33,7 @@ const MENU_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'text-indigo-600 bg-indigo-50 border-indigo-100' },
   { id: 'section', label: 'Sections', icon: TableProperties, color: 'text-purple-600 bg-purple-50 border-purple-100' },
   { id: 'program', label: 'Programs', icon: School, color: 'text-blue-600 bg-blue-50 border-blue-100' },
-  { id: 'dropout', label: 'Dropout', icon: UserX, color: 'text-red-600 bg-red-50 border-red-100' },
+  { id: 'dropout', label: 'Follow-up', icon: MessageSquareQuote, color: 'text-red-600 bg-red-50 border-red-100' },
   { id: 'student', label: 'Students', icon: FileText, color: 'text-teal-600 bg-teal-50 border-teal-100' },
   { id: 'employee', label: 'Employees', icon: IdCard, color: 'text-orange-500 bg-orange-50 border-orange-100' },
   { id: 'classroom', label: 'Rooms', icon: Building2, color: 'text-cyan-600 bg-cyan-50 border-cyan-100' },
