@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { ProgramDataRow } from '../types';
-import { X, Search, RotateCcw, ChevronDown, ChevronRight, UserPlus, UserMinus, FileSpreadsheet, AlertTriangle, Check, Plus } from 'lucide-react';
+import { X, Search, RotateCcw, ChevronDown, ChevronRight, UserPlus, UserMinus, FileSpreadsheet, AlertTriangle, Check, Plus, GraduationCap } from 'lucide-react';
 import { PdfConverterModal } from './PdfConverterModal';
 
 interface TeacherOption {
@@ -699,9 +699,40 @@ export const FilterPanel: React.FC<FilterPanelProps> = (props) => {
     const renderAdmittedFilters = () => {
         const top12 = admittedSemestersOptions.slice(0, 12);
         const allSelected = top12.length > 0 && top12.every(s => selectedAdmittedSemesters.has(s));
+        
+        // Single semester selection from dropdown
+        const currentSelectedSemester = selectedAdmittedSemesters.size === 1 ? Array.from(selectedAdmittedSemesters)[0] : '';
+
         return (
             <div className="flex flex-col h-full overflow-hidden">
                 <h3 className="text-[11px] font-bold text-gray-700 px-1 mb-2 uppercase tracking-wide shrink-0">Analysis Settings</h3>
+                
+                {/* Enroll Semester Dropdown */}
+                <div className="mx-1 mb-3 p-2 bg-blue-50 rounded-xl border border-blue-100 shadow-sm space-y-2">
+                    <label className="block text-[8px] font-black text-blue-400 uppercase tracking-[0.2em] px-0.5 flex items-center">
+                        <GraduationCap className="w-2.5 h-2.5 mr-1" />
+                        Enroll Semester
+                    </label>
+                    <div className="relative">
+                        <select 
+                            value={currentSelectedSemester}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                if (val && onAdmittedSemesterChange) {
+                                    onAdmittedSemesterChange(new Set([val]));
+                                }
+                            }}
+                            className="w-full text-[10px] font-black border-none rounded-lg bg-white focus:ring-1 focus:ring-blue-500 py-1.5 pl-2 pr-6 cursor-pointer appearance-none text-blue-700 uppercase shadow-sm"
+                        >
+                            <option value="">Select Semester...</option>
+                            {admittedSemestersOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <ChevronDown className="w-3 h-3 absolute right-1.5 top-1/2 -translate-y-1/2 text-blue-400 pointer-events-none" />
+                    </div>
+                </div>
+
+                <div className="h-px bg-gray-100 mx-1 mb-3"></div>
+
                 <button onClick={() => {
                     const newSet = new Set(selectedAdmittedSemesters);
                     if (allSelected) top12.forEach(s => newSet.delete(s)); else top12.forEach(s => newSet.add(s));

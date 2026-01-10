@@ -47,14 +47,14 @@ export const ProgramView: React.FC = () => {
   const [activeReport, setActiveReport] = useState<string | null>('courses');
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   
-  // Fix: Updated activeUnregList state type to match the union of list types provided by AdmittedReportTable to resolve type incompatibility error
+  // Fix: Updated listType union to include 'dues' and 'followupTarget' to match AdmittedReportTable and UnregisteredStudentsModal types
   const [activeUnregList, setActiveUnregList] = useState<{ 
     semester: string; 
     programId: string; 
     programName: string; 
     students: StudentDataRow[]; 
     targetSemester: string; 
-    listType: 'all' | 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' | 'followupTarget' | 'followup' 
+    listType: 'all' | 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' | 'followupTarget' | 'followup' | 'dues'
   } | null>(null);
   
   const [selectedAdmittedSemesters, setSelectedAdmittedSemesters] = useState<Set<string>>(new Set());
@@ -115,10 +115,10 @@ export const ProgramView: React.FC = () => {
       if (registeredData.length === 0) return map;
       registeredData.forEach(row => {
           Object.entries(row).forEach(([sem, idVal]) => {
-              if (sem && idVal) {
-                  const sId = String(idVal).trim();
+              if (sem && idVal && String(idVal).trim() !== '') {
+                  const sId = normalizeId(String(idVal)); // Normalized matching
                   if (!map.has(sId)) map.set(sId, new Set());
-                  map.get(sId)!.add(sem);
+                  map.get(sId)!.add(sem.trim());
               }
           });
       });
@@ -328,6 +328,7 @@ export const ProgramView: React.FC = () => {
                             </div>
                         )}
                     </div>
+                    {/* Fix: Added missing props to ProgramRightPanel and enabled conditional StudentDetailView handling inside it */}
                     <ProgramRightPanel 
                         program={selectedProgram} 
                         facultyLeadership={currentFacultyLeadership} 
@@ -351,8 +352,8 @@ export const ProgramView: React.FC = () => {
         </div>
         <button onClick={() => setIsAddModalOpen(true)} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 group z-30" title="Add New Program"><Plus className="w-7 h-7 group-hover:rotate-90 transition-transform duration-300" /></button>
       </div>
-      <FilterPanel isOpen={isFilterPanelOpen} onClose={() => setIsFilterPanelOpen(false)} programData={programData} semesterFilter={semesterFilter} setSemesterFilter={setSemesterFilter} uniqueSemesters={uniqueSemesters} selectedFaculties={new Set()} setSelectedFaculties={() => {}} selectedProgramTypes={new Set()} setSelectedProgramTypes={() => {}} selectedSemesterTypes={new Set()} setSelectedSemesterTypes={() => {}} selectedPrograms={new Set()} setSelectedPrograms={() => {}} attributeOptions={attributeOptions} selectedTeachers={selectedTeachers} setSelectedTeachers={setSelectedTeachers} selectedCourseTypes={selectedCourseTypes} setSelectedCourseTypes={setSelectedCourseTypes} selectedTypes={selectedTypes} setSelectedTypes={setSelectedTypes} selectedCredits={selectedCredits} setSelectedCredits={setSelectedCredits} selectedCapacities={selectedCapacities} setSelectedCapacities={setSelectedCapacities} studentMin={studentMin} setStudentMin={setStudentMin} studentMax={studentMax} setStudentMax={setStudentMax} selectedStudentCounts={selectedStudentCounts} setSelectedStudentCounts={setSelectedStudentCounts} classTakenMin={classTakenMin} setClassTakenMin={setClassTakenMin} classTakenMax={classTakenMax} setClassTakenMax={setClassTakenMax} selectedClassTakens={selectedClassTakens} setSelectedClassTakens={setSelectedClassTakens} selectedMissingFields={selectedMissingFields} setSelectedMissingFields={setSelectedMissingFields} onClearAll={clearAllFilters} hideProgramTab={true} viewMode={activeReport === 'admitted' ? 'admitted' : undefined} admittedSemestersOptions={admittedSemestersOptions} selectedAdmittedSemesters={selectedAdmittedSemesters} onAdmittedSemesterChange={setSelectedAdmittedSemesters} registeredSemestersOptions={registeredSemesters} registrationFilters={registrationFilters} onRegistrationFilterChange={setRegistrationFilters} />
-      <EditEntryModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} mode="add" title="Add New Program" sheetName={SHEET_NAMES.PROGRAM} columns={['PID','Faculty Short Name','Faculty Full Name','Program Full Name','Program Short Name','Department Name','Program Type','Semester Type','Semester Duration Num','Theory Duration','Lab Duration','Theory Requirement','Lab Requirement']} hiddenFields={['Class Duration', 'Class Requirement', 'Semester Duration']} initialData={{ 'Semester Duration Num': '4', 'Theory Duration': '90', 'Lab Duration': '120', 'Theory Requirement': '0', 'Lab Requirement': '0' }} keyColumn="PID" spreadsheetId={REF_SHEET_ID} transformData={(data) => { const tDur = data['Theory Duration'] || '0', lDur = data['Lab Duration'] || '0', tReq = data['Theory Requirement'] || '0', lReq = data['Lab Requirement'] || '0', sDur = data['Semester Duration Num'] || '0'; return { ...data, 'Class Duration': `Theory ${tDur} Minutes, Lab ${lDur} Minutes`, 'Class Requirement': `Theory ${tReq} Minutes, Lab ${lReq} Minutes`, 'Semester Duration': `${sDur} Months` }; }} onSuccess={(newData) => { updateProgramData(prev => [newData, ...prev]); setSelectedProgram(newData); }} />
+      <FilterPanel isOpen={isFilterPanelOpen} onClose={() => setIsFilterPanelOpen(false)} programData={programData} semesterFilter={semesterFilter} setSemesterFilter={setSemesterFilter} uniqueSemesters={uniqueSemesters} selectedFaculties={new Set()} setSelectedFaculties={() => {}} selectedProgramTypes={new Set()} setSelectedProgramTypes={() => {}} selectedSemesterTypes={new Set()} setSelectedSemesterTypes={() => {}} selectedPrograms={new Set()} setSelectedPrograms={() => {}} attributeOptions={attributeOptions} selectedTeachers={selectedTeachers} setSelectedTeachers={setSelectedTeachers} selectedCourseTypes={selectedCourseTypes} setSelectedCourseTypes={setSelectedCourseTypes} selectedTypes={new Set()} setSelectedTypes={() => {}} selectedCredits={selectedCredits} setSelectedCredits={setSelectedCredits} selectedCapacities={selectedCapacities} setSelectedCapacities={setSelectedCapacities} studentMin="" setStudentMin={() => {}} studentMax="" setStudentMax={() => {}} selectedStudentCounts={selectedStudentCounts} setSelectedStudentCounts={setSelectedStudentCounts} classTakenMin="" setClassTakenMin={() => {}} classTakenMax="" setClassTakenMax={() => {}} selectedClassTakens={selectedClassTakens} setSelectedClassTakens={(() => {})} selectedMissingFields={selectedMissingFields} setSelectedMissingFields={setSelectedMissingFields} onClearAll={clearAllFilters} hideProgramTab={true} viewMode={activeReport === 'admitted' ? 'admitted' : undefined} admittedSemestersOptions={admittedSemestersOptions} selectedAdmittedSemesters={selectedAdmittedSemesters} onAdmittedSemesterChange={setSelectedAdmittedSemesters} registeredSemestersOptions={registeredSemesters} registrationFilters={registrationFilters} onRegistrationFilterChange={setRegistrationFilters} />
+      <EditEntryModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} mode="add" title="Add New Program" sheetName={SHEET_NAMES.PROGRAM} columns={['PID','Faculty Short Name','Faculty Full Name','Program Full Name','Program Short Name','Department Name','Program Type','Semester Type','Semester Duration Num','Theory Duration','Lab Duration','Theory Requirement','Lab Requirement']} hiddenFields={['Class Duration', 'Class Requirement', 'Semester Duration']} initialData={{ 'Semester Duration Num': '4', 'Theory Duration': '90', 'Lab Duration': '120', 'Theory Requirement': '0', 'Lab Requirement': '0' }} keyColumn="PID" spreadsheetId={REF_SHEET_ID} transformData={(data) => { const tDur = data['Theory Duration'] || '0', lDur = data['Lab Duration'] || '0', tReq = data['Theory Requirement'] || '0', lReq = data['Lab Requirement'] || '0', sDur = data['Semester Duration Num'] || '0'; return { ...data, 'Class Duration': `Theory ${tDur} Minutes, Lab ${lDur} Minutes`, 'Class Requirement': `Theory ${tDur} Minutes, Lab ${lDur} Minutes`, 'Semester Duration': `${sDur} Months` }; }} onSuccess={(newData) => { updateProgramData(prev => [newData, ...prev]); setSelectedProgram(newData); }} />
     </div>
   );
 };

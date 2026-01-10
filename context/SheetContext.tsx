@@ -24,8 +24,10 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [registeredData, setRegisteredData] = useState<any[]>([]);
   const [loading, setLoading] = useState<LoadingState>({ status: 'idle' });
 
-  // Use a ref to prevent multiple simultaneous loads
+  // Ref to track if we are currently syncing
   const isSyncing = useRef(false);
+  // Ref to store latest links to avoid closure problems during sequential async calls
+  const latestStudentDataLinks = useRef<Map<string, string>>(new Map());
 
   const uniqueSemesters = useMemo(() => {
     const rawSemesters = Array.from(new Set(data.map(d => d.Semester?.trim()).filter(Boolean))) as string[];
@@ -53,16 +55,26 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const loadStudentData = async (semester: string, force?: boolean) => {
     if (!force && studentCache.has(semester)) return;
-    const link = studentDataLinks.get(semester);
-    if (!link) return;
+    
+    // Always use the latest available links (Ref is updated during reloadData)
+    const link = latestStudentDataLinks.current.get(semester) || studentDataLinks.get(semester);
+    if (!link) {
+        console.debug(`No link found for semester: ${semester}`);
+        return;
+    }
+
     try {
         const studentRows = await fetchSubSheet(link);
-        setStudentCache((prev: Map<string, StudentDataRow[]>) => {
-            const newMap = new Map<string, StudentDataRow[]>(prev);
-            newMap.set(semester, studentRows as unknown as StudentDataRow[]);
-            return newMap;
-        });
-    } catch (e) {}
+        if (studentRows && Array.isArray(studentRows)) {
+            setStudentCache((prev: Map<string, StudentDataRow[]>) => {
+                const newMap = new Map<string, StudentDataRow[]>(prev);
+                newMap.set(semester, studentRows as unknown as StudentDataRow[]);
+                return newMap;
+            });
+        }
+    } catch (e) {
+        console.error(`Failed to load student data for ${semester}`, e);
+    }
   };
 
   const updateStudentData = (semester: string, studentId: string, newData: Partial<StudentDataRow>) => {
@@ -95,7 +107,6 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (isSyncing.current) return;
     isSyncing.current = true;
     
-    // Set descriptive message based on mode
     let loadMsg = 'Syncing Data...';
     if (mode === 'followup') loadMsg = 'Updating Followup Logs...';
     else if (mode === 'admitted') loadMsg = 'Fetching Student Records...';
@@ -112,7 +123,6 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
 
     try {
-      // Step 1: Parallel fetch all core databases and metadata links
       const corePromises: Promise<any>[] = [];
 
       if (mode === 'all' || mode === 'followup') {
@@ -124,6 +134,7 @@ export const SheetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               const map = new Map<string, string>();
               links.forEach(row => { if (row.Semester && row['Student Data Link']) map.set(row.Semester, row['Student Data Link']); });
               setStudentDataLinks(map);
+              latestStudentDataLinks.current = map; // Update Ref for immediate use in loadStudentData
           }));
           corePromises.push(loadRegisteredData(force));
       }

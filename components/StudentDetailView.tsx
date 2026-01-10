@@ -14,7 +14,6 @@ import { StudentRemarksPanel, normalizeSemesterName } from './StudentProfile/Stu
 import { StudentRegistrationHistory } from './StudentRegistrationHistory';
 import { StudentDisciplinaryForm } from './StudentDisciplinaryForm';
 import { StudentFollowupForm } from './StudentFollowupForm';
-import { StudentDuesForm } from './StudentDuesForm';
 import { StudentSnoozeForm } from './StudentSnoozeForm';
 import { SearchableSelect } from './EditEntryModal';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -93,7 +92,7 @@ interface StudentDetailViewProps {
 export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
     student, program, diuEmployeeData, teacherData, employeeOptions, onSaveStudent, onClose, registrationLookup, studentSemester, initialRemarksOpen = false
 }) => {
-    const { uniqueSemesters, studentFollowupData, reloadData } = useSheetData();
+    const { uniqueSemesters, studentFollowupData, reloadData, data: sectionData } = useSheetData();
     const [isSaving, setIsSaving] = useState(false);
     const [activePopup, setActivePopup] = useState<string | null>(null);
     const [isRemarksOpen, setIsRemarksOpen] = useState(false);
@@ -112,13 +111,15 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 
     const [editFormData, setEditFormData] = useState<any>({});
     const [followupFormData, setFollowupFormData] = useState({ Date: '', Remark: '', 'Re-follow up': '', Status: '', 'Contacted By': '', 'Target Semester': '', Category: '' });
-    const [defenseTypes] = useState(['Thesis', 'Project', 'Internship']);
+    const [activeDefenseMode, setActiveDefenseMode] = useState<'tracking' | 'snooze'>('snooze');
 
     const historyRemarks = useMemo(() => {
         const isDues = followupContext === 'dues';
         const isReg = followupContext === 'registration';
+        const isDef = followupContext === 'defense';
         const rawRemarks = student['Discussion Remark'];
         let remarkEntries: any[] = [];
+        
         if (!isValEmpty(rawRemarks)) {
             remarkEntries = rawRemarks!.split(RECORD_SEP).map(s => s.trim()).filter(Boolean).map((entry, idx) => {
                 const fields = entry.split(FIELD_SEP).map(f => f.trim());
@@ -131,7 +132,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                     Remark: fields[5] || '', 
                     Category: (fields[6] || '').trim(), 
                     'Exam Period': (fields[7] || '').trim(), 
-                    'SemanticStatus': (fields[8] || fields[1] || '').trim(), // Support legacy by falling back to index 1
+                    'SemanticStatus': (fields[8] || fields[1] || '').trim(),
                     'Student ID': student['Student ID'], 
                     'Student Name': student['Student Name'],
                     'uniqueid': `remark-${idx}`, _index: idx,
@@ -142,46 +143,81 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 
         if (isDues) {
             const duesRelatedRemarks = remarkEntries.filter(r => r.Category?.trim().toLowerCase() === 'dues follow up');
-            const rawDues = student['Dues'];
-            let duesEntries: any[] = [];
-            if (!isValEmpty(rawDues)) {
-                if (!rawDues!.includes(FIELD_SEP)) {
-                    duesEntries.push({
-                        Date: new Date().toISOString(), Status: `BDT ${rawDues}`, 'Contacted By': 'System', 'Re-follow up': '', 'Target Semester': '', 'Exam Period': '', Remark: `Direct Amount: ${rawDues} BDT`, Category: 'Dues Follow up', 'Student ID': student['Student ID'], 'Student Name': student['Student Name'], 'uniqueid': 'legacy-dues', _index: -1, _source: 'dues', DoneStatus: '', SemanticStatus: 'Done'
-                    });
-                } else {
-                    duesEntries = rawDues!.split(RECORD_SEP).map(s => s.trim()).filter(Boolean).map((entry, idx) => {
-                        const fields = entry.split(FIELD_SEP).map(f => f.trim());
-                        return { Date: fields[0] || '', Status: `BDT ${fields[1] || '0'}`, 'Contacted By': fields[4] || 'System', 'Re-follow up': '', 'Target Semester': fields[3] || '', 'Exam Period': fields[2] || '', Remark: fields[5] || `Dues set to ${fields[1]} BDT`, Category: 'Dues Follow up', 'Student ID': student['Student ID'], 'Student Name': student['Student Name'], 'uniqueid': `dues-${idx}`, _index: idx, _source: 'dues', DoneStatus: fields[6] || '', SemanticStatus: fields[6] === 'DONE' ? 'Done' : 'Pending' } as any;
-                    });
-                }
-            }
-            return [...duesEntries, ...duesRelatedRemarks].sort((a, b) => new Date(b.Date).getTime() - new Date(a.Date).getTime());
+            return duesRelatedRemarks.sort((a, b) => new Date(b.Date).getTime() - new Date(a.Date).getTime());
         }
         
-        if (followupContext === 'defense') {
-            return remarkEntries.filter(r => r.Category?.trim().toLowerCase() === 'defense follow up').sort((a, b) => new Date(b.Date).getTime() - new Date(a.Date).getTime());
+        if (isDef) {
+            const list = remarkEntries.filter(r => r.Category?.trim().toLowerCase() === 'defense follow up');
+            
+            const packedDef = student['Defense Status'] || '';
+            if (packedDef.includes(' ;; ')) {
+                const f = packedDef.split(' ;; ').map(x => x.trim());
+                list.unshift({
+                    Date: f[0] || 'Unknown',
+                    Status: f[1] || 'On going',
+                    'Contacted By': f[2] || 'Unassigned',
+                    'DefenseType': f[3] || 'Thesis',
+                    'Remark': f[4] || '',
+                    'LibraryClearance': f[5] || 'Pending',
+                    _source: 'packed-defense'
+                } as any);
+            }
+            return list.sort((a, b) => {
+                if (a._source === 'packed-defense') return -1;
+                if (b._source === 'packed-defense') return 1;
+                return new Date(b.Date).getTime() - new Date(a.Date).getTime();
+            });
         } else if (isReg) {
             return remarkEntries.filter(r => r.Category?.trim().toLowerCase() === 'registration follow up').sort((a, b) => new Date(b.Date).getTime() - new Date(a.Date).getTime());
         }
         
-        return remarkEntries.sort((a, b) => new Date(b.Date).getTime() - new Date(a.Date).getTime());
-    }, [student['Discussion Remark'], student['Dues'], followupContext, student['Student ID']]);
+        return remarkEntries.sort((a, b) => {
+            const dateA = new Date(a.Date).getTime();
+            const dateB = new Date(b.Date).getTime();
+            if (isNaN(dateA)) return 1;
+            if (isNaN(dateB)) return -1;
+            return dateB - dateA;
+        });
+    }, [student, followupContext]);
 
-    const [showFollowupForm, setShowFollowupForm] = useState(false);
-    const [showDuesForm, setShowDuesForm] = useState(false);
-    const [showSnoozeForm, setShowSnoozeForm] = useState(false);
-    const [editingDuesData, setEditingDuesData] = useState<any>(null);
-    const [editingDuesIndex, setEditingDuesIndex] = useState<number | null>(null);
-    const [snoozeContext, setSnoozeContext] = useState<any>(null);
-
-    useEffect(() => {
-        if (activePopup && !['dropout', 'history', 'remarks', 'remarks-defense', 'remarks-dues'].includes(activePopup)) {
-            const initialData = { ...student };
-            if (activePopup === 'defense') { initialData['Defense Registration'] = parseToIsoDate(student['Defense Registration']); }
-            setEditFormData(initialData);
+    // Fix: Moved activeSemester inside component and added correct dependencies to resolve missing name errors
+    const activeSemester = useMemo(() => {
+        if (studentSemester && studentSemester !== 'All') {
+            return studentSemester;
         }
-    }, [activePopup, student]);
+
+        if (!Array.isArray(sectionData) || sectionData.length === 0) return '';
+
+        const semesterOptions = Array.from(new Set(sectionData.map(s => s.Semester)))
+            .filter(s => s && typeof s === 'string' && s.trim().length > 0) as string[];
+        
+        if (semesterOptions.length === 0) return '';
+
+        const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
+        
+        const sorted = semesterOptions.sort((a, b) => {
+            const regex = /([a-zA-Z]+)[\s-]*'?(\d{2,4})/;
+            const matchA = a.match(regex);
+            const matchB = b.match(regex);
+            
+            if (!matchA && !matchB) return b.localeCompare(a);
+            if (!matchA) return 1;
+            if (!matchB) return -1;
+            
+            let yearA = parseInt(matchA[2] || '0', 10);
+            if (yearA < 100) yearA += 2000;
+            const seasonA = (matchA[1] || '').toLowerCase(); 
+
+            let yearB = parseInt(matchB[2] || '0', 10);
+            if (yearB < 100) yearB += 2000;
+            const seasonB = (matchB[1] || '').toLowerCase();
+            
+            if (yearA !== yearB) return yearB - yearA;
+            return (seasonWeight[seasonB] || 0) - (seasonWeight[seasonA] || 0);
+        });
+
+        return sorted.length > 0 ? sorted[0] : '';
+    }, [sectionData, studentSemester]);
 
     const discRecords = useMemo(() => {
         const raw = student['Disciplinary Action'];
@@ -212,7 +248,6 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         return allSemesters.filter(sem => { if (sem.year > enrollmentParsed.year) return true; if (sem.year === enrollmentParsed.year && sem.season >= enrollmentParsed.season) return true; return false; }).map(sem => { const isRegistered = registeredSems.has(sem.original); return { semester: sem.original, isRegistered: isRegistered, taken: isRegistered ? (15) : null, complete: isRegistered ? 15 : null, sgpa: isRegistered ? (3.2 + Math.random() * 0.7).toFixed(2) : null, dues: 0 }; }).sort((a, b) => { const pa = parseSem(a.semester), pb = parseSem(b.semester); if (pa.year !== pb.year) return pb.year - pa.year; return pb.season - pa.season; });
     }, [registrationLookup, student['Student ID'], studentSemester, uniqueSemesters]);
 
-    // Fix: Corrected setter name to setIsDiscFormOpen to resolve redeclaration conflict and missing name errors
     const [isDiscFormOpen, setIsDiscFormOpen] = useState(false);
     const [editingDiscIndex, setEditingDiscIndex] = useState<number | null>(null);
     const [editingFollowupIndex, setEditingFollowupIndex] = useState<number | null>(null);
@@ -224,10 +259,9 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         setActivePopup(null);
         try {
             const payload = { ...newData };
-            if (activePopup === 'defense' && payload['Defense Registration']) { payload['Defense Registration'] = formatDisplayDate(payload['Defense Registration'], false); }
             await onSaveStudent(semesterToSave, { ...student, ...payload } as StudentDataRow);
         } finally { setIsSaving(false); }
-    }, [studentSemester, student, onSaveStudent, activePopup]);
+    }, [studentSemester, student, onSaveStudent]);
 
     const handleSaveInlineForm = () => { handleQuickUpdate(editFormData); };
 
@@ -236,7 +270,22 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
     const [discToDate, setDiscToDate] = useState('');
 
     const statusOptions = useMemo(() => {
-        const defaults = ['Call Busy', 'Switched Off', 'Not Reachable', 'Department Change', 'University Change'];
+        const defaults = [
+            'Call Busy', 
+            'Not Reachable', 
+            'Academic Reasons',
+            'Financial Reasons',
+            'Administrative / System Reasons',
+            'Personal / Family Reasons',
+            'Job / Career Reasons',
+            'Transfer / Change Reasons',
+            'Decision / Motivation Reasons',
+            'Death-Related',
+            'Health / Medical Related',
+            'Legal / Compliance Issues',
+            'Extracurricular-Sports-Arts',
+            'Miscellaneous'
+        ];
         const used = new Set<string>();
         studentFollowupData.forEach(f => {
             if (f.Status && f.Status.trim()) used.add(f.Status.trim());
@@ -261,260 +310,155 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                 updatedValue = student['Disciplinary Action'] ? `${student['Disciplinary Action']} || ${newRecord}` : newRecord;
             }
             await onSaveStudent(semesterToSave, { ...student, 'Disciplinary Action': updatedValue } as StudentDataRow);
-            // Fix: Correctly close the form using setIsDiscFormOpen instead of isDiscHistoryOpen
             setIsDiscFormOpen(false);
         } finally { setIsSaving(false); }
     };
 
-    const renderInlineEditForm = () => {
-        if (!activePopup) return null;
-        const fields: Record<string, string[]> = { 'credits': ['Credit Requirement', 'Credit Completed'], 'defense': ['Defense Registration', 'Defense Supervisor', 'Defense Status', 'Defense Type'], 'degree': ['Degree Status'], 'mentor': ['Mentor'] };
-        const currentFields = fields[activePopup] || [];
-        const title = activePopup.charAt(0).toUpperCase() + activePopup.slice(1);
-        return (
-            <div className="flex flex-col h-full">
-                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50"><h4 className="text-xs font-black uppercase tracking-widest text-slate-700">Update {title}</h4><button onClick={() => setActivePopup(null)}><X className="w-4 h-4 text-slate-400" /></button></div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 thin-scrollbar">
-                    {currentFields.map(field => (
-                        <div key={field}>
-                            <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">{field}</label>
-                            {field === 'Defense Status' || field === 'Degree Status' ? (
-                                <SearchableSelect value={editFormData[field] || ''} onChange={(v) => setEditFormData({ ...editFormData, [field]: v })} options={field === 'Defense Status' ? ['Ongoing', 'Complete', 'Incomplete', 'Withdrawn'] : ['Complete', 'Ongoing', 'Incomplete']} />
-                            ) : field === 'Defense Type' ? (
-                                <SearchableSelect value={editFormData[field] || ''} onChange={(v) => setEditFormData({ ...editFormData, [field]: v })} options={defenseTypes} />
-                            ) : field === 'Defense Registration' ? (
-                                <input type="date" value={editFormData[field] || ''} onChange={(e) => setEditFormData({ ...editFormData, [field]: e.target.value })} className="w-full text-sm border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500" />
-                            ) : field === 'Mentor' ? (
-                                <SearchableSelect value={editFormData[field] || ''} onChange={(v) => setEditFormData({ ...editFormData, [field]: v })} options={employeeOptions} />
-                            ) : (
-                                <input type="text" value={editFormData[field] || ''} onChange={(e) => setEditFormData({ ...editFormData, [field]: e.target.value })} className="w-full text-sm border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500" />
-                            )}
-                        </div>
-                    ))}
-                </div>
-                <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex space-x-2"><button onClick={() => setActivePopup(null)} className="flex-1 py-2 text-xs font-bold text-slate-500 bg-white border border-slate-200 rounded-lg uppercase">Cancel</button><button onClick={handleSaveInlineForm} disabled={isSaving} className="flex-1 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg uppercase shadow-md flex items-center justify-center">{isSaving ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <Save className="w-3 h-3 mr-2" />} Save</button></div>
-            </div>
-        );
-    };
-
     const handleSaveFollowup = async (finalData?: any) => {
         const semesterToSave = studentSemester || (student as any)._semester;
-        if (!semesterToSave) {
-            alert("Error: Semester information missing for this student.");
-            return;
-        }
-
+        if (!semesterToSave) return;
         const d = finalData || followupFormData;
         const categoryValue = d.Category || (followupContext === 'defense' ? 'Defense Follow up' : followupContext === 'registration' ? 'Registration Follow up' : followupContext === 'dues' ? 'Dues Follow up' : 'General Follow up');
         const targetSemValue = d['Target Semester'] || '';
         const targetPeriodValue = d['Exam Period'] || 'Registration';
+        const isDues = categoryValue === 'Dues Follow up';
         
-        if (followupContext === 'registration' || followupContext === 'dues' || followupContext === 'defense') {
-            const prefix = followupContext === 'registration' ? 'reg' : (followupContext === 'dues' ? 'dues' : 'defense');
-            const targetUid = `${prefix}-${normalizeSemesterName(targetSemValue)}-${normalizeSemesterName(targetPeriodValue)}`;
-            setExpandedRemarks(new Set([targetUid]));
-            setIsRemarksOpen(true);
-        }
-
         setShowFollowupForm(false);
         setIsSaving(true);
         try {
             const now = new Date();
-            const timePart = now.toTimeString().split(' ')[0];
-            const combinedDate = `${now.toISOString().split('T')[0]} ${timePart}`;
+            const combinedDate = `${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0]}`;
             const reFollowupDate = (d['Re-follow up'] || '').split(' ')[0].split('T')[0];
             const contactedByText = d['Contacted By'] || '';
             const idMatch = contactedByText.match(/\(([^)]+)\)$/);
             const contactedById = idMatch ? idMatch[1] : contactedByText;
-            
             const entries = (student['Discussion Remark'] || '').split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
+            
+            const categoricalStatus = d.Status || 'Pending';
+            const savedStatus = isDues ? (d.amount ? `BDT ${d.amount}` : categoricalStatus) : categoricalStatus;
+            const semanticStatusValue = `Done: ${categoricalStatus}`;
 
             if (editingFollowupIndex !== null && editingFollowupIndex >= 0) {
-                // EDIT LOGIC
                 const fields = entries[editingFollowupIndex].split(FIELD_SEP).map(f => f.trim());
-                fields[1] = d.Status;
-                fields[2] = contactedById;
-                fields[3] = reFollowupDate;
-                fields[5] = (d.Remark || d.Status).replace(/\n/g, ' ');
-                if (d.Category) fields[6] = d.Category;
-                if (targetPeriodValue) fields[7] = targetPeriodValue;
-                while (fields.length < 9) fields.push('');
-                fields[8] = 'Done';
+                fields[1] = savedStatus; fields[2] = contactedById; fields[3] = reFollowupDate; fields[5] = (d.Remark || categoricalStatus).replace(/\n/g, ' '); if (d.Category) fields[6] = d.Category; if (targetPeriodValue) fields[7] = targetPeriodValue; while (fields.length < 9) fields.push(''); fields[8] = semanticStatusValue;
                 entries[editingFollowupIndex] = fields.join(FIELD_SEP);
                 const updatedRemarksStr = deduplicateRemarks(entries).join(RECORD_SEP);
                 await onSaveStudent(semesterToSave, { ...student, 'Discussion Remark': updatedRemarksStr } as StudentDataRow);
             } else {
-                // ADD LOGIC
                 const processedRemarks = entries.map(re => {
                     const fields = re.split(FIELD_SEP).map(f => f.trim());
                     const isCatMatch = fields[6] === categoryValue;
                     const isSemMatch = normalizeSemesterName(fields[4]) === normalizeSemesterName(targetSemValue);
-                    if (isCatMatch && isSemMatch && (fields[8] === 'Pending' || (!fields[8] && fields[1] === 'Pending'))) {
-                        while (fields.length < 9) fields.push('');
-                        fields[8] = 'Done'; return fields.join(FIELD_SEP);
+                    const isPeriodMatch = isDues ? fields[7] === targetPeriodValue : true;
+                    if (isCatMatch && isSemMatch && isPeriodMatch && (fields[8]?.startsWith('Pending') || (!fields[8] && fields[1] === 'Pending'))) {
+                        while (fields.length < 9) fields.push(''); fields[8] = `Done: ${fields[8]?.split(': ')[1] || fields[1]}`; return fields.join(FIELD_SEP);
                     }
                     return re;
                 });
-
-                const mainEntryFields = [combinedDate, d.Status, contactedById, reFollowupDate, targetSemValue, (d.Remark || d.Status).replace(/\n/g, ' '), categoryValue, targetPeriodValue, 'Done'];
+                const mainEntryFields = [combinedDate, savedStatus, contactedById, reFollowupDate, targetSemValue, (d.Remark || categoricalStatus).replace(/\n/g, ' '), categoryValue, targetPeriodValue, semanticStatusValue];
                 processedRemarks.push(mainEntryFields.join(FIELD_SEP));
-
-                if (d.snoozeDate && d.snoozeRemark) {
-                    const snoozeEntryFields = [combinedDate, d.Status, contactedById, d.snoozeDate, targetSemValue, d.snoozeRemark, categoryValue, targetPeriodValue, 'Pending'];
-                    processedRemarks.push(snoozeEntryFields.join(FIELD_SEP));
-                    const globalPayload = { 'uniqueid': `SF-SNZ-${Date.now()}`, 'Date': combinedDate, 'Student ID': student['Student ID'], 'Student Name': student['Student Name'], 'Remark': d.snoozeRemark, 'Re-follow up': d.snoozeDate, 'Target Semester': targetSemValue, 'Status': 'Pending', 'Contacted By': contactedById, 'Category': categoryValue, 'Timestamp': new Date().toLocaleString() };
-                    await submitSheetData('add', SHEET_NAMES.FOLLOWUP, globalPayload, 'uniqueid', undefined, STUDENT_LINK_SHEET_ID);
-                }
-
                 const updatedRemarksStr = deduplicateRemarks(processedRemarks).join(RECORD_SEP);
                 await onSaveStudent(semesterToSave, { ...student, 'Discussion Remark': updatedRemarksStr } as StudentDataRow);
-                
-                const mainPayload = { 'uniqueid': `SF-AUTO-${Date.now()}`, 'Date': combinedDate, 'Student ID': student['Student ID'], 'Student Name': student['Student Name'], 'Remark': d.Remark || d.Status, 'Re-follow up': reFollowupDate, 'Target Semester': targetSemValue, 'Status': d.Status, 'Contacted By': contactedById, 'Category': categoryValue, 'Timestamp': new Date().toLocaleString() };
+                const mainPayload = { 'uniqueid': `SF-AUTO-${Date.now()}`, 'Date': combinedDate, 'Student ID': student['Student ID'], 'Student Name': student['Student Name'], 'Remark': d.Remark || categoricalStatus, 'Re-follow up': reFollowupDate, 'Target Semester': targetSemValue, 'Status': savedStatus, 'Contacted By': contactedById, 'Category': categoryValue, 'Timestamp': new Date().toLocaleString() };
                 await submitSheetData('add', SHEET_NAMES.FOLLOWUP, mainPayload, 'uniqueid', undefined, STUDENT_LINK_SHEET_ID);
             }
             await reloadData('followup', false);
-        } finally {
-            setIsSaving(false);
-            setEditingFollowupIndex(null);
-        }
+        } finally { setIsSaving(false); setEditingFollowupIndex(null); }
     };
 
-    const handleSaveDues = async (duesData: any) => {
+    const [showFollowupForm, setShowFollowupForm] = useState(false);
+    const [showSnoozeForm, setShowSnoozeForm] = useState(false);
+    const [snoozeContext, setSnoozeContext] = useState<any>(null);
+
+    const handleSaveSnooze = async (snoozeData: { snoozeDate: string; remark: string; status?: string; contactedBy?: string; amount?: string; defenseData?: any; isTrackingUpdate?: boolean }) => {
         const semesterToSave = studentSemester || (student as any)._semester;
         if (!semesterToSave) return;
         
-        const targetSem = `${duesData.semester} ${duesData.year}`;
-        const targetPeriod = duesData.period;
-        const targetUid = `dues-${normalizeSemesterName(targetSem)}-${normalizeSemesterName(targetPeriod)}`;
+        const currentContext = snoozeContext || { Category: followupContext === 'defense' ? 'Defense Follow up' : (followupContext === 'dues' ? 'Dues Follow up' : 'General Follow up'), 'Target Semester': '', 'Exam Period': 'Registration' };
+        const category = currentContext.Category || 'General Follow up';
+        const isDefense = category === 'Defense Follow up';
         
-        const now = new Date();
-        const combinedDate = `${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0]}`;
-        const approverId = (duesData.approver.match(/\(([^)]+)\)$/) || [])[1] || duesData.approver;
-        const duesFields = [combinedDate, duesData.amount, duesData.period, targetSem, approverId, duesData.historyRemark];
-        if (editingDuesData?.DoneStatus === 'DONE') duesFields.push('DONE');
-        const entryStr = duesFields.join(FIELD_SEP);
-        const rawDues = student['Dues'] || '';
-        const entries = rawDues.includes(FIELD_SEP) ? rawDues.split(RECORD_SEP).map(s => s.trim()).filter(Boolean) : [];
-        if (editingDuesIndex !== null && editingDuesIndex >= 0) entries[editingDuesIndex] = entryStr;
-        else entries.push(entryStr);
-        const updatedDues = entries.join(RECORD_SEP);
-        
-        let updatedRemarks = student['Discussion Remark'] || '';
-        let globalFollowupPayload: any = null;
-
-        if (duesData.snoozeDate && duesData.snoozeRemark) {
-            const remarkEntries = updatedRemarks.split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
-            const processedRemarks = remarkEntries.map(re => {
-                const fields = re.split(FIELD_SEP).map(f => f.trim());
-                const isCatMatch = fields[6]?.trim().toLowerCase() === 'dues follow up';
-                const isSemMatch = normalizeSemesterName(fields[4]) === normalizeSemesterName(targetSem);
-                const isPeriodMatch = fields[7] === targetPeriod;
-                if (isCatMatch && isSemMatch && isPeriodMatch && (fields[8] === 'Pending' || (!fields[8] && fields[1] === 'Pending'))) {
-                    while (fields.length < 9) fields.push('');
-                    fields[8] = 'Done'; return fields.join(FIELD_SEP);
-                }
-                return re;
-            });
-            const snoozeEntryFields = [combinedDate, 'Dues Set', 'System', duesData.snoozeDate, targetSem, duesData.snoozeRemark, 'Dues Follow up', targetPeriod, 'Pending'];
-            processedRemarks.push(snoozeEntryFields.join(FIELD_SEP));
-            updatedRemarks = processedRemarks.join(RECORD_SEP);
-            globalFollowupPayload = { 'uniqueid': `SF-SNZ-DUES-${Date.now()}`, 'Date': combinedDate, 'Student ID': student['Student ID'], 'Student Name': student['Student Name'], 'Remark': duesData.snoozeRemark, 'Re-follow up': duesData.snoozeDate, 'Target Semester': targetSem, 'Status': 'Pending', 'Contacted By': 'System', 'Category': 'Dues Follow up', 'Timestamp': new Date().toLocaleString() };
-        }
-
-        setExpandedRemarks(new Set([targetUid]));
-        setIsRemarksOpen(true);
-        setShowDuesForm(false); 
-        onSaveStudent(semesterToSave, { ...student, 'Dues': updatedDues, 'Discussion Remark': updatedRemarks } as StudentDataRow);
-
+        setShowSnoozeForm(false); 
         setIsSaving(true);
-        try {
-            if (globalFollowupPayload) {
-                await submitSheetData('add', SHEET_NAMES.FOLLOWUP, globalFollowupPayload, 'uniqueid', undefined, STUDENT_LINK_SHEET_ID);
+        
+        if (isDefense && snoozeData.isTrackingUpdate && snoozeData.defenseData) {
+            const def = snoozeData.defenseData;
+            const packedStatus = [
+                def.regFormDate,
+                def.defenseStatus,
+                def.defenseSupervisor,
+                def.defenseType,
+                def.reportTitle,
+                def.libraryClearance
+            ].join(' ;; ');
+
+            try {
+                await onSaveStudent(semesterToSave, { 
+                    ...student, 
+                    'Defense Status': packedStatus 
+                } as StudentDataRow);
+            } finally {
+                setIsSaving(false); 
+                setSnoozeContext(null);
             }
-            await reloadData('followup', false);
-        } finally {
-            setIsSaving(false);
-            setEditingDuesIndex(null); setEditingDuesData(null);
+            return;
         }
-    };
-
-    const handleSaveSnooze = async (snoozeData: { snoozeDate: string; remark: string; status?: string; contactedBy?: string }) => {
-        const semesterToSave = studentSemester || (student as any)._semester;
-        if (!semesterToSave || !snoozeContext) return;
-
-        const targetSem = (snoozeContext['Target Semester'] || '').trim();
-        const targetPeriod = (snoozeContext['Exam Period'] || '').trim();
-        const prefix = followupContext === 'registration' ? 'reg' : (followupContext === 'dues' ? 'dues' : 'standard');
-        const targetUid = `${prefix}-${normalizeSemesterName(targetSem)}-${normalizeSemesterName(targetPeriod)}`;
-        
-        // IMMEDIATE UI CLOSE
-        setShowSnoozeForm(false);
-        setExpandedRemarks(new Set([targetUid]));
-        setIsRemarksOpen(true);
-        
-        let updatedEntries: string[] = [];
-        const entries = (student['Discussion Remark'] || '').split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
-        let category = 'General Follow up';
-        if (followupContext === 'registration') category = 'Registration Follow up';
-        else if (followupContext === 'dues') category = 'Dues Follow up';
-        else if (followupContext === 'defense') category = 'Defense Follow up';
 
         let personnel = 'System';
-        if (snoozeData.contactedBy) {
-            const idMatch = snoozeData.contactedBy.match(/\(([^)]+)\)$/);
-            personnel = idMatch ? idMatch[1] : snoozeData.contactedBy;
+        if (snoozeData.contactedBy) { 
+            const idMatch = snoozeData.contactedBy.match(/\(([^)]+)\)$/); 
+            personnel = idMatch ? idMatch[1] : snoozeData.contactedBy; 
         }
-
-        const now = new Date();
+        
+        const now = new Date(); 
         const combinedDate = `${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0]}`;
+        const remarkEntries = (student['Discussion Remark'] || '').split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
+
+        const categoricalStatus = snoozeData.status || 'Pending';
+        const isDues = category === 'Dues Follow up';
+        const savedStatus = isDues ? (snoozeData.amount ? `BDT ${snoozeData.amount}` : categoricalStatus) : categoricalStatus;
+        const semanticStatusValue = `Pending: ${categoricalStatus}`;
 
         if (editingFollowupIndex !== null && editingFollowupIndex >= 0) {
-            // EDIT MODE
-            const fields = entries[editingFollowupIndex].split(FIELD_SEP).map(f => f.trim());
-            fields[1] = snoozeData.status || fields[1];
-            fields[2] = personnel;
-            fields[3] = snoozeData.snoozeDate;
-            fields[5] = snoozeData.remark;
-            while (fields.length < 9) fields.push('');
-            fields[8] = 'Pending';
-            entries[editingFollowupIndex] = fields.join(FIELD_SEP);
-            updatedEntries = entries;
+            const originalFields = remarkEntries[editingFollowupIndex].split(FIELD_SEP).map(f => f.trim());
+            originalFields[1] = savedStatus;
+            originalFields[2] = personnel;
+            originalFields[3] = snoozeData.snoozeDate;
+            originalFields[5] = snoozeData.remark;
+            while (originalFields.length < 9) originalFields.push('');
+            originalFields[8] = semanticStatusValue; 
+
+            remarkEntries[editingFollowupIndex] = originalFields.join(FIELD_SEP);
+            const finalRemarksStr = deduplicateRemarks(remarkEntries).join(RECORD_SEP);
+            await onSaveStudent(semesterToSave, { ...student, 'Discussion Remark': finalRemarksStr } as StudentDataRow);
         } else {
-            // ADD MODE
-            const remarkEntries = (student['Discussion Remark'] || '').split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
+            const targetSem = (currentContext['Target Semester'] || '').trim();
+            const targetPeriod = (currentContext['Exam Period'] || '').trim();
+
             const processedRemarks = remarkEntries.map(re => {
                 const fields = re.split(FIELD_SEP).map(f => f.trim());
-                const isCatMatch = fields[6]?.trim().toLowerCase() === category.toLowerCase();
-                const isSemMatch = normalizeSemesterName(fields[4]) === normalizeSemesterName(targetSem);
-                const isPeriodMatch = (followupContext === 'registration' || followupContext === 'defense') ? true : fields[7] === targetPeriod;
-                if (isCatMatch && isSemMatch && isPeriodMatch && (fields[8] === 'Pending' || (!fields[8] && fields[1] === 'Pending'))) {
-                    while (fields.length < 9) fields.push('');
-                    fields[8] = 'Done'; return fields.join(FIELD_SEP);
+                if (fields[6]?.trim().toLowerCase() === category.toLowerCase() && normalizeSemesterName(fields[4]) === normalizeSemesterName(targetSem) && (fields[7] === targetPeriod) && (fields[8]?.startsWith('Pending') || (!fields[8] && fields[1] === 'Pending'))) {
+                    while (fields.length < 9) fields.push(''); fields[8] = `Done: ${fields[8]?.split(': ')[1] || fields[1]}`; return fields.join(FIELD_SEP);
                 }
                 return re;
             });
-            const interactionFields = [combinedDate, snoozeData.status || 'Pending', personnel, snoozeData.snoozeDate, targetSem, snoozeData.remark, category, targetPeriod, 'Pending'];
-            processedRemarks.push(interactionFields.join(FIELD_SEP));
-            updatedEntries = processedRemarks;
-        }
 
-        const deduplicatedRemarksStr = deduplicateRemarks(updatedEntries).join(RECORD_SEP);
-        
-        // OPTIMISTIC UPDATE: Trigger parent state change before background sync
-        onSaveStudent(semesterToSave, { ...student, 'Discussion Remark': deduplicatedRemarksStr } as StudentDataRow);
-
-        setIsSaving(true);
-        try {
-            if (editingFollowupIndex === null) {
-                // Only send to global followup sheet if it's a NEW snooze
-                const globalPayload = { 'uniqueid': `SF-SNZ-${Date.now()}`, 'Date': combinedDate, 'Student ID': student['Student ID'], 'Student Name': student['Student Name'], 'Remark': snoozeData.remark, 'Re-follow up': snoozeData.snoozeDate, 'Target Semester': targetSem, 'Status': 'Pending', 'Contacted By': personnel, 'Category': category, 'Timestamp': new Date().toLocaleString() };
+            const interactionFields = [combinedDate, savedStatus, personnel, snoozeData.snoozeDate, targetSem, snoozeData.remark, category, targetPeriod, semanticStatusValue];
+            processedRemarks.push(interactionFields.join(FIELD_SEP)); 
+            
+            const deduplicatedRemarksStr = deduplicateRemarks(processedRemarks).join(RECORD_SEP);
+            await onSaveStudent(semesterToSave, { ...student, 'Discussion Remark': deduplicatedRemarksStr } as StudentDataRow);
+            
+            try {
+                const globalPayload = { 'uniqueid': `SF-SNZ-${Date.now()}`, 'Date': combinedDate, 'Student ID': student['Student ID'], 'Student Name': student['Student Name'], 'Remark': snoozeData.remark, 'Re-follow up': snoozeData.snoozeDate, 'Target Semester': targetSem, 'Status': savedStatus, 'Contacted By': personnel, 'Category': category, 'Timestamp': new Date().toLocaleString() };
                 await submitSheetData('add', SHEET_NAMES.FOLLOWUP, globalPayload, 'uniqueid', undefined, STUDENT_LINK_SHEET_ID);
-            }
-            await reloadData('followup', false);
-        } finally {
-            setIsSaving(false);
-            setSnoozeContext(null); setEditingFollowupIndex(null);
+                await reloadData('followup', false);
+            } catch(e) { console.error("Global log sync failed", e); }
         }
+        
+        setIsSaving(false); 
+        setSnoozeContext(null); 
+        setEditingFollowupIndex(null);
     };
 
     const handleSaveSnoozeClear = useCallback(async (context: any) => {
@@ -524,58 +468,23 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         try {
             const targetSem = (context['Target Semester'] || '').trim();
             const targetPeriod = (context['Exam Period'] || '').trim();
-            
-            let newDuesValue = student['Dues'] || '';
-            if (followupContext === 'dues') {
-                if (!newDuesValue.includes(FIELD_SEP)) {
-                    const now = new Date();
-                    const combinedDate = `${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0]}`;
-                    newDuesValue = [combinedDate, newDuesValue, 'Registration', '', 'System', `Legacy dues marked as done.`, 'DONE'].join(FIELD_SEP);
-                } else {
-                    const entries = newDuesValue.split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
-                    if (context._index >= 0 && context._index < entries.length) {
-                        const fields = entries[context._index].split(FIELD_SEP).map(f => f.trim());
-                        while (fields.length < 6) fields.push('');
-                        fields[6] = 'DONE'; entries[context._index] = fields.join(FIELD_SEP);
-                        newDuesValue = entries.join(RECORD_SEP);
-                    } else {
-                        const updatedEntries = entries.map(entry => {
-                            const fields = entry.split(FIELD_SEP).map(f => f.trim());
-                            const isMatch = normalizeSemesterName(fields[3]) === normalizeSemesterName(targetSem) && fields[2] === targetPeriod;
-                            if (isMatch) {
-                                while (fields.length < 6) fields.push('');
-                                fields[6] = 'DONE'; return fields.join(FIELD_SEP);
-                            }
-                            return entry;
-                        });
-                        newDuesValue = updatedEntries.join(RECORD_SEP);
-                    }
-                }
-            }
+            const category = context.Category || 'General Follow up';
 
             const remarkEntries = (student['Discussion Remark'] || '').split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
-            let category = 'General Follow up';
-            if (followupContext === 'registration') category = 'Registration Follow up';
-            else if (followupContext === 'dues') category = 'Dues Follow up';
-            else if (followupContext === 'defense') category = 'Defense Follow up';
-
             const resolvedRemarks = remarkEntries.map(re => {
                 const fields = re.split(FIELD_SEP).map(f => f.trim());
-                const isCatMatch = fields[6]?.trim().toLowerCase() === category.toLowerCase();
-                const isSemMatch = normalizeSemesterName(fields[4]) === normalizeSemesterName(targetSem);
-                const isPeriodMatch = (followupContext === 'registration' || followupContext === 'defense') ? true : fields[7] === targetPeriod;
-                if (isCatMatch && isSemMatch && isPeriodMatch && (fields[8] === 'Pending' || (!fields[8] && fields[1] === 'Pending'))) {
-                    while (fields.length < 9) fields.push('');
-                    fields[8] = 'Done'; return fields.join(FIELD_SEP);
+                if (fields[6]?.trim().toLowerCase() === category.toLowerCase() && normalizeSemesterName(fields[4]) === normalizeSemesterName(targetSem) && (fields[7] === targetPeriod) && (fields[8]?.startsWith('Pending') || (!fields[8] && fields[1] === 'Pending'))) {
+                    while (fields.length < 9) fields.push(''); 
+                    const categoricalStatus = fields[8]?.includes(':') ? fields[8].split(': ')[1] : fields[1];
+                    fields[8] = `Done: ${categoricalStatus}`; 
+                    return fields.join(FIELD_SEP);
                 }
                 return re;
             });
             const finalRemarksStr = deduplicateRemarks(resolvedRemarks).join(RECORD_SEP);
-            await onSaveStudent(semesterToSave, { ...student, 'Dues': newDuesValue, 'Discussion Remark': finalRemarksStr } as StudentDataRow);
-        } finally {
-            setIsSaving(false);
-        }
-    }, [studentSemester, student, onSaveStudent, followupContext]);
+            await onSaveStudent(semesterToSave, { ...student, 'Discussion Remark': finalRemarksStr } as StudentDataRow);
+        } finally { setIsSaving(false); }
+    }, [studentSemester, student, onSaveStudent]);
 
     const handleDeleteFollowup = async (index: number, source: string = 'discussion') => {
         setConfirmDeleteInfo(null);
@@ -584,41 +493,27 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         setIsSaving(true);
         try {
             let updatedRemarks = student['Discussion Remark'] || '';
-            let updatedDues = student['Dues'] || '';
-            if (source === 'dues') {
-                const entries = updatedDues.split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
-                if (index >= 0 && index < entries.length) {
-                    const duesFields = entries[index].split(FIELD_SEP).map(f => f.trim());
-                    const targetSem = (duesFields[3] || '').trim(), targetPeriod = (duesFields[2] || '').trim();
-                    const remarkEntries = updatedRemarks.split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
-                    const filteredRemarks = remarkEntries.filter(re => {
-                        const fields = re.split(FIELD_SEP).map(f => f.trim());
-                        return !(fields[6]?.trim().toLowerCase() === 'dues follow up' && normalizeSemesterName(fields[4]) === normalizeSemesterName(targetSem) && fields[7] === targetPeriod);
-                    });
-                    updatedRemarks = filteredRemarks.join(RECORD_SEP);
-                    entries.splice(index, 1); 
-                    updatedDues = entries.join(RECORD_SEP);
-                }
-            } else {
-                const remarkEntries = updatedRemarks.split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
-                if (index >= 0 && index < remarkEntries.length) {
-                    remarkEntries.splice(index, 1);
-                    updatedRemarks = remarkEntries.join(RECORD_SEP);
-                }
+            const remarkEntries = updatedRemarks.split(RECORD_SEP).map(s => s.trim()).filter(Boolean);
+            if (index >= 0 && index < remarkEntries.length) { 
+                remarkEntries.splice(index, 1); 
+                updatedRemarks = remarkEntries.join(RECORD_SEP); 
             }
-            const finalRemarksStr = deduplicateRemarks(updatedRemarks.split(RECORD_SEP)).join(RECORD_SEP);
-            await onSaveStudent(semesterToSave, { ...student, 'Dues': updatedDues, 'Discussion Remark': finalRemarksStr } as StudentDataRow);
-        } finally { 
-            setIsSaving(false); 
-        }
+            await onSaveStudent(semesterToSave, { ...student, 'Discussion Remark': updatedRemarks } as StudentDataRow);
+        } finally { setIsSaving(false); }
     };
 
     const handleStatCardClick = useCallback((type: string) => {
-        if (type === 'history') { setActivePopup(null); setIsRemarksOpen(false); setFollowupContext('standard'); }
-        else if (type === 'remarks') { setIsRemarksOpen(true); setActivePopup(null); setFollowupContext('registration'); }
-        else if (type === 'remarks-defense') { setIsRemarksOpen(true); setActivePopup(null); setFollowupContext('defense'); }
-        else if (type === 'remarks-dues') { setIsRemarksOpen(true); setActivePopup(null); setFollowupContext('dues'); }
-        else { setActivePopup(type); setIsRemarksOpen(false); setFollowupContext('standard'); }
+        if (type === 'history') { 
+            setActivePopup(null); setIsRemarksOpen(false); setFollowupContext('standard'); 
+        } else if (type === 'remarks') { 
+            setFollowupContext('registration'); setActivePopup(null); setIsRemarksOpen(true); 
+        } else if (type === 'remarks-defense') { 
+            setFollowupContext('defense'); setActivePopup(null); setIsRemarksOpen(true); 
+        } else if (type === 'remarks-dues') { 
+            setFollowupContext('dues'); setActivePopup(null); setIsRemarksOpen(true); 
+        } else { 
+            setActivePopup(type); setIsRemarksOpen(false); setFollowupContext('standard'); 
+        }
     }, []);
 
     const dropInfo = useMemo(() => {
@@ -628,6 +523,84 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         if (classification.includes('Temporary')) return { label: 'T. Drop', color: 'text-orange-600' };
         return { label: classification, color: 'text-slate-600' };
     }, [student]);
+
+    const renderInlineEditForm = () => {
+        if (!activePopup) return null;
+
+        const handleFieldChange = (key: string, value: string) => {
+            setEditFormData((prev: any) => ({ ...prev, [key]: value }));
+        };
+
+        const renderField = (label: string, key: string, type: 'text' | 'number' | 'date' | 'select' = 'text', options?: string[]) => (
+            <div className="space-y-1.5">
+                <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider">{label}</label>
+                {type === 'select' ? (
+                    <SearchableSelect 
+                        value={editFormData[key] || ''} 
+                        onChange={(val) => handleFieldChange(key, val)} 
+                        options={options || []} 
+                    />
+                ) : (
+                    <input 
+                        type={type} 
+                        value={editFormData[key] || ''} 
+                        onChange={(e) => handleFieldChange(key, e.target.value)} 
+                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                    />
+                )}
+            </div>
+        );
+
+        return (
+            <div className="flex flex-col h-full bg-white">
+                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
+                    <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-700 flex items-center">
+                        <Pencil className="w-3.5 h-3.5 mr-2 text-blue-600" />
+                        Edit {activePopup.charAt(0).toUpperCase() + activePopup.slice(1)}
+                    </h4>
+                    <button onClick={() => setActivePopup(null)} className="p-1 hover:bg-slate-50 rounded-full text-slate-400">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 thin-scrollbar">
+                    {activePopup === 'credits' && (
+                        <>
+                            {renderField('Credit Requirement', 'Credit Requirement', 'number')}
+                            {renderField('Credit Completed', 'Credit Completed', 'number')}
+                        </>
+                    )}
+                    {activePopup === 'degree' && (
+                        <>
+                            {renderField('Degree Status', 'Degree Status', 'select', ['Not Applied', 'Applied', 'Processing', 'Complete'])}
+                        </>
+                    )}
+                    {activePopup === 'mentor' && (
+                        <>
+                            {renderField('Mentor Name / ID', 'Mentor', 'select', employeeOptions)}
+                        </>
+                    )}
+                </div>
+
+                <div className="p-4 border-t border-slate-100 bg-slate-50/30 flex space-x-2 shrink-0">
+                    <button 
+                        onClick={() => setActivePopup(null)} 
+                        className="flex-1 py-2 text-[10px] font-black text-slate-500 bg-white border border-slate-200 rounded-lg uppercase hover:bg-slate-50 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={handleSaveInlineForm}
+                        disabled={isSaving}
+                        className="flex-[1.5] py-2 text-[10px] font-black text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-lg flex items-center justify-center uppercase transition-all active:scale-95 disabled:opacity-50"
+                    >
+                        {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : <Save className="w-3.5 h-3.5 mr-2" />}
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        );
+    };
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative bg-white font-sans h-full">
@@ -644,21 +617,22 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                     toggleRemarkExpansion={(uid) => setExpandedRemarks(prev => prev.has(uid) ? new Set() : new Set([uid]))}
                     formatDate={formatDisplayDate} 
                     onAddFollowup={() => { 
-                        if (followupContext === 'dues') { 
-                            setEditingDuesIndex(null); setEditingDuesData(null); setShowDuesForm(true); 
-                        } else if (followupContext !== 'registration') { 
+                        if ((followupContext as string) === 'defense') {
+                            setActiveDefenseMode('tracking'); setSnoozeContext(null); setEditingFollowupIndex(null); setShowSnoozeForm(true);
+                        } else if (followupContext !== 'registration' && followupContext !== 'dues') { 
                             const now = new Date(); const datePart = now.toISOString().split('T')[0]; 
-                            setFollowupFormData({ Date: datePart, Remark: '', 'Re-follow up': '', Status: '', 'Contacted By': '', 'Target Semester': '', Category: followupContext === 'defense' ? 'Defense Follow up' : '' }); 
+                            setFollowupFormData({ Date: datePart, Remark: '', 'Re-follow up': '', Status: '', 'Contacted By': '', 'Target Semester': '', Category: (followupContext as string) === 'defense' ? 'Defense Follow up' : '' }); 
                             setEditingFollowupIndex(null); setShowFollowupForm(true); 
                         } 
                     }}
                     onEditFollowup={(item) => { 
-                        if (item._source === 'dues') { setEditingDuesIndex(item._index); setEditingDuesData(item); setShowDuesForm(true); } 
-                        else if (item.SemanticStatus === 'Pending' || item.SemanticStatus === 'Done') { setEditingFollowupIndex(item._index); setSnoozeContext(item); setShowSnoozeForm(true); }
+                        if (item.SemanticStatus?.startsWith('Pending') || item.SemanticStatus?.startsWith('Done')) { setActiveDefenseMode('snooze'); setEditingFollowupIndex(item._index); setSnoozeContext(item); setShowSnoozeForm(true); }
                         else { const cleanDate = (item.Date || '').split(' ')[0].split('T')[0]; const cleanReFollowup = (item['Re-follow up'] || '').split(' ')[0].split('T')[0]; setFollowupFormData({ Date: cleanDate, Remark: item.Remark, 'Re-follow up': cleanReFollowup, Status: item.Status, 'Contacted By': item['Contacted By'], 'Target Semester': item['Target Semester'], Category: item.Category || '' } as any); setEditingFollowupIndex(item._index); setShowFollowupForm(true); } 
                     }}
                     onDeleteFollowup={(idx, source) => setConfirmDeleteInfo({ index: idx, source })}
-                    onSnoozeFollowup={(item) => { setSnoozeContext(item); setEditingFollowupIndex(null); setShowSnoozeForm(true); }}
+                    onSnoozeFollowup={(item, mode) => { 
+                        setActiveDefenseMode(mode || 'snooze'); setSnoozeContext(item); setEditingFollowupIndex(null); setShowSnoozeForm(true); 
+                    }}
                     onClearSnoozeFollowup={handleSaveSnoozeClear}
                     discStatus={discStatus} discRecords={discRecords} isDiscHistoryOpen={isDiscHistoryOpen} toggleDiscHistory={() => setIsDiscHistoryOpen(!isDiscHistoryOpen)}
                     onAddDisc={() => { setDiscReason(''); setDiscFromDate(new Date().toISOString().split('T')[0]); setDiscToDate(''); setEditingDiscIndex(null); setIsDiscFormOpen(true); }}
@@ -671,14 +645,9 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
             </div>
             {isDiscFormOpen && (<div className="absolute inset-0 z-[150] p-3 bg-white/95 backdrop-blur-sm"><StudentDisciplinaryForm mode={editingDiscIndex !== null ? 'edit' : 'add'} discReason={discReason} setDiscReason={setDiscReason} discFromDate={discFromDate} setDiscFromDate={setDiscFromDate} discToDate={discToDate} setDiscToDate={setDiscToDate} isExpired={discStatus.isExpired} isSaving={isSaving} onSave={handleSaveDisc} onClose={() => setIsDiscFormOpen(false)} /></div>)}
             {showFollowupForm && (<StudentFollowupForm student={student} formData={followupFormData} setFormData={setFollowupFormData} employeeOptions={employeeOptions} statusOptions={statusOptions} isSaving={isSaving} onSave={handleSaveFollowup} onClose={() => setShowFollowupForm(false)} />)}
-            {showDuesForm && (<StudentDuesForm student={student} employeeOptions={employeeOptions} isSaving={isSaving} onSave={handleSaveDues} onClose={() => { setShowDuesForm(false); setEditingDuesData(null); setEditingDuesIndex(null); }} initialData={editingDuesData} />)}
-            {showSnoozeForm && (<StudentSnoozeForm student={student} isSaving={isSaving} onSave={handleSaveSnooze} onClose={() => { setShowSnoozeForm(false); setSnoozeContext(null); setEditingFollowupIndex(null); }} initialData={editingFollowupIndex !== null ? snoozeContext : null} statusOptions={statusOptions} employeeOptions={employeeOptions} isRegistration={followupContext === 'registration'} />)}
-            <ConfirmDialog isOpen={confirmDeleteInfo !== null} title="Delete Record?" message={confirmDeleteInfo?.source === 'dues' ? "This will permanently delete the Main Dues Record and ALL associated History Logs for this session. This cannot be undone." : "This action will permanently remove this history log. The Main Dues record will remain unchanged."} onConfirm={() => confirmDeleteInfo !== null && handleDeleteFollowup(confirmDeleteInfo.index, confirmDeleteInfo.source)} onCancel={() => setConfirmDeleteInfo(null)} />
-            <ConfirmDialog confirmLabel="Clear" isOpen={confirmClearDisc} title="Clear All Records?" message="Are you sure you want to clear all disciplinary history for this student? This is a permanent action." onConfirm={() => { 
-                const semesterToSave = studentSemester || (student as any)._semester;
-                setConfirmClearDisc(false); 
-                onSaveStudent(semesterToSave!, { ...student, 'Disciplinary Action': '' } as StudentDataRow); 
-            }} onCancel={() => setConfirmClearDisc(false)} />
+            {showSnoozeForm && (<StudentSnoozeForm student={student} isSaving={isSaving} onSave={handleSaveSnooze} onClose={() => { setShowSnoozeForm(false); setSnoozeContext(null); setEditingFollowupIndex(null); }} initialData={editingFollowupIndex !== null ? snoozeContext : null} statusOptions={statusOptions} employeeOptions={employeeOptions} isRegistration={followupContext === 'registration'} isDues={followupContext === 'dues'} isDefense={followupContext === 'defense'} defenseMode={activeDefenseMode} />)}
+            <ConfirmDialog isOpen={confirmDeleteInfo !== null} title="Delete Record?" message={"This action will permanently remove this history log interaction. This cannot be undone."} onConfirm={() => confirmDeleteInfo !== null && handleDeleteFollowup(confirmDeleteInfo.index, confirmDeleteInfo.source)} onCancel={() => setConfirmDeleteInfo(null)} />
+            <ConfirmDialog confirmLabel="Clear" isOpen={confirmClearDisc} title="Clear All Records?" message="Are you sure you want to clear all disciplinary history for this student? This is a permanent action." onConfirm={() => { const semesterToSave = studentSemester || (student as any)._semester; setConfirmClearDisc(false); onSaveStudent(semesterToSave!, { ...student, 'Disciplinary Action': '' } as StudentDataRow); }} onCancel={() => setConfirmClearDisc(false)} />
         </div>
     );
 };

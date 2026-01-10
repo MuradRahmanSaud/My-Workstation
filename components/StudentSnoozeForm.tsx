@@ -1,147 +1,399 @@
-import React, { useState, useEffect } from 'react';
-import { Clock, Save, Loader2, X, MessageSquare, Calendar, RefreshCcw, CheckCircle2, UserCheck } from 'lucide-react';
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { Clock, Save, Loader2, X, MessageSquare, Calendar, RefreshCcw, CheckCircle2, UserCheck, Phone, Banknote, Plus, Check, Search, GraduationCap, ShieldCheck, FileText, ClipboardList, Tags } from 'lucide-react';
 import { StudentDataRow } from '../types';
 import { SearchableSelect } from './EditEntryModal';
 
 interface StudentSnoozeFormProps {
     student: StudentDataRow;
     isSaving: boolean;
-    onSave: (data: { snoozeDate: string; remark: string; status?: string; contactedBy?: string }) => void;
+    onSave: (data: { snoozeDate: string; remark: string; status?: string; contactedBy?: string; amount?: string; defenseData?: any; isTrackingUpdate?: boolean }) => void;
     onClose: () => void;
     initialData?: any; 
     statusOptions?: string[];
     employeeOptions?: string[];
     isRegistration?: boolean;
+    isDues?: boolean;
+    isDefense?: boolean;
+    defenseMode?: 'tracking' | 'snooze'; // New prop to distinguish behavior
 }
 
 export const StudentSnoozeForm: React.FC<StudentSnoozeFormProps> = ({
-    student, isSaving, onSave, onClose, initialData, statusOptions = [], employeeOptions = [], isRegistration = false
+    student, isSaving, onSave, onClose, initialData, statusOptions = [], employeeOptions = [], isRegistration = false, isDues = false, isDefense = false, defenseMode = 'snooze'
 }) => {
     const [snoozeDate, setSnoozeDate] = useState('');
     const [remark, setRemark] = useState('');
     const [status, setStatus] = useState('');
     const [contactedBy, setContactedBy] = useState('');
+    const [amount, setAmount] = useState('');
+    
+    // Defense Specific States
+    const [regFormDate, setRegFormDate] = useState('');
+    const [defenseSupervisor, setDefenseSupervisor] = useState('');
+    const [defenseType, setDefenseType] = useState('Thesis');
+    const [reportTitle, setReportTitle] = useState('');
+    const [libraryClearance, setLibraryClearance] = useState('Pending');
+    
+    // Manage dynamic status tabs
+    const [localStatusOptions, setLocalStatusOptions] = useState<string[]>([]);
+    const [isAddingStatus, setIsAddingStatus] = useState(false);
+    const [newStatusValue, setNewStatusValue] = useState('');
+    const [statusSearch, setStatusSearch] = useState('');
+
+    // Dynamic Defense Type Tabs
+    const [defenseTypeOptions, setDefenseTypeOptions] = useState(['Thesis', 'Project', 'Internship']);
+    const [isAddingDefType, setIsAddingDefType] = useState(false);
+    const [newDefTypeValue, setNewDefTypeValue] = useState('');
+
+    const defenseStatusOptions = ['On going', 'Pre-defense', 'Final Defense', 'Grade Sheet', 'Degree'];
 
     useEffect(() => {
+        if (statusOptions.length > 0) {
+            setLocalStatusOptions(statusOptions);
+        }
+    }, [statusOptions]);
+
+    useEffect(() => {
+        // Parse existing packed defense status if available
+        const rawDefStatus = student['Defense Status'] || '';
+        if (isDefense && rawDefStatus.includes(' ;; ')) {
+            const fields = rawDefStatus.split(' ;; ').map(f => f.trim());
+            setRegFormDate(fields[0] || '');
+            setStatus(fields[1] || 'On going');
+            setDefenseSupervisor(fields[2] || '');
+            setDefenseType(fields[3] || 'Thesis');
+            setReportTitle(fields[4] || '');
+            setLibraryClearance(fields[5] || 'Pending');
+        } else if (isDefense) {
+            setStatus(rawDefStatus || 'On going');
+            setDefenseSupervisor(student['Defense Supervisor'] || '');
+            setDefenseType(student['Defense Type'] || 'Thesis');
+            setRegFormDate(student['Defense Registration'] || '');
+        }
+
         if (initialData) {
             const dateStr = initialData['Re-follow up'] || '';
             const cleanDate = dateStr.split(' ')[0].split('T')[0];
             setSnoozeDate(cleanDate);
             setRemark(initialData.Remark || '');
-            setStatus(initialData.Status || '');
             setContactedBy(initialData['Contacted By'] || '');
+            
+            if (isDues) {
+                const rawStatus = initialData.Status || '';
+                const match = String(rawStatus).match(/\d+/);
+                setAmount(match ? match[0] : '');
+                const semanticStatus = initialData.SemanticStatus || '';
+                if (semanticStatus.includes(':')) {
+                    setStatus(semanticStatus.split(':')[1].trim());
+                } else {
+                    setStatus(rawStatus.startsWith('BDT') ? 'Pending' : rawStatus);
+                }
+            }
         }
-    }, [initialData]);
+    }, [initialData, isDues, isDefense, student]);
+
+    const handleAddStatus = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newStatusValue.trim() && !localStatusOptions.includes(newStatusValue.trim())) {
+            setLocalStatusOptions(prev => [...prev, newStatusValue.trim()].sort());
+            setStatus(newStatusValue.trim());
+            setNewStatusValue('');
+            setIsAddingStatus(false);
+        }
+    };
+
+    const handleAddDefType = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newDefTypeValue.trim() && !defenseTypeOptions.includes(newDefTypeValue.trim())) {
+            setDefenseTypeOptions(prev => [...prev, newDefTypeValue.trim()].sort());
+            setDefenseType(newDefTypeValue.trim());
+            setNewDefTypeValue('');
+            setIsAddingDefType(false);
+        }
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!snoozeDate || !remark || !status || !contactedBy) return;
+        
+        if (isDefense && defenseMode === 'tracking') {
+            if (!regFormDate || !defenseSupervisor || !status) return;
+            onSave({
+                snoozeDate: '', 
+                remark: '', 
+                isTrackingUpdate: true,
+                defenseData: {
+                    regFormDate,
+                    defenseStatus: status,
+                    defenseSupervisor,
+                    defenseType,
+                    reportTitle,
+                    libraryClearance
+                }
+            });
+            return;
+        }
+
+        if (!snoozeDate || !status || !contactedBy) return;
 
         onSave({ 
             snoozeDate, 
             remark, 
-            status: status, 
-            contactedBy: contactedBy
+            status: status,
+            contactedBy: contactedBy,
+            amount: isDues ? amount : undefined
         });
     };
 
-    const isInvalid = !snoozeDate || !remark || !status || !contactedBy;
+    const filteredStatusOptions = useMemo(() => {
+        if (!statusSearch.trim()) return localStatusOptions;
+        const query = statusSearch.toLowerCase();
+        return localStatusOptions.filter(opt => opt.toLowerCase().includes(query));
+    }, [localStatusOptions, statusSearch]);
+
+    const isTrackingMode = isDefense && defenseMode === 'tracking';
+    
+    // Validation
+    const isInvalid = isTrackingMode 
+        ? (!regFormDate || !defenseSupervisor || !status)
+        : (!snoozeDate || !status || !contactedBy || (isDues && !amount));
 
     return (
-        /* 
-           Positioning updates: 
-           - Left/Translate-X: Centers the form.
-           - Top: Lowered from 180px to 280px to align below the History Log title area.
-           - Width: Increased max-width to 440px (from 380px) and adjusted percentage for small screens.
-        */
-        <div className="absolute left-1/2 -translate-x-1/2 top-[280px] z-[170] w-[96%] max-w-[440px] bg-white border border-indigo-100 rounded-xl flex flex-col shadow-[0_25px_60px_rgba(0,0,0,0.25)] ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-200 max-h-[70vh]">
+        <div className="absolute left-1/2 -translate-x-1/2 top-[215px] bottom-2 z-[170] w-[calc(100%-24px)] max-w-[600px] bg-white border border-indigo-100 rounded-xl flex flex-col shadow-[0_25px_60px_rgba(0,0,0,0.35)] ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
             <div className="flex flex-col border-b border-indigo-100/50 bg-indigo-50/30 rounded-t-xl shrink-0">
-                <div className="flex items-center justify-between p-3.5 pb-2.5">
+                <div className="flex items-center justify-between p-3 pb-2">
                     <div className="flex items-center space-x-2">
-                        <Clock className="w-4 h-4 text-indigo-600" />
-                        <h5 className="text-[10px] font-black text-indigo-800 uppercase tracking-tight">
-                            Follow-up Setting — {student['Student ID']}
+                        <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                        <h5 className="text-[9px] font-black text-indigo-800 uppercase tracking-tight">
+                            {isTrackingMode ? 'Defense Tracking Details' : 'Add Defense Snooze'} — {student['Student ID']}
                         </h5>
                     </div>
                     <button type="button" onClick={onClose} className="p-1 hover:bg-indigo-100 rounded-full text-indigo-400 transition-colors">
-                        <X className="w-4 h-4" />
+                        <X className="w-3.5 h-3.5" />
                     </button>
                 </div>
             </div>
             
-            <form id="snooze-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-5 thin-scrollbar">
-                {/* Row 1: Status and Date side-by-side */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                        <label className="block text-[9px] font-black text-indigo-600 uppercase tracking-wider flex items-center">
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Response Status *
-                        </label>
-                        <SearchableSelect 
-                            value={status} 
-                            onChange={setStatus} 
-                            options={statusOptions} 
-                            placeholder="Select Status..." 
-                        />
+            <form id="snooze-form" onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden p-4 bg-white/50">
+                
+                {/* Mobile Info Grid */}
+                <div className="grid grid-cols-3 gap-2 bg-slate-50 border border-slate-100 rounded-lg p-2 mb-4 shadow-inner shrink-0">
+                    <div className="flex flex-col">
+                        <span className="text-[7px] font-black text-indigo-500 uppercase tracking-tighter flex items-center">
+                            <Phone className="w-2 h-2 mr-1" /> Student
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-700 font-mono leading-tight truncate">{student['Mobile'] || '-'}</span>
                     </div>
-                    <div className="space-y-1.5">
-                        <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider flex items-center">
-                            <Calendar className="w-3.5 h-3.5 mr-1.5" /> Snooze Until *
-                        </label>
-                        <input 
-                            required
-                            type="date" 
-                            value={snoozeDate} 
-                            onChange={e => setSnoozeDate(e.target.value)} 
-                            className="w-full px-4 py-2.5 text-xs font-bold border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all"
-                        />
+                    <div className="flex flex-col border-l border-slate-200 pl-2">
+                        <span className="text-[7px] font-black text-indigo-500 uppercase tracking-tighter">Father Mob</span>
+                        <span className="text-[10px] font-bold text-slate-700 font-mono leading-tight truncate">{student['Father Mobile'] || '-'}</span>
+                    </div>
+                    <div className="flex flex-col border-l border-slate-200 pl-2">
+                        <span className="text-[7px] font-black text-indigo-500 uppercase tracking-tighter">Mother Mob</span>
+                        <span className="text-[10px] font-bold text-slate-700 font-mono leading-tight truncate">{student['Mother Mobile'] || '-'}</span>
                     </div>
                 </div>
 
-                {/* Row 2: Follow-up By full width */}
-                <div className="space-y-1.5 pt-1">
-                    <label className="block text-[9px] font-black text-indigo-600 uppercase tracking-wider flex items-center">
-                        <UserCheck className="w-3.5 h-3.5 mr-1.5" /> Follow-up By *
-                    </label>
-                    <SearchableSelect 
-                        value={contactedBy} 
-                        onChange={setContactedBy} 
-                        options={employeeOptions} 
-                        placeholder="Search Personnel..." 
-                    />
-                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto thin-scrollbar space-y-4">
+                    
+                    {/* Conditional Fields based on Mode */}
+                    {!isTrackingMode ? (
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <label className="block text-[9px] font-black text-indigo-600 uppercase tracking-wider flex items-center">
+                                        <UserCheck className="w-3.5 h-3.5 mr-1.5" /> Follow-up By *
+                                    </label>
+                                    <SearchableSelect 
+                                        value={contactedBy} 
+                                        onChange={setContactedBy} 
+                                        options={employeeOptions} 
+                                        placeholder="Select Personnel..." 
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider flex items-center">
+                                        <Calendar className="w-3.5 h-3.5 mr-1.5" /> Snooze Until *
+                                    </label>
+                                    <input 
+                                        required
+                                        type="date" 
+                                        value={snoozeDate} 
+                                        onChange={e => setSnoozeDate(e.target.value)} 
+                                        className="w-full px-3 py-2 text-[11px] font-bold border border-slate-200 rounded-lg shadow-sm focus:ring-1 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all h-[38px] bg-white"
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider flex items-center">
+                                    <MessageSquare className="w-3.5 h-3.5 mr-1.5" /> Snooze Remark *
+                                </label>
+                                <textarea 
+                                    required
+                                    value={remark} 
+                                    onChange={e => setRemark(e.target.value)} 
+                                    className="w-full px-3 py-2 text-[12px] font-medium border border-slate-200 rounded-lg focus:ring-1 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all resize-none min-h-[80px] bg-white"
+                                    placeholder="Type detailed follow-up notes here..."
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider flex items-center">
+                                    <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-blue-500" /> Interaction Status *
+                                </label>
+                                <div className="flex flex-wrap gap-1">
+                                    {defenseStatusOptions.map(opt => (
+                                        <button
+                                            key={opt}
+                                            type="button"
+                                            onClick={() => setStatus(opt)}
+                                            className={`px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all border ${
+                                                status === opt 
+                                                ? 'bg-blue-600 text-white border-blue-700 shadow-md' 
+                                                : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'
+                                            }`}
+                                        >
+                                            {opt}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="space-y-4 animate-in fade-in duration-500">
+                            <div className="grid grid-cols-1 md:grid-cols-[1fr_160px] gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider flex items-center">
+                                        <GraduationCap className="w-3.5 h-3.5 mr-1.5 text-indigo-500" /> Defense Supervisor *
+                                    </label>
+                                    <SearchableSelect 
+                                        value={defenseSupervisor} 
+                                        onChange={setDefenseSupervisor} 
+                                        options={employeeOptions} 
+                                        placeholder="Search supervisor..." 
+                                    />
+                                </div>
+                                <div className="flex flex-col space-y-1">
+                                    <label className="block text-[8px] font-black text-blue-600 uppercase tracking-tighter flex items-center">
+                                        <ClipboardList className="w-2.5 h-2.5 mr-1" /> Submission Date *
+                                    </label>
+                                    <input 
+                                        required
+                                        type="date" 
+                                        value={regFormDate} 
+                                        onChange={e => setRegFormDate(e.target.value)} 
+                                        className="w-full px-2 py-1 text-[10px] font-bold border border-slate-200 rounded-md shadow-sm focus:ring-1 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all h-[38px] bg-white"
+                                    />
+                                </div>
+                            </div>
 
-                {/* Row 3: Remark full width with long text field */}
-                <div className="space-y-1.5 pt-1">
-                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider mb-1 flex items-center">
-                        <MessageSquare className="w-3.5 h-3.5 mr-1.5" /> Snooze Remark *
-                    </label>
-                    <textarea 
-                        required
-                        value={remark} 
-                        onChange={e => setRemark(e.target.value)} 
-                        rows={4}
-                        className="w-full px-4 py-3 text-xs font-medium border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all resize-none bg-slate-50/30"
-                        placeholder="Type detailed reason or follow-up notes here..."
-                    />
+                            <div className="space-y-1.5">
+                                <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider flex items-center">
+                                    <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-blue-500" /> Defense Status *
+                                </label>
+                                <div className="flex flex-wrap gap-1">
+                                    {defenseStatusOptions.map(opt => (
+                                        <button
+                                            key={opt}
+                                            type="button"
+                                            onClick={() => setStatus(opt)}
+                                            className={`px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all border ${
+                                                status === opt 
+                                                ? 'bg-blue-600 text-white border-blue-700 shadow-md' 
+                                                : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'
+                                            }`}
+                                        >
+                                            {opt}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider flex items-center">
+                                        <Tags className="w-3.5 h-3.5 mr-1.5 text-rose-500" /> Defense Type
+                                    </label>
+                                    {isAddingDefType ? (
+                                        <div className="flex items-center space-x-1">
+                                            <input autoFocus value={newDefTypeValue} onChange={e => setNewDefTypeValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddDefType(e)} className="text-[9px] px-1.5 py-0.5 border rounded outline-none w-24" placeholder="Type..." />
+                                            <button onClick={handleAddDefType} className="text-blue-600"><Check className="w-3 h-3"/></button>
+                                            <button onClick={() => setIsAddingDefType(false)} className="text-slate-400"><X className="w-3 h-3"/></button>
+                                        </div>
+                                    ) : (
+                                        <button onClick={() => setIsAddingDefType(true)} className="text-[8px] font-black text-blue-600 uppercase flex items-center"><Plus className="w-2.5 h-2.5 mr-0.5" /> Add</button>
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                    {defenseTypeOptions.map(opt => (
+                                        <button
+                                            key={opt}
+                                            type="button"
+                                            onClick={() => setDefenseType(opt)}
+                                            className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all border ${
+                                                defenseType === opt 
+                                                ? 'bg-slate-700 text-white border-slate-800' 
+                                                : 'bg-white text-slate-500 border-slate-200'
+                                            }`}
+                                        >
+                                            {opt}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider flex items-center">
+                                    <FileText className="w-3.5 h-3.5 mr-1.5 text-emerald-500" /> Report Title
+                                </label>
+                                <textarea 
+                                    value={reportTitle} 
+                                    onChange={e => setReportTitle(e.target.value)}
+                                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:ring-1 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all resize-none h-16 bg-white shadow-sm"
+                                    placeholder="Enter thesis/project report title..."
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider flex items-center">
+                                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-teal-500" /> Library Clearance
+                                </label>
+                                <div className="flex p-0.5 bg-slate-100 rounded-lg w-fit border border-slate-200">
+                                    {['Pending', 'Done'].map(opt => (
+                                        <button
+                                            key={opt}
+                                            type="button"
+                                            onClick={() => setLibraryClearance(opt)}
+                                            className={`px-4 py-1 rounded-md text-[9px] font-black uppercase transition-all ${
+                                                libraryClearance === opt 
+                                                ? 'bg-white text-blue-600 shadow-sm' 
+                                                : 'text-slate-400 hover:text-slate-600'
+                                            }`}
+                                        >
+                                            {opt}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </form>
 
-            <div className="p-4 pt-3 flex space-x-3 shrink-0 border-t bg-slate-50/50 rounded-b-xl">
-                <button type="button" onClick={onClose} className="flex-1 py-3 text-[10px] font-black text-slate-500 bg-white border border-slate-200 rounded-xl uppercase hover:bg-slate-50 transition-colors">
+            <div className="p-3 pt-2 flex space-x-2 shrink-0 border-t bg-slate-50/80 rounded-b-xl">
+                <button type="button" onClick={onClose} className="flex-1 py-2.5 text-[9px] font-black text-slate-500 bg-white border border-slate-200 rounded-lg uppercase hover:bg-slate-50 transition-colors">
                     Cancel
                 </button>
                 <button 
                     type="submit"
                     form="snooze-form"
                     disabled={isSaving || isInvalid} 
-                    className="flex-[1.5] py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg flex items-center justify-center uppercase transition-all active:scale-95 disabled:opacity-50"
+                    className="flex-[1.5] py-2.5 text-[9px] font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-lg flex items-center justify-center uppercase transition-all active:scale-95 disabled:opacity-50"
                 >
                     {isSaving ? (
-                        <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+                        <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
                     ) : (
-                        <Save className="w-4 h-4 mr-1.5" />
+                        <Save className="w-3.5 h-3.5 mr-1.5" />
                     )}
-                    Log & Apply Snooze
+                    {isTrackingMode ? 'Save Defense Tracking' : 'Apply Snooze & Log'}
                 </button>
             </div>
         </div>

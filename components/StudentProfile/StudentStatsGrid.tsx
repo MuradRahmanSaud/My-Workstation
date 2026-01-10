@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { GraduationCap, Calendar, Award, Banknote, CalendarCheck, ShieldQuestion, Pencil } from 'lucide-react';
 import { StudentDataRow } from '../../types';
@@ -19,62 +20,38 @@ export const StudentStatsGrid: React.FC<StudentStatsGridProps> = React.memo(({
     const cardBase = "rounded border p-1.5 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 shadow-sm hover:shadow-md relative group";
     const activeRing = "shadow-lg ring-2 ring-blue-500/20";
 
-    // Parse the semantically latest amount from the Dues history string
+    // Deriving latest Dues amount strictly from History Logs (Discussion Remark)
     const displayDues = useMemo(() => {
-        const raw = student['Dues'];
-        if (!raw || raw.trim() === '') return '0';
-        
-        // If it's just a number (legacy), return it
-        if (!raw.includes(' ;; ')) return raw;
+        const rawRemarks = student['Discussion Remark'];
+        if (!rawRemarks || rawRemarks.trim() === '') return '0';
 
         try {
-            // Split into individual records
-            const records = raw.split(' || ').map(r => r.trim()).filter(Boolean);
+            // Split into individual interaction records
+            const records = rawRemarks.split(' || ').map(r => r.trim()).filter(Boolean);
             
-            // Map to sortable objects
-            // Schema: [Date, Amount, Period, TargetSemester, ApproverId, HistoryRemark]
-            const parsedRecords = records.map(r => {
+            // Filter only Dues related interactions and map to objects
+            // Fields: [0:Date, 1:Status, 2:Personnel, 3:Snooze, 4:TargetSem, 5:Remark, 6:Category, 7:Period, 8:SemanticStatus]
+            const duesLogs = records.map(r => {
                 const fields = r.split(' ;; ').map(f => f.trim());
                 return {
-                    amount: fields[1] || '0',
-                    period: fields[2] || '',
-                    semesterStr: fields[3] || '',
+                    date: new Date(fields[0]).getTime(),
+                    status: fields[1] || '0',
+                    category: (fields[6] || '').toLowerCase(),
+                    amount: (fields[1] || '').match(/\d+/) ? (fields[1] || '').match(/\d+/)![0] : '0'
                 };
-            });
+            }).filter(log => !isNaN(log.date) && log.category === 'dues follow up');
 
-            // Weights for sorting
-            const semWeight: Record<string, number> = { 'fall': 3, 'summer': 2, 'spring': 1 };
-            const periodWeight: Record<string, number> = { 'final-term': 3, 'mid-term': 2, 'registration': 1 };
+            if (duesLogs.length === 0) return '0';
 
-            // Sort by Semester Year (DESC) > Semester Type (DESC) > Period (DESC)
-            parsedRecords.sort((a, b) => {
-                const partsA = a.semesterStr.split(' ');
-                const partsB = b.semesterStr.split(' ');
+            // Sort by date descending to get the absolute latest interaction
+            duesLogs.sort((a, b) => b.date - a.date);
 
-                const yearA = parseInt(partsA[1] || '0');
-                const yearB = parseInt(partsB[1] || '0');
-
-                // 1. Compare Year (Descending)
-                if (yearA !== yearB) return yearB - yearA;
-
-                // 2. Compare Semester (Descending: Fall > Summer > Spring)
-                const sWeightA = semWeight[partsA[0]?.toLowerCase()] || 0;
-                const sWeightB = semWeight[partsB[0]?.toLowerCase()] || 0;
-                if (sWeightA !== sWeightB) return sWeightB - sWeightA;
-
-                // 3. Compare Period (Descending: Final > Mid > Registration)
-                const pWeightA = periodWeight[a.period.toLowerCase()] || 0;
-                const pWeightB = periodWeight[b.period.toLowerCase()] || 0;
-                return pWeightB - pWeightA;
-            });
-
-            // Return the amount from the semantically latest record
-            return parsedRecords[0]?.amount || '0';
+            return duesLogs[0].amount;
         } catch (e) {
             console.error("Dues parsing error in StatsGrid:", e);
             return '0';
         }
-    }, [student['Dues']]);
+    }, [student['Discussion Remark']]);
 
     return (
         <div className="space-y-1.5 mt-3">
@@ -103,17 +80,6 @@ export const StudentStatsGrid: React.FC<StudentStatsGridProps> = React.memo(({
 
                 {/* Defense Card */}
                 <div onClick={() => onCardClick('remarks-defense')} className={`${cardBase} ${activePopup === 'remarks' ? activeRing : ''} ${isDefenseSuccess ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
-                    <button 
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onCardClick('defense');
-                        }}
-                        className="absolute top-1 right-1 p-0.5 rounded bg-white/50 text-slate-400 hover:text-blue-600 hover:bg-white opacity-0 group-hover:opacity-100 transition-all shadow-sm border border-slate-100"
-                        title="Edit Defense Details"
-                    >
-                        <Pencil className="w-2 h-2" />
-                    </button>
-
                     <div className="flex items-center space-x-1 mb-0.5">
                         <Calendar className={`w-2.5 h-2.5 ${isDefenseSuccess ? 'text-emerald-500' : 'text-red-500'}`} />
                         <span className={`text-[8px] uppercase font-black tracking-tight ${isDefenseSuccess ? 'text-emerald-600' : 'text-red-600'}`}>Defense</span>

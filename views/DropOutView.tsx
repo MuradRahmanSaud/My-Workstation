@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { MessageSquareQuote, RefreshCw, ArrowLeft, School, Search, Filter, MessageSquare, User, X } from 'lucide-react';
@@ -10,7 +11,7 @@ import { FilterPanel } from '../components/FilterPanel';
 import { FollowupTimelineDashboard } from '../components/FollowupTimelineDashboard';
 import { StudentDetailView } from '../components/StudentDetailView';
 import { ProgramDataRow, StudentDataRow } from '../types';
-import { normalizeId, submitSheetData, extractSheetIdAndGid } from '../services/sheetService';
+import { normalizeId, submitSheetData, extractSheetIdAndGid, normalizeSemesterString } from '../services/sheetService';
 import { isValEmpty } from './EmployeeView';
 
 const FIELD_SEP = ' ;; ';
@@ -103,10 +104,11 @@ export const DropOutView: React.FC = () => {
         if (registeredData.length === 0) return map;
         registeredData.forEach(row => {
             Object.entries(row).forEach(([sem, idVal]) => {
-                if (sem && idVal) {
-                    const sId = String(idVal).trim();
+                if (sem && idVal && String(idVal).trim() !== '') {
+                    const sId = normalizeId(String(idVal)); 
+                    const normSem = normalizeSemesterString(sem);
                     if (!map.has(sId)) map.set(sId, new Set());
-                    map.get(sId)!.add(sem);
+                    map.get(sId)!.add(normSem);
                 }
             });
         });
@@ -118,16 +120,6 @@ export const DropOutView: React.FC = () => {
         programData.forEach(p => { if (p.PID && p['Program Short Name']) map.set(normalizeId(p.PID), p['Program Short Name']); });
         return map;
     }, [programData]);
-
-    const normalizeSemesterString = (sem: string) => {
-        if (!sem) return '';
-        const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/);
-        if (!match) return sem.trim().toLowerCase();
-        const season = match[1].toLowerCase();
-        let year = match[2];
-        if (year.length === 2) year = '20' + year;
-        return `${season} ${year}`;
-    };
 
     const checkDuesForSemester = (duesStr: string | undefined, targetSem: string) => {
         if (!duesStr || isValEmpty(duesStr)) return false;
@@ -145,6 +137,7 @@ export const DropOutView: React.FC = () => {
     const kpiStats = useMemo(() => {
         if (!selectedProgram || !targetRegSem) return { enrolled: 0, registered: 0, unregistered: 0, pDrop: 0, tDrop: 0, crCom: 0, defense: 0, regPending: 0, dues: 0, followup: 0 };
         const pidNorm = normalizeId(selectedProgram.PID);
+        const targetNorm = normalizeSemesterString(targetRegSem);
         let enrolled = 0, registered = 0, pDrop = 0, tDrop = 0, crCom = 0, defense = 0, regPending = 0, dues = 0, followup = 0;
         
         const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
@@ -164,8 +157,10 @@ export const DropOutView: React.FC = () => {
             students.forEach(s => {
                 if (normalizeId(s.PID) === pidNorm) {
                     enrolled++;
-                    const id = String(s['Student ID']).trim();
-                    const isRegistered = registrationLookup.get(id)?.has(targetRegSem) || false;
+                    const id = normalizeId(s['Student ID']);
+                    const registeredFor = registrationLookup.get(id);
+                    const isRegistered = registeredFor ? registeredFor.has(targetNorm) : false;
+                    
                     if (isRegistered) registered++;
                     const dropClass = s['Dropout Classification'] || '';
                     const isPDrop = dropClass.includes('Permanent');
@@ -192,6 +187,7 @@ export const DropOutView: React.FC = () => {
     const getFilteredStudentList = useCallback((type: DropoutKpiType) => {
         if (!selectedProgram || !targetRegSem) return [];
         const pidNorm = normalizeId(selectedProgram.PID);
+        const targetNorm = normalizeSemesterString(targetRegSem);
         const results: StudentDataRow[] = [];
         
         const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
@@ -211,8 +207,10 @@ export const DropOutView: React.FC = () => {
             const students = studentCache.get(sem) || [];
             students.forEach(s => {
                 if (normalizeId(s.PID) === pidNorm) {
-                    const id = String(s['Student ID']).trim();
-                    const isRegistered = registrationLookup.get(id)?.has(targetRegSem) || false;
+                    const id = normalizeId(s['Student ID']);
+                    const registeredFor = registrationLookup.get(id);
+                    const isRegistered = registeredFor ? registeredFor.has(targetNorm) : false;
+                    
                     const dropClass = s['Dropout Classification'] || '';
                     const isPDrop = dropClass.includes('Permanent');
                     const isTDrop = dropClass.includes('Temporary');
@@ -261,7 +259,7 @@ export const DropOutView: React.FC = () => {
 
     const handleFollowupStudentClick = (studentId: string) => {
         const followupStudents = getFilteredStudentList('followup');
-        const student = followupStudents.find(s => s['Student ID'] === studentId);
+        const student = followupStudents.find(s => normalizeId(s['Student ID']) === normalizeId(studentId));
         if (student) {
             setShouldAutoOpenRemarks(true);
             setSelectedStudent(student);
@@ -330,6 +328,14 @@ export const DropOutView: React.FC = () => {
         setShouldAutoOpenRemarks(false);
     };
 
+    const handleRefresh = async () => {
+        await reloadData('admitted', true);
+        if (selectedAdmittedSemesters.size > 0) {
+            const promises = Array.from(selectedAdmittedSemesters).map(sem => loadStudentData(sem, true));
+            await Promise.all(promises);
+        }
+    };
+
     const headerTitleTarget = document.getElementById('header-title-area');
     const headerActionsTarget = document.getElementById('header-actions-area');
 
@@ -360,8 +366,7 @@ export const DropOutView: React.FC = () => {
                         <Filter className="w-3.5 h-3.5" />
                         <span>Filter Program & Data</span>
                     </button>
-                    {/* FIXED: Changed reloadData('admitted', true) to reloadData('all', true) to sync all relevant page data */}
-                    <button onClick={() => reloadData('all', true)} disabled={loading.status === 'loading'} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all">
+                    <button onClick={handleRefresh} disabled={loading.status === 'loading'} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all">
                         <RefreshCw className={`w-4 h-4 ${loading.status === 'loading' ? 'animate-spin' : ''}`} />
                     </button>
                 </div>, 
@@ -369,7 +374,7 @@ export const DropOutView: React.FC = () => {
             )}
             <div className="flex-1 overflow-hidden flex flex-col relative">
                 {selectedProgram && (
-                    <div className="p-2 md:p-3 shrink-0 bg-white shadow-sm border-b border-gray-100 z-20 w-full overflow-x-auto">
+                    <div className="p-2 md:p-3 shrink-0 bg-white shadow-sm border-b border-gray-100 z-20 w-full overflow-x-auto no-scrollbar">
                         <DropOutDashboard stats={kpiStats} comparisonSemester={targetRegSem} onCardClick={handleCardClick} activeType={currentListType} />
                     </div>
                 )}
@@ -406,6 +411,7 @@ export const DropOutView: React.FC = () => {
                                                     externalTargetRegSemester={targetRegSem}
                                                     onTargetRegSemesterChange={setTargetRegSem}
                                                     hideSummaryToggle={true}
+                                                    hideSidebar={true}
                                                 />
                                             </div>
                                             

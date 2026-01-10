@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquareQuote, Search, RefreshCw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Plus, Pencil, Trash2, CheckCircle2, Calendar, Loader2, Fingerprint, AlertCircle, Target } from 'lucide-react';
+import { MessageSquareQuote, Search, RefreshCw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Plus, Pencil, Trash2, CheckCircle2, Calendar, Loader2, Fingerprint, AlertCircle, Target, User } from 'lucide-react';
 import { useSheetData } from '../hooks/useSheetData';
 import { useResponsivePagination } from '../hooks/useResponsivePagination';
 import { EditEntryModal } from '../components/EditEntryModal';
@@ -28,6 +28,20 @@ export const StudentFollowupView: React.FC = () => {
     // Ref to track if we should temporarily ignore incoming context data (to prevent stale overwrite)
     const ignoreContextSyncUntil = useRef<number>(0);
 
+    // Helper to resolve employee details from ID
+    const resolveEmployeeDetails = useCallback((id: string | undefined) => {
+        if (!id || id === 'System') return { name: id || 'System', designation: '' };
+        const normId = normalizeId(id);
+        const emp = diuEmployeeData.find(e => normalizeId(e['Employee ID']) === normId);
+        if (emp) {
+            const desig = [emp['Academic Designation'], emp['Administrative Designation']].filter(Boolean).join(' / ');
+            return { name: emp['Employee Name'], designation: desig };
+        }
+        const teacher = teacherData.find(t => normalizeId(t['Employee ID']) === normId);
+        if (teacher) return { name: teacher['Employee Name'], designation: teacher.Designation };
+        return { name: id, designation: '' };
+    }, [diuEmployeeData, teacherData]);
+
     // Compute employee options for the dropdown
     const employeeOptions = useMemo(() => {
         const map = new Map<string, string>();
@@ -47,7 +61,22 @@ export const StudentFollowupView: React.FC = () => {
 
     // Compute dynamic Response Status options from history
     const statusOptions = useMemo(() => {
-        const defaults = ['Call Busy', 'Switched Off', 'Not Reachable', 'Department Change', 'University Change'];
+        const defaults = [
+            'Call Busy', 
+            'Not Reachable', 
+            'Academic Reasons',
+            'Financial Reasons',
+            'Administrative / System Reasons',
+            'Personal / Family Reasons',
+            'Job / Career Reasons',
+            'Transfer / Change Reasons',
+            'Decision / Motivation Reasons',
+            'Death-Related',
+            'Health / Medical Related',
+            'Legal / Compliance Issues',
+            'Extracurricular-Sports-Arts',
+            'Miscellaneous'
+        ];
         const used = new Set<string>();
         contextData.forEach(f => {
             if (f.Status && f.Status.trim()) used.add(f.Status.trim());
@@ -95,14 +124,14 @@ export const StudentFollowupView: React.FC = () => {
 
     const columns = useMemo(() => [
         'uniqueid',
-        'Date',
+        'Date & Personnel', // Modified Header
         'Student ID',
         'Student Name',
-        'Target Semester', // Added new column
+        'Target Semester',
         'Remark',
         'Re-follow up',
-        'Status',
-        'Contacted By'
+        'Status'
+        // 'Contacted By' removed from column list as it's merged into Date
     ], []);
 
     const handleAddClick = () => {
@@ -118,7 +147,7 @@ export const StudentFollowupView: React.FC = () => {
             'Date': datePart,
             'Student ID': '',
             'Student Name': '',
-            'Target Semester': '', // New field
+            'Target Semester': '',
             'Remark': '',
             'Re-follow up': '',
             'Status': 'Call Busy',
@@ -271,7 +300,7 @@ export const StudentFollowupView: React.FC = () => {
                                     const rowUid = getRowUidValue(row);
                                     const isDeleting = isDeletingId === rowUid;
                                     return (
-                                        <tr key={rowUid || idx} className="hover:bg-blue-50/50 transition-colors group text-[11px] text-gray-700 h-[32px]">
+                                        <tr key={rowUid || idx} className="hover:bg-blue-50/50 transition-colors group text-[11px] text-gray-700 h-[36px]">
                                             <td className="px-3 py-1 text-center whitespace-nowrap">
                                                 <div className="flex items-center justify-center space-x-2">
                                                     <button 
@@ -302,7 +331,25 @@ export const StudentFollowupView: React.FC = () => {
                                                 </div>
                                             </td>
                                             <td className="px-3 py-1 text-gray-500 font-medium whitespace-nowrap">
-                                                {row.Date || '-'}
+                                                <div className="flex flex-col">
+                                                    <div className="flex items-center space-x-1.5">
+                                                        <Calendar className="w-2.5 h-2.5 text-slate-400" />
+                                                        <span className="text-[10px] text-slate-700 font-bold">{row.Date || '-'}</span>
+                                                    </div>
+                                                    {(() => {
+                                                        const employeeId = row['Contacted By'];
+                                                        if (!employeeId || employeeId === 'System') return null;
+                                                        const info = resolveEmployeeDetails(employeeId);
+                                                        return (
+                                                            <div className="text-[9px] text-blue-600 font-bold leading-tight mt-0.5 flex items-center">
+                                                                <User className="w-2 h-2 mr-1 opacity-70 shrink-0" />
+                                                                <span className="truncate max-w-[180px]">
+                                                                    {info.name}{info.designation ? `, ${info.designation}` : ''} ({employeeId})
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
                                             </td>
                                             <td className="px-3 py-1 font-bold text-blue-600">
                                                 {row['Student ID'] || '-'}
@@ -332,9 +379,6 @@ export const StudentFollowupView: React.FC = () => {
                                                 }`}>
                                                     {row.Status || 'Pending'}
                                                 </span>
-                                            </td>
-                                            <td className="px-3 py-1 italic text-gray-500 whitespace-nowrap">
-                                                {row['Contacted By'] || '-'}
                                             </td>
                                         </tr>
                                     );
@@ -395,7 +439,17 @@ export const StudentFollowupView: React.FC = () => {
                 mode={editMode}
                 title={editMode === 'add' ? "New Student Follow-up" : "Update Record"}
                 sheetName={SHEET_NAMES.FOLLOWUP}
-                columns={columns}
+                columns={[
+                    'uniqueid',
+                    'Date',
+                    'Student ID',
+                    'Student Name',
+                    'Target Semester',
+                    'Remark',
+                    'Re-follow up',
+                    'Status',
+                    'Contacted By'
+                ]}
                 initialData={editingRow}
                 keyColumn="uniqueid"
                 hiddenFields={['uniqueid', 'Timestamp']} 

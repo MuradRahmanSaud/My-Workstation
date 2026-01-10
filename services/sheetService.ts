@@ -1,3 +1,4 @@
+
 import { MAIN_SHEET_ID, MAIN_SHEET_GID, REF_SHEET_ID, REF_SHEET_GID, TEACHER_SHEET_GID, PROGRAM_SHEET_GID, CLASSROOM_SHEET_GID, DIU_EMPLOYEE_SHEET_GID, FACULTY_LEADERSHIP_SHEET_GID, STUDENT_LINK_SHEET_ID, STUDENT_LINK_SHEET_GID, REGISTERED_STUDENT_SHEET_GID, CORS_PROXY, GOOGLE_SCRIPT_URL, FOLLOWUP_SHEET_GID } from '../constants';
 import { MainSheetRow, CourseSectionData, ReferenceDataRow, TeacherDataRow, ProgramDataRow, StudentLinkRow, StudentDataRow, ClassRoomDataRow, DiuEmployeeRow, FacultyLeadershipRow, StudentFollowupRow } from '../types';
 import { parseCSV, extractSheetIdAndGid } from '../utils/csvParser';
@@ -19,7 +20,8 @@ const getCachedData = <T>(key: string): T[] | null => {
         const cached = sessionStorage.getItem(`cache_${key}`);
         if (!cached) return null;
         const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < 30 * 60 * 1000) return data;
+        // Reduce cache time for higher data accuracy
+        if (Date.now() - timestamp < 15 * 60 * 1000) return data;
     } catch (e) { return null; }
     return null;
 };
@@ -31,9 +33,15 @@ const setCachedData = (key: string, data: any) => {
 };
 
 const fetchSheet = async <T>(url: string, retries = 2): Promise<T[]> => {
+  // Use high-entropy cache busting
+  const cacheBustUrl = `${url}${url.includes('?') ? '&' : '?'}_cb=${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+
   try {
-    // Try cache-busting and direct fetch first
-    const directResponse = await fetch(`${url}&cachebust=${Date.now()}`, { cache: 'no-cache' });
+    const directResponse = await fetch(cacheBustUrl, { 
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+    });
+    
     if (directResponse.ok) {
         const text = await directResponse.text();
         if (text && !text.trim().startsWith('<!doctype html') && !text.trim().startsWith('<html')) {
@@ -48,7 +56,7 @@ const fetchSheet = async <T>(url: string, retries = 2): Promise<T[]> => {
   for (let i = 0; i < retries; i++) {
     try {
       const proxy = PROXY_LIST[proxyIndex % PROXY_LIST.length];
-      const targetUrl = `${proxy}${encodeURIComponent(url)}`;
+      const targetUrl = `${proxy}${encodeURIComponent(cacheBustUrl)}`;
       const response = await fetch(targetUrl);
       if (!response.ok) { proxyIndex++; continue; }
       const text = await response.text();
@@ -142,6 +150,16 @@ export const fetchSubSheet = async (sheetLink: string): Promise<CourseSectionDat
 export const normalizeId = (id: string | undefined | null) => {
     if (!id) return '';
     return String(id).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+};
+
+export const normalizeSemesterString = (sem: string): string => {
+    if (!sem) return '';
+    const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/);
+    if (!match) return sem.trim().toLowerCase();
+    const season = match[1].toLowerCase();
+    let year = match[2];
+    if (year.length === 2) year = '20' + year;
+    return `${season} ${year}`;
 };
 
 export const getMobileNumber = (row: TeacherDataRow): string => {

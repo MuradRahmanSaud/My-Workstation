@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { RefreshCw, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowLeft, Database, ExternalLink, CheckCircle, XCircle, BarChart3, List, Menu, X, LogIn, Settings, PieChart } from 'lucide-react';
@@ -25,10 +26,11 @@ import { ClassRoomTable } from '../components/ClassRoomTable';
 import { SectionDetailsPanel } from '../components/SectionDetailsPanel';
 import { CourseDetailsPanel } from '../components/CourseDetailsPanel';
 import { TeacherDetailsPanel } from '../components/TeacherDetailsPanel';
+import { UnregisteredStudentsModal } from '../components/UnregisteredStudentsModal';
 import { EditEntryModal } from '../components/EditEntryModal';
 import { MAIN_SHEET_ID, MAIN_SHEET_GID, REF_SHEET_ID, REF_SHEET_GID, CLASSROOM_SHEET_GID, SHEET_NAMES } from '../constants';
 import { ProgramDataRow, CourseSectionData, ReferenceDataRow, StudentDataRow } from '../types';
-import { submitSheetData, extractSheetIdAndGid, normalizeId } from '../services/sheetService';
+import { submitSheetData, extractSheetIdAndGid, normalizeId, normalizeSemesterString } from '../services/sheetService';
 
 interface SectionViewProps {
     showStats?: boolean;
@@ -114,6 +116,16 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
   const [referenceEditingRow, setReferenceEditingRow] = useState<any>(undefined);
 
   const [isAdmittedReportModalOpen, setIsAdmittedReportModalOpen] = useState(false);
+  
+  // State for student list modal from analytics clicks
+  const [activeAdmittedList, setActiveAdmittedList] = useState<{ 
+      semester: string; 
+      programId: string; 
+      programName: string; 
+      students: StudentDataRow[]; 
+      targetSemester: string; 
+      listType: string;
+  } | null>(null);
 
   const [reportModePreferences, setReportModePreferences] = useState<Record<string, boolean>>({
       'sections': showStats,
@@ -292,10 +304,11 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
 
       registeredData.forEach(row => {
           Object.entries(row).forEach(([sem, idVal]) => {
-              if (sem && idVal) {
-                  const sId = String(idVal).trim();
+              if (sem && idVal && String(idVal).trim() !== '') {
+                  const sId = normalizeId(String(idVal)); 
+                  const normalizedSem = normalizeSemesterString(sem); // Store normalized keys for lookup
                   if (!map.has(sId)) map.set(sId, new Set());
-                  map.get(sId)!.add(sem);
+                  map.get(sId)!.add(normalizedSem);
               }
           });
       });
@@ -326,9 +339,10 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
       
       const allStudents: any[] = [];
       const seenIds = new Set<string>();
-      const sortedSemesters = Array.from(selectedAdmittedSemesters).sort();
+      
+      const latestToOldest = admittedSemesters.filter(s => selectedAdmittedSemesters.has(s));
 
-      sortedSemesters.forEach(sem => {
+      latestToOldest.forEach(sem => {
           const students = studentCache.get(sem) || [];
           students.forEach(s => {
               const id = String(s['Student ID']).trim();
@@ -343,13 +357,23 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
       
       let filtered = allStudents;
 
+      // Apply Global Search Filter for ID and Name
+      if (searchTerm.trim()) {
+          const lower = searchTerm.toLowerCase();
+          filtered = filtered.filter(s => 
+              String(s['Student Name'] || '').toLowerCase().includes(lower) || 
+              String(s['Student ID'] || '').toLowerCase().includes(lower)
+          );
+      }
+
       if (registrationFilters.size > 0) {
           filtered = filtered.filter(s => {
-              const cleanId = String(s['Student ID']).trim();
+              const cleanId = normalizeId(s['Student ID']); 
               const studentSemesters = registrationLookup.get(cleanId);
               
               for (const [sem, type] of registrationFilters.entries()) {
-                   const hasReg = studentSemesters?.has(sem);
+                   const normalizedSem = normalizeSemesterString(sem);
+                   const hasReg = studentSemesters?.has(normalizedSem);
                    if (type === 'registered' && !hasReg) return false;
                    if (type === 'unregistered' && hasReg) return false;
               }
@@ -379,7 +403,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
 
           return true;
       });
-  }, [selectedAdmittedSemesters, studentCache, selectedPrograms, selectedFaculties, selectedProgramTypes, selectedSemesterTypes, programDetailsMap, registrationFilters, registrationLookup]);
+  }, [selectedAdmittedSemesters, admittedSemesters, studentCache, selectedPrograms, selectedFaculties, selectedProgramTypes, selectedSemesterTypes, programDetailsMap, registrationFilters, registrationLookup, searchTerm]);
 
   const totalAdmitted = filteredAdmittedData.length;
 
@@ -576,11 +600,15 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
 
   const currentHeaderColor = viewColors[viewMode] || 'bg-purple-500';
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
       if (viewMode === 'admitted') {
-          reloadData('admitted', true);
+          await reloadData('admitted', true);
+          if (selectedAdmittedSemesters.size > 0) {
+              const promises = Array.from(selectedAdmittedSemesters).map(sem => loadStudentData(sem, true));
+              await Promise.all(promises);
+          }
       } else {
-          reloadData('sections', true);
+          await reloadData('sections', true);
       }
   };
 
@@ -678,7 +706,6 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
     const { id: sheetId } = extractSheetIdAndGid(link);
     if (!sheetId) return;
 
-    // Update local React cache immediately for responsiveness
     updateStudentData(semester, student['Student ID'], student);
     
     const { _semester, ...apiPayload } = student as any;
@@ -691,6 +718,19 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
 
   const headerActionsTarget = document.getElementById('header-actions-area');
   const headerTitleTarget = document.getElementById('header-title-area');
+
+  const latestSelectedSemester = useMemo(() => {
+    if (selectedAdmittedSemesters.size === 0) return '';
+    return admittedSemesters.find(s => selectedAdmittedSemesters.has(s)) || '';
+  }, [selectedAdmittedSemesters, admittedSemesters]);
+
+  const [targetRegSemester, setTargetRegSemester] = useState<string>('');
+
+  useEffect(() => {
+    if (latestSelectedSemester) {
+        setTargetRegSemester(latestSelectedSemester);
+    }
+  }, [latestSelectedSemester]);
 
   return (
     <div className={`flex flex-col h-full space-y-2 bg-gray-50 relative overflow-hidden ${showStats ? 'p-1' : 'p-2 md:p-3'}`}>
@@ -805,7 +845,14 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
                          <span className="text-[9px] font-bold text-gray-400 bg-gray-50 px-1 rounded border border-gray-200">
                             {activeDataForPagination.length} Records
                          </span>
-                         <span className="text-[9px] font-medium text-blue-500">{semesterFilter}</span>
+                         {viewMode === 'admitted' ? (
+                             <span className="text-[9px] font-black text-indigo-600 uppercase tracking-tighter bg-indigo-50 px-1.5 rounded border border-indigo-100 flex items-center">
+                                <RefreshCw className="w-2.5 h-2.5 mr-1" />
+                                {latestSelectedSemester || 'None'}
+                             </span>
+                         ) : (
+                             <span className="text-[9px] font-medium text-blue-500">{semesterFilter}</span>
+                         )}
                     </div>
                 )}
              </div>
@@ -989,11 +1036,14 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
                             diuEmployeeData={diuEmployeeData}
                             teacherData={teacherData}
                             onSaveStudent={handleSaveStudent}
+                            externalTargetRegSemester={targetRegSemester}
+                            onTargetRegSemesterChange={setTargetRegSemester}
+                            onUnregClick={setActiveAdmittedList}
                         />
                     ) : viewMode === 'courses' && isReportMode ? (
                         <CourseDistributionReport 
                             data={filteredCourseSummaryData} 
-                            programData={programData}
+                            programData={programData} 
                             showExportPanel={isExportPanelOpen}
                             setShowExportPanel={setIsExportPanelOpen}
                         />
@@ -1113,7 +1163,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
                                         {paginatedData.map((row: any, idx: number) => {
-                                            const cleanId = String(row['Student ID']).trim();
+                                            const cleanId = normalizeId(row['Student ID']); 
                                             const studentSemesters = registrationLookup.get(cleanId);
                                             const currentRowIdx = idx;
 
@@ -1156,6 +1206,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
                                                     {visibleRegisteredSemesters.map((sem, sIdx) => {
                                                         const colIdx = 4 + sIdx;
                                                         const filterType = registrationFilters.get(sem);
+                                                        const normalizedSem = normalizeSemesterString(sem);
                                                         
                                                         let cellBgClass = getCellClass(colIdx, currentRowIdx);
                                                         if (!cellBgClass) {
@@ -1169,7 +1220,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
                                                                 className={`px-2 py-1 text-center border-r border-transparent align-middle ${cellBgClass}`}
                                                                 onMouseEnter={() => setHoveredAdmittedCol(colIdx)}
                                                             >
-                                                                {studentSemesters?.has(sem) ? (
+                                                                {studentSemesters?.has(normalizedSem) ? (
                                                                     <CheckCircle className="w-3.5 h-3.5 text-green-500 mx-auto" />
                                                                 ) : (
                                                                     <XCircle className={`w-3 h-3 mx-auto ${filterType === 'unregistered' ? 'text-red-500' : 'text-red-200'}`} />
@@ -1448,6 +1499,25 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
           registeredSemesters={registeredSemesters}
           programMap={programMap}
       />
+
+      {/* Modal for student list from analytics clicks */}
+      {activeAdmittedList && (
+          <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4">
+              <UnregisteredStudentsModal 
+                  isOpen={true}
+                  onClose={() => setActiveAdmittedList(null)}
+                  semester={activeAdmittedList.semester}
+                  programId={activeAdmittedList.programId}
+                  programName={activeAdmittedList.programName}
+                  targetSemester={activeAdmittedList.targetSemester}
+                  students={activeAdmittedList.students}
+                  registrationLookup={registrationLookup}
+                  programMap={programMap}
+                  listType={activeAdmittedList.listType as any}
+                  isInline={false}
+              />
+          </div>
+      )}
 
     </div>
   );

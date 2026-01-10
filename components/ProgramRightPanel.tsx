@@ -6,6 +6,7 @@ import { normalizeId } from '../services/sheetService';
 import { MultiSearchableSelect } from './EditEntryModal';
 import { getImageUrl, isValEmpty } from '../views/EmployeeView';
 import { EmployeeDetailsPanel } from './EmployeeDetailsPanel';
+import { StudentDetailView } from './StudentDetailView';
 
 interface ProgramRightPanelProps {
     program: ProgramDataRow;
@@ -22,6 +23,11 @@ interface ProgramRightPanelProps {
     forceEditTrigger?: number;
     registrationLookup?: Map<string, Set<string>>;
     isModular?: boolean; // New prop to handle embedded view
+    // Fix: Added missing props to support student details view from ProgramView
+    onSaveStudent?: (semester: string, student: StudentDataRow) => Promise<void>;
+    selectedStudent?: StudentDataRow | null;
+    studentSemester?: string;
+    onCloseStudent?: () => void;
 }
 
 type PanelView = 'details' | 'edit-faculty' | 'edit-program' | 'edit-employee' | 'edit-program-leadership';
@@ -47,7 +53,8 @@ const parseMetric = (str: string | undefined) => {
 };
 
 export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({ 
-    program, facultyLeadership, diuEmployeeData, teacherData, employeeOptions, employeeFieldOptions, onSaveFacultyLeadership, onSaveProgramLeadership, onSaveProgramData, onSaveEmployee, forceEditTrigger = 0, registrationLookup, isModular = false
+    program, facultyLeadership, diuEmployeeData, teacherData, employeeOptions, employeeFieldOptions, onSaveFacultyLeadership, onSaveProgramLeadership, onSaveProgramData, onSaveEmployee, forceEditTrigger = 0, registrationLookup, isModular = false,
+    onSaveStudent, selectedStudent, studentSemester, onCloseStudent
 }) => {
     const [view, setView] = useState<PanelView>('details');
     const [isSaving, setIsSaving] = useState(false);
@@ -188,6 +195,22 @@ export const ProgramRightPanel: React.FC<ProgramRightPanelProps> = ({
             {selectedEmployeeForDetails && (
                 <div className="absolute inset-0 z-50 bg-white flex flex-col animate-in slide-in-from-right duration-300 shadow-2xl">
                     <EmployeeDetailsPanel employee={selectedEmployeeForDetails} onClose={() => setSelectedEmployeeForDetails(null)} onUpdate={(d) => onSaveEmployee(d)} fieldOptions={employeeFieldOptions} isInline={true} />
+                </div>
+            )}
+            {/* Fix: Added overlay for StudentDetailView when used in ProgramView */}
+            {selectedStudent && onSaveStudent && onCloseStudent && (
+                <div className="absolute inset-0 z-50 bg-white flex flex-col animate-in slide-in-from-right duration-300 shadow-2xl">
+                    <StudentDetailView 
+                        student={selectedStudent} 
+                        program={program} 
+                        diuEmployeeData={diuEmployeeData} 
+                        teacherData={teacherData} 
+                        employeeOptions={employeeOptions} 
+                        onSaveStudent={onSaveStudent} 
+                        onClose={onCloseStudent} 
+                        registrationLookup={registrationLookup} 
+                        studentSemester={studentSemester} 
+                    />
                 </div>
             )}
         </div>
