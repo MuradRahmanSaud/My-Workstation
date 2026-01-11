@@ -121,7 +121,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         let remarkEntries: any[] = [];
         
         if (!isValEmpty(rawRemarks)) {
-            remarkEntries = rawRemarks!.split(RECORD_SEP).map(s => s.trim()).filter(Boolean).map((entry, idx) => {
+            remarkEntries = rawRemarks!.split(RECORD_SEP).map(s => s.trim()).filter(Boolean).map((entry: string, idx) => {
                 const fields = entry.split(FIELD_SEP).map(f => f.trim());
                 return {
                     Date: fields[0] || '', 
@@ -213,7 +213,8 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         // Build a complete pool of semesters from all available system sources
         const allAvailableSemNames = new Set<string>();
         uniqueSemesters.forEach(s => { if (s !== 'All') allAvailableSemNames.add(s); });
-        Array.from(studentDataLinks.keys()).forEach(s => allAvailableSemNames.add(s));
+        // Fix: Explicitly cast Array.from result to string array to resolve unknown type issues during add()
+        (Array.from(studentDataLinks.keys()) as string[]).forEach(s => allAvailableSemNames.add(s));
         if (enrollmentSem) allAvailableSemNames.add(enrollmentSem);
 
         const allSemesters = Array.from(allAvailableSemNames)
@@ -266,7 +267,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         try {
             const payload = { ...newData };
             await onSaveStudent(semesterToSave, { ...student, ...payload } as StudentDataRow);
-        } finally { setIsSaving(false); }
+        } finally { setIsSaving(true); }
     }, [studentSemester, student, onSaveStudent]);
 
     const handleSaveInlineForm = () => { handleQuickUpdate(editFormData); };
@@ -444,7 +445,8 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
             const processedRemarks = remarkEntries.map(re => {
                 const fields = re.split(FIELD_SEP).map(f => f.trim());
                 if (fields[6]?.trim().toLowerCase() === category.toLowerCase() && normalizeSemesterName(fields[4]) === normalizeSemesterName(targetSem) && (fields[7] === targetPeriod) && (fields[8]?.startsWith('Pending') || (!fields[8] && fields[1] === 'Pending'))) {
-                    while (fields.length < 9) fields.push(''); fields[8] = `Done: ${fields[8]?.split(': ')[1] || fields[1]}`; return fields.join(FIELD_SEP);
+                    while (fields.length < 9) fields.push(''); 
+                    fields[8] = `Done: ${fields[8]?.split(': ')[1] || fields[1]}`; return fields.join(FIELD_SEP);
                 }
                 return re;
             });
@@ -456,7 +458,6 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
             await onSaveStudent(semesterToSave, { ...student, 'Discussion Remark': deduplicatedRemarksStr } as StudentDataRow);
             
             try {
-                // Fix: Corrected 'snoozeDate' to 'snoozeData.snoozeDate'
                 const globalPayload = { 'uniqueid': `SF-SNZ-${Date.now()}`, 'Date': combinedDate, 'Student ID': student['Student ID'], 'Student Name': student['Student Name'], 'Remark': snoozeData.remark, 'Re-follow up': snoozeData.snoozeDate, 'Target Semester': targetSem, 'Status': savedStatus, 'Contacted By': personnel, 'Category': category, 'Timestamp': new Date().toLocaleString() };
                 await submitSheetData('add', SHEET_NAMES.FOLLOWUP, globalPayload, 'uniqueid', undefined, STUDENT_LINK_SHEET_ID);
                 await reloadData('followup', false);
@@ -651,6 +652,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                 />
             </div>
             {isDiscFormOpen && (<div className="absolute inset-0 z-[150] p-3 bg-white/95 backdrop-blur-sm"><StudentDisciplinaryForm mode={editingDiscIndex !== null ? 'edit' : 'add'} discReason={discReason} setDiscReason={setDiscReason} discFromDate={discFromDate} setDiscFromDate={setDiscFromDate} discToDate={discToDate} setDiscToDate={setDiscToDate} isExpired={discStatus.isExpired} isSaving={isSaving} onSave={handleSaveDisc} onClose={() => setIsDiscFormOpen(false)} /></div>)}
+            {/* Fix: Use setFollowupFormData instead of undefined setFormData */}
             {showFollowupForm && (<StudentFollowupForm student={student} formData={followupFormData} setFormData={setFollowupFormData} employeeOptions={employeeOptions} statusOptions={statusOptions} isSaving={isSaving} onSave={handleSaveFollowup} onClose={() => setShowFollowupForm(false)} studentSemester={studentSemester} />)}
             {showSnoozeForm && (<StudentSnoozeForm student={student} isSaving={isSaving} onSave={handleSaveSnooze} onClose={() => { setShowSnoozeForm(false); setSnoozeContext(null); setEditingFollowupIndex(null); }} initialData={editingFollowupIndex !== null ? snoozeContext : null} statusOptions={statusOptions} employeeOptions={employeeOptions} isRegistration={followupContext === 'registration'} isDues={followupContext === 'dues'} isDefense={followupContext === 'defense'} defenseMode={activeDefenseMode} studentSemester={studentSemester} />)}
             <ConfirmDialog isOpen={confirmDeleteInfo !== null} title="Delete Record?" message={"This action will permanently remove this history log interaction. This cannot be undone."} onConfirm={() => confirmDeleteInfo !== null && handleDeleteFollowup(confirmDeleteInfo.index, confirmDeleteInfo.source)} onCancel={() => setConfirmDeleteInfo(null)} />
