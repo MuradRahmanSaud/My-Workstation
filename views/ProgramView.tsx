@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ProgramDataRow, CourseSectionData, StudentDataRow } from '../types';
@@ -16,7 +15,6 @@ import { SectionTable } from '../components/SectionTable';
 import { CourseSummaryTable } from '../components/CourseSummaryTable';
 import { TeacherSummaryTable } from '../components/TeacherSummaryTable';
 import { AdmittedReportTable } from '../components/AdmittedReportTable';
-import { UnregisteredStudentsModal } from '../components/UnregisteredStudentsModal';
 import { FilterPanel } from '../components/FilterPanel';
 import { SHEET_NAMES, REF_SHEET_ID } from '../constants';
 import { normalizeId, submitSheetData, extractSheetIdAndGid } from '../services/sheetService';
@@ -46,16 +44,6 @@ export const ProgramView: React.FC = () => {
   const [selectedProgram, setSelectedProgram] = useState<ProgramDataRow | null>(null);
   const [activeReport, setActiveReport] = useState<string | null>('courses');
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
-  
-  // Fix: Updated listType union to include 'dues' and 'followupTarget' to match AdmittedReportTable and UnregisteredStudentsModal types
-  const [activeUnregList, setActiveUnregList] = useState<{ 
-    semester: string; 
-    programId: string; 
-    programName: string; 
-    students: StudentDataRow[]; 
-    targetSemester: string; 
-    listType: 'all' | 'registered' | 'unregistered' | 'pdrop' | 'tdrop' | 'crcom' | 'defense' | 'regPending' | 'followupTarget' | 'followup' | 'dues'
-  } | null>(null);
   
   const [selectedAdmittedSemesters, setSelectedAdmittedSemesters] = useState<Set<string>>(new Set());
   const [registrationFilters, setRegistrationFilters] = useState<Map<string, 'registered' | 'unregistered'>>(new Map());
@@ -116,7 +104,7 @@ export const ProgramView: React.FC = () => {
       registeredData.forEach(row => {
           Object.entries(row).forEach(([sem, idVal]) => {
               if (sem && idVal && String(idVal).trim() !== '') {
-                  const sId = normalizeId(String(idVal)); // Normalized matching
+                  const sId = normalizeId(String(idVal)); 
                   if (!map.has(sId)) map.set(sId, new Set());
                   map.get(sId)!.add(sem.trim());
               }
@@ -173,7 +161,7 @@ export const ProgramView: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   useEffect(() => { if (programData.length > 0 && !selectedProgram) setSelectedProgram(programData[0]); }, [programData, selectedProgram]);
-  useEffect(() => { setReportSearch(''); clearAllFilters(); setActiveUnregList(null); setSelectedStudent(null); }, [selectedProgram?.PID]);
+  useEffect(() => { setReportSearch(''); clearAllFilters(); setSelectedStudent(null); }, [selectedProgram?.PID]);
   
   const faculties = useMemo(() => {
     const set = new Set<string>();
@@ -240,11 +228,6 @@ export const ProgramView: React.FC = () => {
     setSelectedStudent(prev => prev ? { ...prev, ...student } : null);
     updateStudentData(semester, student['Student ID'], student);
     
-    if (activeUnregList) {
-        const newStudents = activeUnregList.students.map(s => s['Student ID'] === student['Student ID'] ? { ...s, ...student } : s);
-        setActiveUnregList({ ...activeUnregList, students: newStudents });
-    }
-
     const { _semester, ...apiPayload } = student as any;
     try {
         await submitSheetData('update', semester, apiPayload, 'Student ID', student['Student ID'].trim(), sheetId);
@@ -259,7 +242,7 @@ export const ProgramView: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-gray-50 relative overflow-hidden">
-      {headerTitleTarget && createPortal(<div className="flex items-center space-x-3 animate-in fade-in slide-in-from-left-2 duration-300">{activeReport && (<button onClick={() => { setActiveReport(null); setActiveUnregList(null); setSelectedStudent(null); }} className="p-1.5 hover:bg-white rounded-full text-gray-500 shadow-sm border border-gray-100 transition-all"><ArrowLeft className="w-4 h-4" /></button>)}<h2 className="text-[13px] md:text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center truncate"><School className="w-4 h-4 mr-2 text-blue-600" />{activeReport ? `${activeReport.replace('_', ' ')}` : 'Programs'}</h2></div>, headerTitleTarget)}
+      {headerTitleTarget && createPortal(<div className="flex items-center space-x-3 animate-in fade-in slide-in-from-left-2 duration-300">{activeReport && (<button onClick={() => { setActiveReport(null); setSelectedStudent(null); }} className="p-1.5 hover:bg-white rounded-full text-gray-500 shadow-sm border border-gray-100 transition-all"><ArrowLeft className="w-4 h-4" /></button>)}<h2 className="text-[13px] md:text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center truncate"><School className="w-4 h-4 mr-2 text-blue-600" />{activeReport ? `${activeReport.replace('_', ' ')}` : 'Programs'}</h2></div>, headerTitleTarget)}
       {headerActionsTarget && createPortal(<div className="flex items-center space-x-1 animate-in fade-in slide-in-from-right-2 duration-300 overflow-hidden">{activeReport && (<><button onClick={() => setIsFilterPanelOpen(true)} className={`flex items-center space-x-1 px-3 py-1.5 text-[11px] font-bold rounded-full border transition-all ${activeFilterCount > 0 ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-600 border-gray-200'}`}><Filter className="w-3.5 h-3.5" /><span>Filter</span>{activeFilterCount > 0 && <span className="bg-blue-600 text-white text-[9px] px-1.5 rounded-full ml-1">{activeFilterCount}</span>}</button><div className="relative group"><Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" placeholder="Search..." value={reportSearch} onChange={e => setReportSearch(e.target.value)} className="pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-full text-xs outline-none focus:ring-1 focus:ring-blue-500 w-32 md:w-48 transition-all" /></div></>)}<button onClick={() => reloadData('all', true)} disabled={loading.status === 'loading'} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all"><RefreshCw className={`w-4 h-4 ${loading.status === 'loading' ? 'animate-spin' : ''}`} /></button></div>, headerActionsTarget)}
       <div className="flex-1 overflow-hidden flex flex-row relative">
         <ProgramLeftPanel searchTerm={searchTerm} setSearchTerm={setSearchTerm} selectedFaculty={selectedFaculty} setSelectedFaculty={setSelectedFaculty} faculties={faculties} selectedType={selectedType} setSelectedType={setSelectedType} selectedSemesterMode={selectedSemesterMode} setSelectedSemesterMode={setSelectedSemesterMode} semesterFilter={semesterFilter} setSemesterFilter={setSemesterFilter} uniqueSemesters={uniqueSemesters} sortedGroupKeys={sortedGroupKeys} groupedData={groupedData} selectedProgram={selectedProgram} onSelectProgram={setSelectedProgram} onEditProgram={(e, p) => { setSelectedProgram(p); }} facultyColors={FACULTY_CHIP_COLORS} facultyHeaderColors={FACULTY_HEADER_COLORS} loading={loading.status === 'loading' && programData.length === 0} />
@@ -292,33 +275,7 @@ export const ProgramView: React.FC = () => {
                                                         setSelectedFaculties={() => {}}
                                                         selectedProgramTypes={new Set()}
                                                         selectedSemesterTypes={new Set()}
-                                                        onUnregClick={setActiveUnregList}
                                                     />
-                                                </div>
-                                                <div className="flex-1 border border-gray-200 rounded-lg overflow-auto thin-scrollbar bg-white shadow-sm">
-                                                    {activeUnregList ? (
-                                                        <UnregisteredStudentsModal 
-                                                            isInline={true}
-                                                            isOpen={true} 
-                                                            onClose={() => setActiveUnregList(null)} 
-                                                            semester={activeUnregList.semester} 
-                                                            programName={activeUnregList.programName} 
-                                                            programId={activeUnregList.programId} 
-                                                            targetSemester={activeUnregList.targetSemester} 
-                                                            students={activeUnregList.students}
-                                                            programMap={programMap}
-                                                            registrationLookup={registrationLookup}
-                                                            onRowClick={(student) => setSelectedStudent(student)}
-                                                            listType={activeUnregList.listType}
-                                                        />
-                                                    ) : (
-                                                        <div className="h-full flex flex-col items-center justify-center text-slate-300 p-8 text-center bg-slate-50/20">
-                                                            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mb-3 shadow-sm border border-slate-100">
-                                                                <ArrowLeft className="w-6 h-6 rotate-180 opacity-20" />
-                                                            </div>
-                                                            <p className="text-[11px] font-bold uppercase tracking-widest opacity-40">Select information in Analysis view students</p>
-                                                        </div>
-                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -328,7 +285,6 @@ export const ProgramView: React.FC = () => {
                             </div>
                         )}
                     </div>
-                    {/* Fix: Added missing props to ProgramRightPanel and enabled conditional StudentDetailView handling inside it */}
                     <ProgramRightPanel 
                         program={selectedProgram} 
                         facultyLeadership={currentFacultyLeadership} 

@@ -10,11 +10,12 @@ interface StudentDuesFormProps {
     isSaving: boolean;
     onSave: (data: any) => void;
     onClose: () => void;
-    initialData?: any; // Added for edit support
+    initialData?: any; 
+    studentSemester?: string; // Enrollment semester
 }
 
 export const StudentDuesForm: React.FC<StudentDuesFormProps> = ({
-    student, employeeOptions, isSaving, onSave, onClose, initialData
+    student, employeeOptions, isSaving, onSave, onClose, initialData, studentSemester
 }) => {
     const [semester, setSemester] = useState('Spring');
     const [year, setYear] = useState(new Date().getFullYear().toString());
@@ -52,8 +53,17 @@ export const StudentDuesForm: React.FC<StudentDuesFormProps> = ({
             setApprover(initialData['Contacted By'] || '');
         } else {
             setAmount(student.Dues && !student.Dues.includes(' ;; ') ? student.Dues : '');
+            
+            // Default to Enrollment Semester if no initial data
+            if (studentSemester) {
+                const parts = studentSemester.split(' ');
+                if (parts.length >= 2) {
+                    setSemester(parts[0]);
+                    setYear(parts[1]);
+                }
+            }
         }
-    }, [initialData, student.Dues]);
+    }, [initialData, student.Dues, studentSemester]);
 
     // Duplicate Check Logic
     const isDuplicate = useMemo(() => {

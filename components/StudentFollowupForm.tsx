@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { MessageSquarePlus, Save, Loader2, X, Calendar, Clock, CheckCircle2, UserCheck } from 'lucide-react';
 import { SearchableSelect } from './EditEntryModal';
@@ -13,10 +12,11 @@ interface FollowupFormProps {
     isSaving: boolean;
     onSave: (finalData?: any) => void; 
     onClose: () => void;
+    studentSemester?: string; // Enrollment semester
 }
 
 export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
-    student, formData, setFormData, employeeOptions, statusOptions, isSaving, onSave, onClose
+    student, formData, setFormData, employeeOptions, statusOptions, isSaving, onSave, onClose, studentSemester
 }) => {
     const [targetSem, setTargetSem] = useState('Spring');
     const [targetYear, setTargetYear] = useState(new Date().getFullYear().toString());
@@ -32,8 +32,15 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
                 setTargetSem(parts[0]);
                 setTargetYear(parts[1]);
             }
+        } else if (studentSemester) {
+            // Default to Enrollment Semester if no target is currently set
+            const parts = studentSemester.split(' ');
+            if (parts.length >= 2) {
+                setTargetSem(parts[0]);
+                setTargetYear(parts[1]);
+            }
         }
-    }, [formData]);
+    }, [formData, studentSemester]);
 
     const handleInternalSave = (e: React.FormEvent) => {
         e.preventDefault();
@@ -50,8 +57,10 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
     };
 
     const semesters = ['Spring', 'Summer', 'Fall'];
-
     const isFormInvalid = !formData.Status || !formData['Contacted By'];
+
+    // Specific categories that should not show the target session selector
+    const isDuesOrReg = formData.Category === 'Dues Follow up' || formData.Category === 'Registration Follow up';
 
     return (
         <div className="absolute inset-x-3 top-12 bottom-3 z-[150] bg-white border border-rose-100 rounded-xl flex flex-col shadow-2xl ring-1 ring-black/5 animate-in slide-in-from-top-2">
@@ -71,35 +80,37 @@ export const StudentFollowupForm: React.FC<FollowupFormProps> = ({
             
             <form onSubmit={handleInternalSave} className="flex-1 overflow-y-auto p-5 space-y-6 thin-scrollbar">
                 
-                {/* PART 1: Academic Session (Target) */}
-                <div className="space-y-3 bg-rose-50/30 p-4 rounded-xl border border-rose-100/50 shadow-inner">
-                    <label className="block text-[10px] font-black text-rose-700 uppercase tracking-wider flex items-center">
-                        <Calendar className="w-3.5 h-3.5 mr-2" /> Academic Session (Target)
-                    </label>
-                    <div className="flex items-center space-x-3">
-                        <div className="flex bg-white p-1 rounded-lg border border-rose-200 shadow-sm flex-1">
-                            {semesters.map(sem => (
-                                <button
-                                    key={sem}
-                                    type="button"
-                                    onClick={() => setTargetSem(sem)}
-                                    className={`flex-1 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${targetSem === sem ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
-                                >
-                                    {sem}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="w-24 shrink-0">
-                            <input 
-                                type="text" 
-                                placeholder="Year"
-                                value={targetYear}
-                                onChange={(e) => setTargetYear(e.target.value)}
-                                className="w-full px-3 py-2 text-xs border border-rose-200 rounded-lg shadow-sm font-black focus:ring-1 focus:ring-rose-300 outline-none text-center bg-white"
-                            />
+                {/* PART 1: Academic Session (Target) - Hidden for Dues/Registration */}
+                {!isDuesOrReg && (
+                    <div className="space-y-3 bg-rose-50/30 p-4 rounded-xl border border-rose-100/50 shadow-inner">
+                        <label className="block text-[10px] font-black text-rose-700 uppercase tracking-wider flex items-center">
+                            <Calendar className="w-3.5 h-3.5 mr-2" /> Academic Session (Target)
+                        </label>
+                        <div className="flex items-center space-x-3">
+                            <div className="flex bg-white p-1 rounded-lg border border-rose-200 shadow-sm flex-1">
+                                {semesters.map(sem => (
+                                    <button
+                                        key={sem}
+                                        type="button"
+                                        onClick={() => setTargetSem(sem)}
+                                        className={`flex-1 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${targetSem === sem ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        {sem}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="w-24 shrink-0">
+                                <input 
+                                    type="text" 
+                                    placeholder="Year"
+                                    value={targetYear}
+                                    onChange={(e) => setTargetYear(e.target.value)}
+                                    className="w-full px-3 py-2 text-xs border border-rose-200 rounded-lg shadow-sm font-black focus:ring-1 focus:ring-rose-300 outline-none text-center bg-white"
+                                />
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 <div className="space-y-5">
                     <div className="flex items-center space-x-2 text-indigo-600 mb-1">

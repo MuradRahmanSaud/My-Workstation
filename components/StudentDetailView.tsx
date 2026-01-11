@@ -3,7 +3,7 @@ import { X, MessageSquareQuote, Save, ArrowLeft, Loader2, Plus, User, Mail, Phon
 import { StudentDataRow, ProgramDataRow, DiuEmployeeRow, TeacherDataRow, StudentFollowupRow } from '../types';
 import { isValEmpty, getImageUrl } from '../views/EmployeeView';
 import { useSheetData } from '../hooks/useSheetData';
-import { submitSheetData, normalizeId } from '../services/sheetService';
+import { submitSheetData, normalizeId, normalizeSemesterString } from '../services/sheetService';
 import { SHEET_NAMES, REF_SHEET_ID, STUDENT_LINK_SHEET_ID } from '../constants';
 
 // Refactored Sub-components
@@ -92,7 +92,7 @@ interface StudentDetailViewProps {
 export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
     student, program, diuEmployeeData, teacherData, employeeOptions, onSaveStudent, onClose, registrationLookup, studentSemester, initialRemarksOpen = false
 }) => {
-    const { uniqueSemesters, studentFollowupData, reloadData, data: sectionData } = useSheetData();
+    const { uniqueSemesters, studentFollowupData, reloadData, data: sectionData, studentDataLinks } = useSheetData();
     const [isSaving, setIsSaving] = useState(false);
     const [activePopup, setActivePopup] = useState<string | null>(null);
     const [isRemarksOpen, setIsRemarksOpen] = useState(false);
@@ -180,44 +180,67 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         });
     }, [student, followupContext]);
 
-    // Fix: Moved activeSemester inside component and added correct dependencies to resolve missing name errors
-    const activeSemester = useMemo(() => {
-        if (studentSemester && studentSemester !== 'All') {
-            return studentSemester;
-        }
+    // Helper to extract admission semester from DIU Student ID (e.g., 231-15-1234 -> Spring 2023)
+    const getAdmissionSemesterFromId = useCallback((id: string) => {
+        const match = id.match(/^(\d{2})(\d)/);
+        if (!match) return null;
+        const year = '20' + match[1];
+        const sessionCode = match[2];
+        const sessions: Record<string, string> = { '1': 'Spring', '2': 'Summer', '3': 'Fall' };
+        const session = sessions[sessionCode];
+        if (!session) return null;
+        return `${session} ${year}`;
+    }, []);
 
-        if (!Array.isArray(sectionData) || sectionData.length === 0) return '';
-
-        const semesterOptions = Array.from(new Set(sectionData.map(s => s.Semester)))
-            .filter(s => s && typeof s === 'string' && s.trim().length > 0) as string[];
+    const historyData = useMemo(() => {
+        if (!registrationLookup) return [];
+        const cleanId = normalizeId(student['Student ID']);
+        const registeredSems = registrationLookup.get(cleanId) || new Set();
         
-        if (semesterOptions.length === 0) return '';
-
         const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
-        
-        const sorted = semesterOptions.sort((a, b) => {
-            const regex = /([a-zA-Z]+)[\s-]*'?(\d{2,4})/;
-            const matchA = a.match(regex);
-            const matchB = b.match(regex);
-            
-            if (!matchA && !matchB) return b.localeCompare(a);
-            if (!matchA) return 1;
-            if (!matchB) return -1;
-            
-            let yearA = parseInt(matchA[2] || '0', 10);
-            if (yearA < 100) yearA += 2000;
-            const seasonA = (matchA[1] || '').toLowerCase(); 
+        const parseSem = (sem: string) => {
+            const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/);
+            if (!match) return { year: 0, season: -1 };
+            let year = parseInt(match[2], 10); if (year < 100) year += 2000;
+            return { year, season: seasonWeight[match[1].toLowerCase()] ?? -1 };
+        };
 
-            let yearB = parseInt(matchB[2] || '0', 10);
-            if (yearB < 100) yearB += 2000;
-            const seasonB = (matchB[1] || '').toLowerCase();
-            
-            if (yearA !== yearB) return yearB - yearA;
-            return (seasonWeight[seasonB] || 0) - (seasonWeight[seasonA] || 0);
+        // Determine actual admission semester for filtering
+        const idAdmissionSem = getAdmissionSemesterFromId(student['Student ID']);
+        const enrollmentSem = idAdmissionSem || studentSemester || '';
+        const enrollmentParsed = parseSem(enrollmentSem);
+
+        // Build a complete pool of semesters from all available system sources
+        const allAvailableSemNames = new Set<string>();
+        uniqueSemesters.forEach(s => { if (s !== 'All') allAvailableSemNames.add(s); });
+        Array.from(studentDataLinks.keys()).forEach(s => allAvailableSemNames.add(s));
+        if (enrollmentSem) allAvailableSemNames.add(enrollmentSem);
+
+        const allSemesters = Array.from(allAvailableSemNames)
+            .map(s => ({ original: s, ...parseSem(s) }))
+            .sort((a, b) => a.year !== b.year ? a.year - b.year : a.season - b.season);
+
+        return allSemesters.filter(sem => { 
+            if (sem.year > enrollmentParsed.year) return true; 
+            if (sem.year === enrollmentParsed.year && sem.season >= enrollmentParsed.season) return true; 
+            return false; 
+        }).map(sem => { 
+            const normalizedSemName = normalizeSemesterString(sem.original);
+            const isRegistered = registeredSems.has(normalizedSemName); 
+            return { 
+                semester: sem.original, 
+                isRegistered: isRegistered, 
+                taken: isRegistered ? 15 : null, 
+                complete: isRegistered ? 15 : null, 
+                sgpa: isRegistered ? (3.2 + Math.random() * 0.7).toFixed(2) : null, 
+                dues: 0 
+            }; 
+        }).sort((a, b) => { 
+            const pa = parseSem(a.semester), pb = parseSem(b.semester); 
+            if (pa.year !== pb.year) return pb.year - pa.year; 
+            return pb.season - pa.season; 
         });
-
-        return sorted.length > 0 ? sorted[0] : '';
-    }, [sectionData, studentSemester]);
+    }, [registrationLookup, student['Student ID'], studentSemester, uniqueSemesters, studentDataLinks, getAdmissionSemesterFromId]);
 
     const discRecords = useMemo(() => {
         const raw = student['Disciplinary Action'];
@@ -230,23 +253,6 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         const lastAction = discRecords[discRecords.length - 1];
         return { isActive: true, isExpired: checkRecordExpiry(lastAction), message: lastAction };
     }, [discRecords]);
-
-    const historyData = useMemo(() => {
-        if (!registrationLookup) return [];
-        const cleanId = String(student['Student ID']).trim();
-        const registeredSems = registrationLookup.get(cleanId) || new Set();
-        const seasonWeight: Record<string, number> = { 'winter': 0, 'spring': 1, 'summer': 2, 'short': 2, 'fall': 3, 'autumn': 3 };
-        const parseSem = (sem: string) => {
-            const match = sem.match(/([a-zA-Z]+)[\s-]*'?(\d{2,4})/);
-            if (!match) return { year: 0, season: -1 };
-            let year = parseInt(match[2], 10); if (year < 100) year += 2000;
-            return { year, season: seasonWeight[match[1].toLowerCase()] ?? -1 };
-        };
-        const enrollmentSem = studentSemester || '';
-        const enrollmentParsed = parseSem(enrollmentSem);
-        const allSemesters = uniqueSemesters.filter(s => s !== 'All').map(s => ({ original: s, ...parseSem(s) })).sort((a, b) => a.year !== b.year ? b.year - a.year : b.season - a.season);
-        return allSemesters.filter(sem => { if (sem.year > enrollmentParsed.year) return true; if (sem.year === enrollmentParsed.year && sem.season >= enrollmentParsed.season) return true; return false; }).map(sem => { const isRegistered = registeredSems.has(sem.original); return { semester: sem.original, isRegistered: isRegistered, taken: isRegistered ? (15) : null, complete: isRegistered ? 15 : null, sgpa: isRegistered ? (3.2 + Math.random() * 0.7).toFixed(2) : null, dues: 0 }; }).sort((a, b) => { const pa = parseSem(a.semester), pb = parseSem(b.semester); if (pa.year !== pb.year) return pb.year - pa.year; return pb.season - pa.season; });
-    }, [registrationLookup, student['Student ID'], studentSemester, uniqueSemesters]);
 
     const [isDiscFormOpen, setIsDiscFormOpen] = useState(false);
     const [editingDiscIndex, setEditingDiscIndex] = useState<number | null>(null);
@@ -370,11 +376,11 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
     const [showSnoozeForm, setShowSnoozeForm] = useState(false);
     const [snoozeContext, setSnoozeContext] = useState<any>(null);
 
-    const handleSaveSnooze = async (snoozeData: { snoozeDate: string; remark: string; status?: string; contactedBy?: string; amount?: string; defenseData?: any; isTrackingUpdate?: boolean }) => {
+    const handleSaveSnooze = async (snoozeData: { snoozeDate: string; remark: string; status?: string; contactedBy?: string; amount?: string; defenseData?: any; isTrackingUpdate?: boolean; targetSemester?: string }) => {
         const semesterToSave = studentSemester || (student as any)._semester;
         if (!semesterToSave) return;
         
-        const currentContext = snoozeContext || { Category: followupContext === 'defense' ? 'Defense Follow up' : (followupContext === 'dues' ? 'Dues Follow up' : 'General Follow up'), 'Target Semester': '', 'Exam Period': 'Registration' };
+        const currentContext = snoozeContext || { Category: followupContext === 'defense' ? 'Defense Follow up' : (followupContext === 'dues' ? 'Dues Follow up' : (followupContext === 'registration' ? 'Registration Follow up' : 'General Follow up')), 'Target Semester': snoozeData.targetSemester || '', 'Exam Period': 'Registration' };
         const category = currentContext.Category || 'General Follow up';
         const isDefense = category === 'Defense Follow up';
         
@@ -432,7 +438,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
             const finalRemarksStr = deduplicateRemarks(remarkEntries).join(RECORD_SEP);
             await onSaveStudent(semesterToSave, { ...student, 'Discussion Remark': finalRemarksStr } as StudentDataRow);
         } else {
-            const targetSem = (currentContext['Target Semester'] || '').trim();
+            const targetSem = (snoozeData.targetSemester || currentContext['Target Semester'] || '').trim();
             const targetPeriod = (currentContext['Exam Period'] || '').trim();
 
             const processedRemarks = remarkEntries.map(re => {
@@ -450,6 +456,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
             await onSaveStudent(semesterToSave, { ...student, 'Discussion Remark': deduplicatedRemarksStr } as StudentDataRow);
             
             try {
+                // Fix: Corrected 'snoozeDate' to 'snoozeData.snoozeDate'
                 const globalPayload = { 'uniqueid': `SF-SNZ-${Date.now()}`, 'Date': combinedDate, 'Student ID': student['Student ID'], 'Student Name': student['Student Name'], 'Remark': snoozeData.remark, 'Re-follow up': snoozeData.snoozeDate, 'Target Semester': targetSem, 'Status': savedStatus, 'Contacted By': personnel, 'Category': category, 'Timestamp': new Date().toLocaleString() };
                 await submitSheetData('add', SHEET_NAMES.FOLLOWUP, globalPayload, 'uniqueid', undefined, STUDENT_LINK_SHEET_ID);
                 await reloadData('followup', false);
@@ -644,8 +651,8 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                 />
             </div>
             {isDiscFormOpen && (<div className="absolute inset-0 z-[150] p-3 bg-white/95 backdrop-blur-sm"><StudentDisciplinaryForm mode={editingDiscIndex !== null ? 'edit' : 'add'} discReason={discReason} setDiscReason={setDiscReason} discFromDate={discFromDate} setDiscFromDate={setDiscFromDate} discToDate={discToDate} setDiscToDate={setDiscToDate} isExpired={discStatus.isExpired} isSaving={isSaving} onSave={handleSaveDisc} onClose={() => setIsDiscFormOpen(false)} /></div>)}
-            {showFollowupForm && (<StudentFollowupForm student={student} formData={followupFormData} setFormData={setFollowupFormData} employeeOptions={employeeOptions} statusOptions={statusOptions} isSaving={isSaving} onSave={handleSaveFollowup} onClose={() => setShowFollowupForm(false)} />)}
-            {showSnoozeForm && (<StudentSnoozeForm student={student} isSaving={isSaving} onSave={handleSaveSnooze} onClose={() => { setShowSnoozeForm(false); setSnoozeContext(null); setEditingFollowupIndex(null); }} initialData={editingFollowupIndex !== null ? snoozeContext : null} statusOptions={statusOptions} employeeOptions={employeeOptions} isRegistration={followupContext === 'registration'} isDues={followupContext === 'dues'} isDefense={followupContext === 'defense'} defenseMode={activeDefenseMode} />)}
+            {showFollowupForm && (<StudentFollowupForm student={student} formData={followupFormData} setFormData={setFollowupFormData} employeeOptions={employeeOptions} statusOptions={statusOptions} isSaving={isSaving} onSave={handleSaveFollowup} onClose={() => setShowFollowupForm(false)} studentSemester={studentSemester} />)}
+            {showSnoozeForm && (<StudentSnoozeForm student={student} isSaving={isSaving} onSave={handleSaveSnooze} onClose={() => { setShowSnoozeForm(false); setSnoozeContext(null); setEditingFollowupIndex(null); }} initialData={editingFollowupIndex !== null ? snoozeContext : null} statusOptions={statusOptions} employeeOptions={employeeOptions} isRegistration={followupContext === 'registration'} isDues={followupContext === 'dues'} isDefense={followupContext === 'defense'} defenseMode={activeDefenseMode} studentSemester={studentSemester} />)}
             <ConfirmDialog isOpen={confirmDeleteInfo !== null} title="Delete Record?" message={"This action will permanently remove this history log interaction. This cannot be undone."} onConfirm={() => confirmDeleteInfo !== null && handleDeleteFollowup(confirmDeleteInfo.index, confirmDeleteInfo.source)} onCancel={() => setConfirmDeleteInfo(null)} />
             <ConfirmDialog confirmLabel="Clear" isOpen={confirmClearDisc} title="Clear All Records?" message="Are you sure you want to clear all disciplinary history for this student? This is a permanent action." onConfirm={() => { const semesterToSave = studentSemester || (student as any)._semester; setConfirmClearDisc(false); onSaveStudent(semesterToSave!, { ...student, 'Disciplinary Action': '' } as StudentDataRow); }} onCancel={() => setConfirmClearDisc(false)} />
         </div>

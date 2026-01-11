@@ -1,16 +1,16 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquareQuote, RefreshCw, ArrowLeft, School, Search, Filter, MessageSquare, User, X } from 'lucide-react';
+import { MessageSquareQuote, RefreshCw, ArrowLeft, School, Search, Filter, MessageSquare, User, X, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, ListFilter, RotateCcw } from 'lucide-react';
 import { useSheetData } from '../hooks/useSheetData';
 import { DropOutDashboard, DropoutKpiType } from '../components/DropOutDashboard';
 import { AdmittedReportTable } from '../components/AdmittedReportTable';
-import { UnregisteredStudentsModal } from '../components/UnregisteredStudentsModal';
 import { ProgramRightPanel } from '../components/ProgramRightPanel';
 import { FilterPanel } from '../components/FilterPanel';
 import { FollowupTimelineDashboard } from '../components/FollowupTimelineDashboard';
 import { StudentDetailView } from '../components/StudentDetailView';
 import { ProgramDataRow, StudentDataRow } from '../types';
+import { useResponsivePagination } from '../hooks/useResponsivePagination';
 import { normalizeId, submitSheetData, extractSheetIdAndGid, normalizeSemesterString } from '../services/sheetService';
 import { isValEmpty } from './EmployeeView';
 
@@ -31,9 +31,11 @@ export const DropOutView: React.FC = () => {
     const [selectedProgram, setSelectedProgram] = useState<ProgramDataRow | null>(null);
     const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
     
-    const [activeUnregList, setActiveUnregList] = useState<{ semester: string; programId: string; programName: string; students: StudentDataRow[]; targetSemester: string; listType: DropoutKpiType | any } | null>(null);
     const [currentListType, setCurrentListType] = useState<DropoutKpiType>('all');
     
+    // Drill-down State
+    const [sessionDrillDown, setSessionDrillDown] = useState<{ semester: string, type: 'all' | 'registered' | 'unregistered' } | null>(null);
+
     const [selectedAdmittedSemesters, setSelectedAdmittedSemesters] = useState<Set<string>>(new Set());
     const [registrationFilters, setRegistrationFilters] = useState<Map<string, 'registered' | 'unregistered'>>(new Map());
     const [selectedStudent, setSelectedStudent] = useState<StudentDataRow | null>(null);
@@ -199,6 +201,31 @@ export const DropOutView: React.FC = () => {
         };
         const targetParsed = parseSem(targetRegSem);
 
+        // Calculate based on drill-down if active
+        if (sessionDrillDown) {
+            const students = studentCache.get(sessionDrillDown.semester) || [];
+            const sessionTargetNorm = targetNorm; // We check registration against the currently selected Target Registration Semester
+
+            students.forEach(s => {
+                if (normalizeId(s.PID) === pidNorm) {
+                    const id = normalizeId(s['Student ID']);
+                    const registeredFor = registrationLookup.get(id);
+                    const isRegistered = registeredFor ? registeredFor.has(sessionTargetNorm) : false;
+
+                    let drillMatch = false;
+                    if (sessionDrillDown.type === 'all') drillMatch = true;
+                    else if (sessionDrillDown.type === 'registered') drillMatch = isRegistered;
+                    else if (sessionDrillDown.type === 'unregistered') drillMatch = !isRegistered;
+
+                    if (drillMatch) {
+                        results.push({ ...s, _semester: sessionDrillDown.semester });
+                    }
+                }
+            });
+            return results;
+        }
+
+        // Standard KPI logic
         selectedAdmittedSemesters.forEach(sem => {
             const currentParsed = parseSem(sem);
             const isOnOrBefore = currentParsed.year < targetParsed.year || (currentParsed.year === targetParsed.year && currentParsed.season <= targetParsed.season);
@@ -239,41 +266,32 @@ export const DropOutView: React.FC = () => {
             });
         });
         return results;
-    }, [selectedProgram, targetRegSem, selectedAdmittedSemesters, studentCache, registrationLookup]);
+    }, [selectedProgram, targetRegSem, selectedAdmittedSemesters, studentCache, registrationLookup, sessionDrillDown]);
+
+    const activeFilteredStudents = useMemo(() => getFilteredStudentList(currentListType), [getFilteredStudentList, currentListType]);
+    
+    // Pagination for the Student Registry List
+    const { currentPage, setCurrentPage, rowsPerPage, totalPages, paginatedData, containerRef } = useResponsivePagination<StudentDataRow>(activeFilteredStudents);
 
     const handleCardClick = useCallback((type: DropoutKpiType) => {
         setCurrentListType(type);
+        setSessionDrillDown(null); // Clear session drilldown when changing broad KPI
         setShouldAutoOpenRemarks(false);
-        if (selectedProgram) {
-            const students = getFilteredStudentList(type);
-            setActiveUnregList({
-                semester: 'Selection Analysis',
-                programId: selectedProgram.PID,
-                programName: selectedProgram['Program Short Name'],
-                students,
-                targetSemester: targetRegSem,
-                listType: type
-            });
-        }
-    }, [selectedProgram, getFilteredStudentList, targetRegSem]);
+        setCurrentPage(1); 
+    }, [setCurrentPage]);
+
+    const handleStatDrillDown = useCallback((semester: string, type: 'all' | 'registered' | 'unregistered') => {
+        setSessionDrillDown({ semester, type });
+        setCurrentPage(1);
+    }, [setCurrentPage]);
 
     const handleFollowupStudentClick = (studentId: string) => {
-        const followupStudents = getFilteredStudentList('followup');
-        const student = followupStudents.find(s => normalizeId(s['Student ID']) === normalizeId(studentId));
+        const student = activeFilteredStudents.find(s => normalizeId(s['Student ID']) === normalizeId(studentId));
         if (student) {
-            setShouldAutoOpenRemarks(true);
+            setShouldAutoOpenRemarks(false); // Changed to false as requested
             setSelectedStudent(student);
         }
     };
-
-    useEffect(() => {
-        if (selectedProgram && targetRegSem) {
-            const hasData = Array.from(selectedAdmittedSemesters).some(sem => studentCache.has(sem));
-            if (!activeUnregList && hasData && !selectedStudent) {
-                handleCardClick(currentListType);
-            }
-        }
-    }, [selectedProgram?.PID, targetRegSem, studentCache, selectedAdmittedSemesters, currentListType, handleCardClick, activeUnregList, selectedStudent]);
 
     const employeeOptions = useMemo(() => {
         const map = new Map<string, string>();
@@ -310,11 +328,6 @@ export const DropOutView: React.FC = () => {
         setSelectedStudent(prev => prev ? { ...prev, ...student } : null);
         updateStudentData(semester, student['Student ID'], student);
         
-        if (activeUnregList) {
-            const newStudents = activeUnregList.students.map(s => s['Student ID'] === student['Student ID'] ? { ...s, ...student } : s);
-            setActiveUnregList({ ...activeUnregList, students: newStudents });
-        }
-
         const { _semester, ...apiPayload } = student as any;
         try {
             await submitSheetData('update', semester, apiPayload, 'Student ID', student['Student ID'].trim(), sheetId);
@@ -338,8 +351,6 @@ export const DropOutView: React.FC = () => {
 
     const headerTitleTarget = document.getElementById('header-title-area');
     const headerActionsTarget = document.getElementById('header-actions-area');
-
-    const isAdmittedLoading = loading.status === 'loading' && (loading.message?.includes('Fetching') || loading.message?.includes('Syncing'));
 
     return (
         <div className="flex flex-col h-full bg-gray-50 relative overflow-hidden">
@@ -390,6 +401,7 @@ export const DropOutView: React.FC = () => {
                                         </div>
                                     ) : (
                                         <div className="flex flex-row h-full gap-2 p-2 overflow-hidden">
+                                            {/* COLUMN 1: TARGET SESSION SUMMARY (45%) */}
                                             <div className="basis-[45%] w-[45%] shrink-0 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col">
                                                 <AdmittedReportTable 
                                                     selectedAdmittedSemesters={selectedAdmittedSemesters}
@@ -403,53 +415,77 @@ export const DropOutView: React.FC = () => {
                                                     setSelectedFaculties={() => {}}
                                                     selectedProgramTypes={new Set()}
                                                     selectedSemesterTypes={new Set()}
-                                                    onUnregClick={(data) => {
-                                                        setCurrentListType(data.listType as DropoutKpiType);
-                                                        setActiveUnregList(data);
-                                                        setShouldAutoOpenRemarks(false);
-                                                    }}
                                                     externalTargetRegSemester={targetRegSem}
                                                     onTargetRegSemesterChange={setTargetRegSem}
                                                     hideSummaryToggle={true}
                                                     hideSidebar={true}
+                                                    onStatClick={handleStatDrillDown}
+                                                    activeDrillDown={sessionDrillDown}
                                                 />
                                             </div>
-                                            
+
+                                            {/* COLUMN 2: STUDENT REGISTRY LIST (25%) */}
                                             <div className="basis-[25%] w-[25%] shrink-0 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col">
-                                                {activeUnregList ? (
-                                                    <UnregisteredStudentsModal 
-                                                        isInline={true} isOpen={true} 
-                                                        onClose={() => {}} 
-                                                        semester={activeUnregList.semester} 
-                                                        programName={activeUnregList.programName} 
-                                                        programId={activeUnregList.programId} 
-                                                        targetSemester={activeUnregList.targetSemester} 
-                                                        students={activeUnregList.students}
-                                                        programMap={programMap}
-                                                        registrationLookup={registrationLookup}
-                                                        onRowClick={(student) => {
-                                                            setShouldAutoOpenRemarks(false);
-                                                            setSelectedStudent(student);
-                                                        }}
-                                                        listType={activeUnregList.listType}
-                                                    />
-                                                ) : (
-                                                    <div className="h-full flex flex-col items-center justify-center text-slate-300 p-8 text-center bg-slate-50/20">
-                                                        {isAdmittedLoading ? (
-                                                            <div className="flex flex-col items-center">
-                                                                <RefreshCw className="w-10 h-10 mb-3 text-blue-500 animate-spin opacity-40" />
-                                                                <p className="text-[10px] font-bold uppercase tracking-widest opacity-40">Syncing Student Data...</p>
-                                                            </div>
+                                                <div className="px-3 py-1.5 border-b border-slate-600 bg-slate-700 flex items-center justify-between shrink-0 h-[34px]">
+                                                    <h3 className="text-[10px] font-black text-white uppercase tracking-widest flex items-center truncate">
+                                                        <ListFilter className="w-3.5 h-3.5 mr-1.5 text-blue-300 shrink-0" />
+                                                        {sessionDrillDown ? (
+                                                            <span className="truncate">Registry: {sessionDrillDown.semester} ({sessionDrillDown.type === 'all' ? 'Enroll' : sessionDrillDown.type === 'registered' ? 'Reg' : 'Unreg'})</span>
                                                         ) : (
-                                                            <>
-                                                                <MessageSquareQuote className="w-12 h-12 mb-3 opacity-10" />
-                                                                <p className="text-[10px] font-bold uppercase tracking-widest opacity-40">Select a category</p>
-                                                            </>
+                                                            <span>Registry</span>
                                                         )}
-                                                    </div>
-                                                )}
+                                                    </h3>
+                                                    {sessionDrillDown ? (
+                                                        <button 
+                                                            onClick={() => setSessionDrillDown(null)}
+                                                            className="bg-white/20 hover:bg-white/30 text-white rounded p-0.5 transition-colors"
+                                                            title="Clear Drill-down"
+                                                        >
+                                                            <RotateCcw className="w-3 h-3" />
+                                                        </button>
+                                                    ) : (
+                                                        <span className="bg-white/20 text-white text-[9px] font-black px-1.5 rounded-full border border-white/10">
+                                                            {activeFilteredStudents.length}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 overflow-auto thin-scrollbar relative" ref={containerRef}>
+                                                    <table className="w-full text-left border-collapse">
+                                                        <thead className="bg-slate-600 sticky top-0 z-10 shadow-sm border-b border-slate-600">
+                                                            <tr>
+                                                                <th className="px-3 py-1.5 text-[9px] font-black text-white/90 uppercase tracking-widest border-r border-slate-500 w-1/2">ID</th>
+                                                                <th className="px-3 py-1.5 text-[9px] font-black text-white/90 uppercase tracking-widest">Name</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-slate-100">
+                                                            {paginatedData.map((s, idx) => (
+                                                                <tr 
+                                                                    key={s['Student ID'] || idx} 
+                                                                    onClick={() => handleFollowupStudentClick(s['Student ID'])}
+                                                                    className={`transition-all text-[11px] h-[30px] cursor-pointer group ${selectedStudent?.['Student ID'] === s['Student ID'] ? 'bg-indigo-50' : 'hover:bg-indigo-50/50'}`}
+                                                                >
+                                                                    <td className="px-3 py-1 font-black text-indigo-700 font-mono tracking-tighter border-r border-slate-50">{s['Student ID']}</td>
+                                                                    <td className="px-3 py-1 font-bold text-slate-700 truncate" title={s['Student Name']}>{s['Student Name']}</td>
+                                                                </tr>
+                                                            ))}
+                                                            {activeFilteredStudents.length === 0 && (
+                                                                <tr>
+                                                                    <td colSpan={2} className="py-20 text-center text-gray-400 text-[10px] font-bold uppercase tracking-widest opacity-40">No Students Found</td>
+                                                                </tr>
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <div className="bg-slate-50 px-2 py-1 border-t border-gray-100 flex justify-center items-center space-x-1 shrink-0 h-[34px]">
+                                                    <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1 hover:bg-white rounded disabled:opacity-30"><ChevronsLeft className="w-3.5 h-3.5" /></button>
+                                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 hover:bg-white rounded disabled:opacity-30"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                                                    <span className="text-[10px] font-black text-slate-600 px-2">{currentPage}/{totalPages || 1}</span>
+                                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="p-1 hover:bg-white rounded disabled:opacity-30"><ChevronRight className="w-3.5 h-3.5" /></button>
+                                                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0} className="p-1 hover:bg-white rounded disabled:opacity-30"><ChevronsRight className="w-3.5 h-3.5" /></button>
+                                                </div>
                                             </div>
 
+                                            {/* COLUMN 3: STUDENT PROFILE / PROGRAM PANEL (30%) */}
                                             <div className="basis-[30%] w-[30%] shrink-0 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col relative">
                                                 {selectedStudent ? (
                                                     <div className="flex flex-col h-full overflow-hidden animate-in slide-in-from-right-2 duration-300 bg-white z-10">

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { RefreshCw, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowLeft, Database, ExternalLink, CheckCircle, XCircle, BarChart3, List, Menu, X, LogIn, Settings, PieChart } from 'lucide-react';
@@ -26,7 +25,6 @@ import { ClassRoomTable } from '../components/ClassRoomTable';
 import { SectionDetailsPanel } from '../components/SectionDetailsPanel';
 import { CourseDetailsPanel } from '../components/CourseDetailsPanel';
 import { TeacherDetailsPanel } from '../components/TeacherDetailsPanel';
-import { UnregisteredStudentsModal } from '../components/UnregisteredStudentsModal';
 import { EditEntryModal } from '../components/EditEntryModal';
 import { MAIN_SHEET_ID, MAIN_SHEET_GID, REF_SHEET_ID, REF_SHEET_GID, CLASSROOM_SHEET_GID, SHEET_NAMES } from '../constants';
 import { ProgramDataRow, CourseSectionData, ReferenceDataRow, StudentDataRow } from '../types';
@@ -72,6 +70,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
       studentMin, setStudentMin,
       studentMax, setStudentMax,
       selectedStudentCounts, setSelectedStudentCounts,
+
       classTakenMin, setClassTakenMin,
       classTakenMax, setClassTakenMax,
       selectedClassTakens, setSelectedClassTakens,
@@ -117,16 +116,6 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
 
   const [isAdmittedReportModalOpen, setIsAdmittedReportModalOpen] = useState(false);
   
-  // State for student list modal from analytics clicks
-  const [activeAdmittedList, setActiveAdmittedList] = useState<{ 
-      semester: string; 
-      programId: string; 
-      programName: string; 
-      students: StudentDataRow[]; 
-      targetSemester: string; 
-      listType: string;
-  } | null>(null);
-
   const [reportModePreferences, setReportModePreferences] = useState<Record<string, boolean>>({
       'sections': showStats,
       'courses': showStats,
@@ -306,7 +295,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
           Object.entries(row).forEach(([sem, idVal]) => {
               if (sem && idVal && String(idVal).trim() !== '') {
                   const sId = normalizeId(String(idVal)); 
-                  const normalizedSem = normalizeSemesterString(sem); // Store normalized keys for lookup
+                  const normalizedSem = normalizeSemesterString(sem); 
                   if (!map.has(sId)) map.set(sId, new Set());
                   map.get(sId)!.add(normalizedSem);
               }
@@ -357,7 +346,6 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
       
       let filtered = allStudents;
 
-      // Apply Global Search Filter for ID and Name
       if (searchTerm.trim()) {
           const lower = searchTerm.toLowerCase();
           filtered = filtered.filter(s => 
@@ -812,7 +800,7 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
       {headerTitleTarget && createPortal(
           <div className="flex items-center space-x-2 animate-in fade-in slide-in-from-left-2 duration-300">
              {viewMode !== 'sections' && !showStats && (
-                 <button onClick={handleBack} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors text-gray-500">
+                 <button onClick={handleBack} className="p-1.5 hover:bg-white rounded-full transition-colors text-gray-500">
                      <ArrowLeft className="w-4 h-4" />
                  </button>
              )}
@@ -1038,7 +1026,6 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
                             onSaveStudent={handleSaveStudent}
                             externalTargetRegSemester={targetRegSemester}
                             onTargetRegSemesterChange={setTargetRegSemester}
-                            onUnregClick={setActiveAdmittedList}
                         />
                     ) : viewMode === 'courses' && isReportMode ? (
                         <CourseDistributionReport 
@@ -1499,25 +1486,6 @@ export const SectionView: React.FC<SectionViewProps> = ({ showStats = false }) =
           registeredSemesters={registeredSemesters}
           programMap={programMap}
       />
-
-      {/* Modal for student list from analytics clicks */}
-      {activeAdmittedList && (
-          <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4">
-              <UnregisteredStudentsModal 
-                  isOpen={true}
-                  onClose={() => setActiveAdmittedList(null)}
-                  semester={activeAdmittedList.semester}
-                  programId={activeAdmittedList.programId}
-                  programName={activeAdmittedList.programName}
-                  targetSemester={activeAdmittedList.targetSemester}
-                  students={activeAdmittedList.students}
-                  registrationLookup={registrationLookup}
-                  programMap={programMap}
-                  listType={activeAdmittedList.listType as any}
-                  isInline={false}
-              />
-          </div>
-      )}
 
     </div>
   );
